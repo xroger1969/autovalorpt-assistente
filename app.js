@@ -68,13 +68,27 @@ function removeActionPanels() {
   $('followupActions')?.remove();
 }
 
-function fitMobileViewport() {
+function resetMessageSizing() {
   const messages = $('messages');
   if (!messages) return;
-  if (window.innerWidth > 820 || !$('chat').classList.contains('visible')) {
-    messages.style.removeProperty('height');
-    messages.style.removeProperty('min-height');
-    messages.style.removeProperty('max-height');
+  messages.style.removeProperty('height');
+  messages.style.removeProperty('min-height');
+  messages.style.removeProperty('max-height');
+}
+
+function fitMobileViewport() {
+  const messages = $('messages');
+  const composer = $('composer');
+  if (!messages) return;
+
+  const shouldFit = window.innerWidth <= 820 &&
+    $('chat').classList.contains('visible') &&
+    Boolean(state.vehicle) &&
+    composer &&
+    !composer.hidden;
+
+  if (!shouldFit) {
+    resetMessageSizing();
     return;
   }
 
@@ -82,7 +96,7 @@ function fitMobileViewport() {
     const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const topbarHeight = document.querySelector('.topbar')?.getBoundingClientRect().height || 0;
     const headHeight = document.querySelector('.chat-head')?.getBoundingClientRect().height || 0;
-    const composerHeight = document.querySelector('.composer')?.getBoundingClientRect().height || 0;
+    const composerHeight = composer.getBoundingClientRect().height || 0;
     const available = Math.max(230, viewportHeight - topbarHeight - headHeight - composerHeight);
     messages.style.height = `${available}px`;
     messages.style.minHeight = '0';
@@ -220,6 +234,7 @@ function renderPurposeActions() {
   state.intentQueue = [];
   state.selectedIntents = [];
   $('chatTitle').textContent = 'O que pretende?';
+  $('composer').hidden = false;
   setComposer('Ou escreva uma pergunta sobre a viatura…');
 
   const wrap = el('section', 'action-panel');
@@ -254,6 +269,7 @@ function renderPurposeActions() {
   footer.appendChild(continueButton);
   wrap.appendChild(footer);
   $('messages').appendChild(wrap);
+  fitMobileViewport();
   scrollEnd();
 }
 
@@ -359,17 +375,17 @@ function renderStock(items) {
   }
 
   $('messages').appendChild(grid);
-  scrollEnd();
+  resetMessageSizing();
 }
 
 async function loadStock() {
   $('chatTitle').textContent = 'Escolha uma viatura';
-  setComposer('Pode também escrever o modelo que procura…');
+  $('composer').hidden = true;
+  resetMessageSizing();
   addBubble('Escolha uma viatura para continuar.', 'bot');
   const status = el('div', 'stock-status', 'A carregar fotografias e dados das viaturas…');
   status.id = 'stockStatus';
   $('messages').appendChild(status);
-  scrollEnd();
 
   try {
     const response = await fetch('/api/stock');
@@ -396,6 +412,7 @@ function selectVehicle(item) {
   state.pendingIntent = '';
 
   $('messages').textContent = '';
+  $('composer').hidden = false;
   $('changeBtn').hidden = false;
   $('chatTitle').textContent = 'Viatura selecionada';
   renderSelected();
@@ -403,7 +420,6 @@ function selectVehicle(item) {
   addBubble(item.title, 'user');
   addBubble('Boa escolha. Selecione os assuntos que pretende tratar.', 'bot');
   renderPurposeActions();
-  fitMobileViewport();
 }
 
 function incompleteMessage(intent) {
@@ -478,6 +494,7 @@ function enterChat() {
   $('welcome').hidden = true;
   $('chat').classList.add('visible');
   $('messages').textContent = '';
+  $('composer').hidden = true;
   state.vehicle = null;
   state.lead = { ...EMPTY_LEAD };
   state.history = [];
@@ -487,12 +504,13 @@ function enterChat() {
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
-  fitMobileViewport();
+  resetMessageSizing();
   loadStock();
 }
 
 function changeVehicle() {
   $('messages').textContent = '';
+  $('composer').hidden = true;
   state.vehicle = null;
   state.lead = { ...EMPTY_LEAD };
   state.history = [];
@@ -502,6 +520,7 @@ function changeVehicle() {
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
+  resetMessageSizing();
   loadStock();
 }
 
@@ -515,12 +534,13 @@ function resetAll() {
   state.intentQueue = [];
   state.pendingIntent = '';
   $('messages').textContent = '';
+  $('composer').hidden = true;
   $('chat').classList.remove('visible');
   $('welcome').hidden = false;
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
-  fitMobileViewport();
+  resetMessageSizing();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -537,6 +557,7 @@ window.visualViewport?.addEventListener('resize', fitMobileViewport);
 window.visualViewport?.addEventListener('scroll', fitMobileViewport);
 
 purgeSavedConversations();
+$('composer').hidden = true;
 renderSelected();
 renderSummary();
-fitMobileViewport();
+resetMessageSizing();
