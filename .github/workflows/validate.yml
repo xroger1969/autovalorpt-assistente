@@ -1,0 +1,29 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check server JavaScript
+        run: |
+          node --check api/chat.js
+          node --check api/stock.js
+      - name: Check browser JavaScript
+        run: |
+          node --input-type=module - <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const html = readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map(match => match[1]);
+          if (!scripts.length) throw new Error('No browser script found');
+          for (const script of scripts) new Function(script);
+          console.log('Browser JavaScript syntax is valid');
+          NODE
