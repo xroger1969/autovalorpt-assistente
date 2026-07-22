@@ -1,6 +1,4 @@
 const PHONE = '351918404101';
-const STORAGE_KEY = 'autovalorpt-assistente-v4';
-const MAX_AGE = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
 const EMPTY_LEAD = {
@@ -18,29 +16,28 @@ const state = {
 };
 
 const INTENTS = {
-  disponibilidade: {
-    label: 'Confirmar disponibilidade',
-    short: 'Disponibilidade',
-    prompt: 'Para o Carlos confirmar esta viatura, indique o seu nome e o número de telemóvel ou WhatsApp.',
-    placeholder: 'Ex.: Fernando, 923 444 555'
-  },
   financiamento: {
-    label: 'Financiamento',
     short: 'Financiamento',
-    prompt: 'Indique a entrada pretendida e o prazo ou mensalidade aproximada. O valor final será sempre confirmado pelo Carlos e pela entidade financeira.',
+    prompt: 'Indique a entrada pretendida e o prazo ou mensalidade aproximada.',
+    retry: 'Falta indicar a entrada e o prazo ou mensalidade pretendida.',
     placeholder: 'Ex.: 3 000 € de entrada, 84 meses'
   },
   retoma: {
-    label: 'Tenho retoma',
     short: 'Retoma',
-    prompt: 'Indique marca, modelo, ano e quilómetros da sua viatura. A avaliação e o valor serão feitos pelo Carlos.',
+    prompt: 'Indique marca, modelo, ano e quilómetros da sua viatura.',
+    retry: 'Falta indicar marca, modelo, ano e quilómetros da sua viatura.',
     placeholder: 'Ex.: Renault Clio, 2019, 85 000 km'
   },
   visita: {
-    label: 'Preparar visita',
     short: 'Visita',
     prompt: 'Indique o dia e o horário preferidos. A visita só fica marcada depois da confirmação do Carlos.',
+    retry: 'Falta indicar o dia e o horário preferidos.',
     placeholder: 'Ex.: amanhã às 15:30'
+  },
+  contacto: {
+    short: 'Contacto',
+    prompt: 'Para enviar o pedido ao Carlos, indique o seu nome e número de telemóvel ou WhatsApp.',
+    placeholder: 'Ex.: Fernando, 923 444 555'
   }
 };
 
@@ -51,45 +48,10 @@ const ACTIONS = [
   ['visita', '📅', 'Preparar visita']
 ];
 
-function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      at: Date.now(),
-      vehicle: state.vehicle,
-      lead: state.lead,
-      history: state.history.slice(-18),
-      selectedIntents: state.selectedIntents,
-      intentQueue: state.intentQueue,
-      pendingIntent: state.pendingIntent
-    }));
-  } catch {}
-}
-
-function restore() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (!saved || Date.now() - saved.at > MAX_AGE) return false;
-    state.vehicle = saved.vehicle || null;
-    state.lead = { ...EMPTY_LEAD, ...(saved.lead || {}) };
-    state.history = Array.isArray(saved.history) ? saved.history : [];
-    state.selectedIntents = Array.isArray(saved.selectedIntents) ? saved.selectedIntents.filter((item) => INTENTS[item]) : [];
-    state.intentQueue = Array.isArray(saved.intentQueue) ? saved.intentQueue.filter((item) => INTENTS[item]) : [];
-    state.pendingIntent = INTENTS[saved.pendingIntent] ? saved.pendingIntent : '';
-    return Boolean(state.vehicle || state.history.length);
-  } catch {
-    return false;
+function purgeSavedConversations() {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('autovalorpt-assistente-')) localStorage.removeItem(key);
   }
-}
-
-function clearState() {
-  localStorage.removeItem(STORAGE_KEY);
-  state.vehicle = null;
-  state.lead = { ...EMPTY_LEAD };
-  state.history = [];
-  state.stock = [];
-  state.selectedIntents = [];
-  state.intentQueue = [];
-  state.pendingIntent = '';
 }
 
 function safeText(value = '') { return String(value || ''); }
@@ -146,7 +108,7 @@ function metaValues(item) { return [item?.year, item?.mileage, item?.fuel].filte
 function whatsappText() {
   const lines = ['Olá Carlos, venho do assistente AutoValorPT.'];
   if (state.lead.viatura) lines.push(`Viatura: ${state.lead.viatura}`);
-  if (state.selectedIntents.length) lines.push(`Assuntos: ${state.selectedIntents.map((item) => INTENTS[item]?.short || item).join(', ')}`);
+  if (state.selectedIntents.length) lines.push(`Assuntos: ${state.selectedIntents.map((item) => ACTIONS.find((action) => action[0] === item)?.[2] || item).join(', ')}`);
   if (state.lead.nome) lines.push(`Nome: ${state.lead.nome}`);
   if (state.lead.telefone) lines.push(`Contacto: ${state.lead.telefone}`);
   if (state.lead.financiamento) lines.push(`Financiamento: ${state.lead.financiamento}`);
@@ -172,7 +134,6 @@ function renderSummary() {
   const url = whatsappUrl();
   $('sideWhatsApp').href = url;
   $('topWhatsApp').href = url;
-  save();
 }
 
 function renderSelected() {
@@ -205,12 +166,12 @@ function updateSelectionControls(wrap) {
   }
 }
 
-function renderPurposeActions(clearSelection = true) {
+function renderPurposeActions() {
   removeActionPanels();
   if (!state.vehicle) return;
   state.pendingIntent = '';
   state.intentQueue = [];
-  if (clearSelection) state.selectedIntents = [];
+  state.selectedIntents = [];
   $('chatTitle').textContent = 'O que pretende?';
   setComposer('Ou escreva uma pergunta sobre a viatura…');
 
@@ -222,9 +183,7 @@ function renderPurposeActions(clearSelection = true) {
   for (const [intent, icon, label] of ACTIONS) {
     const button = el('button', 'quick');
     button.type = 'button';
-    button.dataset.intent = intent;
-    button.setAttribute('aria-pressed', state.selectedIntents.includes(intent) ? 'true' : 'false');
-    if (state.selectedIntents.includes(intent)) button.classList.add('selected');
+    button.setAttribute('aria-pressed', 'false');
     button.innerHTML = `<span class="quick-icon">${icon}</span><span class="quick-label">${label}</span><span class="selection-mark" aria-hidden="true">✓</span>`;
     button.addEventListener('click', () => {
       const index = state.selectedIntents.indexOf(intent);
@@ -234,7 +193,6 @@ function renderPurposeActions(clearSelection = true) {
       button.classList.toggle('selected', selected);
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       updateSelectionControls(wrap);
-      save();
     });
     grid.appendChild(button);
   }
@@ -244,49 +202,58 @@ function renderPurposeActions(clearSelection = true) {
   footer.appendChild(el('div', 'selection-count', 'Selecione uma ou várias opções'));
   const continueButton = el('button', 'continue-selection', 'Continuar');
   continueButton.type = 'button';
-  continueButton.disabled = state.selectedIntents.length === 0;
+  continueButton.disabled = true;
   continueButton.addEventListener('click', beginSelectedIntents);
   footer.appendChild(continueButton);
   wrap.appendChild(footer);
-
   $('messages').appendChild(wrap);
-  updateSelectionControls(wrap);
   scrollEnd();
-  save();
 }
 
 function beginSelectedIntents() {
   if (!state.selectedIntents.length) return;
   removeActionPanels();
-  state.intentQueue = [...state.selectedIntents];
-  const labels = state.selectedIntents.map((item) => INTENTS[item].short).join(', ');
-  addBubble(`Pretendo tratar: ${labels}.`, 'user');
+  state.intentQueue = state.selectedIntents.filter((intent) => ['financiamento', 'retoma', 'visita'].includes(intent));
+  if (state.selectedIntents.includes('disponibilidade')) {
+    state.lead.observacoes = 'Pedido de confirmação de disponibilidade.';
+  }
   advanceIntent();
 }
 
+function finishFlow() {
+  state.pendingIntent = '';
+  $('chatTitle').textContent = 'Pedido preparado';
+  renderFollowupActions();
+  setComposer('Pode acrescentar uma observação…');
+}
+
 function advanceIntent() {
-  if (!state.intentQueue.length) {
-    state.pendingIntent = '';
-    $('chatTitle').textContent = 'Pedido preparado';
-    renderFollowupActions();
-    setComposer('Pode acrescentar uma observação…');
-    save();
+  if (state.intentQueue.length) {
+    const intent = state.intentQueue.shift();
+    const config = INTENTS[intent];
+    state.pendingIntent = intent;
+    $('chatTitle').textContent = config.short;
+    addBubble(config.prompt, 'bot');
+    setComposer(config.placeholder);
     return;
   }
-  const intent = state.intentQueue.shift();
-  const config = INTENTS[intent];
-  state.pendingIntent = intent;
-  $('chatTitle').textContent = `${config.short} · ${state.intentQueue.length + 1} por tratar`;
-  addBubble(config.prompt, 'bot');
-  setComposer(config.placeholder);
-  save();
+
+  if (!state.lead.nome || !state.lead.telefone) {
+    state.pendingIntent = 'contacto';
+    $('chatTitle').textContent = 'Contacto';
+    addBubble(INTENTS.contacto.prompt, 'bot');
+    setComposer(INTENTS.contacto.placeholder);
+    return;
+  }
+
+  finishFlow();
 }
 
 function intentComplete(intent) {
-  if (intent === 'disponibilidade') return Boolean(state.lead.nome && state.lead.telefone);
   if (intent === 'financiamento') return Boolean(state.lead.financiamento);
   if (intent === 'retoma') return Boolean(state.lead.retoma);
   if (intent === 'visita') return Boolean(state.lead.visita);
+  if (intent === 'contacto') return Boolean(state.lead.nome && state.lead.telefone);
   return true;
 }
 
@@ -302,7 +269,7 @@ function renderFollowupActions() {
   whatsapp.textContent = 'Continuar no WhatsApp';
   const other = el('button', 'followup-secondary', 'Adicionar outros assuntos');
   other.type = 'button';
-  other.addEventListener('click', () => renderPurposeActions(true));
+  other.addEventListener('click', renderPurposeActions);
   wrap.append(whatsapp, other);
   $('messages').appendChild(wrap);
   scrollEnd();
@@ -367,63 +334,74 @@ async function loadStock() {
 
 function selectVehicle(item) {
   state.vehicle = item;
+  state.lead = { ...EMPTY_LEAD, viatura: item.title };
+  state.history = [];
   state.selectedIntents = [];
   state.intentQueue = [];
   state.pendingIntent = '';
-  state.lead.viatura = item.title;
   $('stockGrid')?.remove();
   $('changeBtn').hidden = false;
   $('chatTitle').textContent = 'Viatura selecionada';
   renderSelected();
   renderSummary();
   addBubble(item.title, 'user');
-  addBubble('Boa escolha. Selecione todos os assuntos que pretende tratar.', 'bot');
-  renderPurposeActions(true);
+  addBubble('Boa escolha. Selecione os assuntos que pretende tratar.', 'bot');
+  renderPurposeActions();
+}
+
+function incompleteMessage(intent) {
+  if (intent === 'contacto') {
+    if (state.lead.nome && !state.lead.telefone) return `Obrigado, ${state.lead.nome}. Falta apenas o número de telemóvel ou WhatsApp.`;
+    if (!state.lead.nome && state.lead.telefone) return 'Obrigado. Falta apenas indicar o seu nome.';
+    return INTENTS.contacto.prompt;
+  }
+  return INTENTS[intent]?.retry || 'Falta completar esta informação.';
 }
 
 async function sendMessage(message) {
   const text = String(message || '').trim();
   if (!text) return;
   const currentIntent = state.pendingIntent;
+  const apiIntent = currentIntent === 'contacto' ? 'disponibilidade' : currentIntent;
   $('messageInput').value = '';
   $('sendBtn').disabled = true;
   removeActionPanels();
   addBubble(text, 'user');
   showTyping();
+
   try {
-    const cleanHistory = state.history
-      .slice(-12, -1)
-      .filter((entry) => !/^Pretendo tratar:/i.test(entry.content) && !/^Boa escolha\./i.test(entry.content));
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: text,
-        intent: currentIntent,
+        intent: apiIntent,
         contexto: { viatura: state.vehicle?.title || state.lead.viatura || '' },
         lead: state.lead,
-        history: cleanHistory
+        history: currentIntent ? [] : state.history.slice(-8, -1)
       })
     });
     const data = await response.json();
     hideTyping();
     if (!response.ok) throw new Error(data.error || 'Erro');
     if (data.lead) state.lead = { ...state.lead, ...data.lead };
-    addBubble(data.reply || 'Obrigado. O Carlos dará seguimento ao seu pedido.', 'bot');
+    if (currentIntent === 'contacto' && !state.selectedIntents.includes('disponibilidade') && state.lead.observacoes === 'Pedido de confirmação de disponibilidade.') {
+      state.lead.observacoes = '';
+    }
     renderSummary();
     renderSelected();
 
-    if (currentIntent && intentComplete(currentIntent)) {
-      state.pendingIntent = '';
-      advanceIntent();
-    } else if (currentIntent) {
-      const config = INTENTS[currentIntent];
-      $('chatTitle').textContent = config.short;
-      setComposer(config.placeholder);
-      save();
+    if (currentIntent) {
+      if (intentComplete(currentIntent)) {
+        state.pendingIntent = '';
+        advanceIntent();
+      } else {
+        addBubble(incompleteMessage(currentIntent), 'bot');
+        setComposer(INTENTS[currentIntent]?.placeholder);
+      }
     } else {
-      renderFollowupActions();
-      setComposer('Pode acrescentar uma observação…');
+      addBubble(data.reply || 'Obrigado. O Carlos dará seguimento ao seu pedido.', 'bot');
+      renderPurposeActions();
     }
   } catch {
     hideTyping();
@@ -431,7 +409,6 @@ async function sendMessage(message) {
     renderFollowupActions();
   } finally {
     $('sendBtn').disabled = false;
-    save();
   }
 }
 
@@ -439,20 +416,26 @@ function enterChat() {
   $('welcome').hidden = true;
   $('chat').classList.add('visible');
   $('messages').textContent = '';
+  state.vehicle = null;
+  state.lead = { ...EMPTY_LEAD };
   state.history = [];
   state.selectedIntents = [];
   state.intentQueue = [];
   state.pendingIntent = '';
+  $('changeBtn').hidden = true;
+  renderSelected();
+  renderSummary();
   loadStock();
 }
 
 function changeVehicle() {
+  $('messages').textContent = '';
   state.vehicle = null;
+  state.lead = { ...EMPTY_LEAD };
+  state.history = [];
   state.selectedIntents = [];
   state.intentQueue = [];
   state.pendingIntent = '';
-  state.lead.viatura = '';
-  $('messages').textContent = '';
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
@@ -460,7 +443,14 @@ function changeVehicle() {
 }
 
 function resetAll() {
-  clearState();
+  purgeSavedConversations();
+  state.vehicle = null;
+  state.lead = { ...EMPTY_LEAD };
+  state.history = [];
+  state.stock = [];
+  state.selectedIntents = [];
+  state.intentQueue = [];
+  state.pendingIntent = '';
   $('messages').textContent = '';
   $('chat').classList.remove('visible');
   $('welcome').hidden = false;
@@ -478,26 +468,6 @@ $('composer').addEventListener('submit', (event) => {
   sendMessage($('messageInput').value);
 });
 
-const restored = restore();
+purgeSavedConversations();
 renderSelected();
 renderSummary();
-if (restored) {
-  $('welcome').hidden = true;
-  $('chat').classList.add('visible');
-  $('changeBtn').hidden = !state.vehicle;
-  for (const entry of state.history) addBubble(entry.content, entry.role === 'user' ? 'user' : 'bot', false);
-  if (!state.history.length) addBubble('Retomámos o seu pedido anterior.', 'bot');
-  if (state.vehicle) {
-    if (state.pendingIntent) {
-      const config = INTENTS[state.pendingIntent];
-      $('chatTitle').textContent = config.short;
-      setComposer(config.placeholder);
-    } else if (state.intentQueue.length) {
-      advanceIntent();
-    } else {
-      renderPurposeActions(false);
-    }
-  } else {
-    loadStock();
-  }
-}
