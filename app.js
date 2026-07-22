@@ -1,5 +1,5 @@
 const PHONE = '351918404101';
-const STORAGE_KEY = 'autovalorpt-assistente-v3';
+const STORAGE_KEY = 'autovalorpt-assistente-v4';
 const MAX_AGE = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
@@ -392,6 +392,9 @@ async function sendMessage(message) {
   addBubble(text, 'user');
   showTyping();
   try {
+    const cleanHistory = state.history
+      .slice(-12, -1)
+      .filter((entry) => !/^Pretendo tratar:/i.test(entry.content) && !/^Boa escolha\./i.test(entry.content));
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -400,7 +403,7 @@ async function sendMessage(message) {
         intent: currentIntent,
         contexto: { viatura: state.vehicle?.title || state.lead.viatura || '' },
         lead: state.lead,
-        history: state.history.slice(-10, -1)
+        history: cleanHistory
       })
     });
     const data = await response.json();
@@ -413,10 +416,6 @@ async function sendMessage(message) {
 
     if (currentIntent && intentComplete(currentIntent)) {
       state.pendingIntent = '';
-      if (state.intentQueue.length) {
-        const next = INTENTS[state.intentQueue[0]];
-        addBubble(`Perfeito. Vamos agora tratar de ${next.short.toLowerCase()}.`, 'bot');
-      }
       advanceIntent();
     } else if (currentIntent) {
       const config = INTENTS[currentIntent];
