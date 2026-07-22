@@ -1,4 +1,5 @@
 const ALLOWED_FIELDS = ['nome', 'telefone', 'viatura', 'financiamento', 'retoma', 'visita', 'observacoes'];
+const ALLOWED_INTENTS = new Set(['disponibilidade', 'financiamento', 'retoma', 'visita']);
 
 const EMPTY_LEAD = Object.freeze({
   nome: '', telefone: '', viatura: '', financiamento: '', retoma: '', visita: '', observacoes: ''
@@ -20,9 +21,16 @@ const SYSTEM_PROMPT = `És o assistente comercial da AutoValorPT e apoias Carlos
 
 Objetivo:
 - Responder primeiro à dúvida do cliente de forma natural e útil.
-- Ajudar a escolher e compreender viaturas, carregamento, utilização, manutenção, compra, retoma e financiamento em termos gerais.
-- Recolher nome e contacto apenas quando o cliente quiser avançar, pedir confirmação concreta ou falar com o Carlos.
+- Tratar apenas o assunto escolhido no interface quando existir: disponibilidade, financiamento, retoma ou visita.
+- Ajudar com automóveis, carregamento, utilização, manutenção e compra em termos gerais.
+- Recolher e organizar dados sem repetir perguntas sobre informação já fornecida.
 - Usar sempre português de Portugal, salvo se o cliente escrever noutra língua.
+
+Como interpretar o assunto escolhido:
+- disponibilidade: recolhe nome e contacto para o Carlos confirmar a unidade.
+- financiamento: recolhe entrada, prazo ou mensalidade pretendida; nunca calcula nem promete uma prestação.
+- retoma: recolhe marca, modelo, ano e quilómetros; nunca atribui valor.
+- visita: recolhe dia e horário preferidos; nunca confirma a marcação.
 
 Limites comerciais obrigatórios:
 1. Nunca confirmes disponibilidade, stock, reserva, venda, entrega ou marcação concluída.
@@ -105,15 +113,15 @@ function extractName(value = '', phone = '') {
   const text = String(value);
   const labelled = [
     /(?:^|[\n,;.!?]\s*|\s+)(?:(?:o\s+)?meu\s+nome|nome|cliente)\s*(?:é|e|:)\s*([^\n,;.!?]+?)(?=\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?(?:n[uú]mero|telefone|telem[oó]vel|contacto|whatsapp)\b|[\n,;.!?]|$)/iu,
-    /(?:^|[\n,;.!?]\s*|\s+)chamo[-\s]me\s+([^\n,;.!?]+?)(?=\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?(?:n[uú]mero|telefone|telem[oó]vel|contacto|whatsapp)\b|[\n,;.!?]|$)/iu,
-    /(?:^|[\n,;.!?]\s*|\s+)(?:o\s+)?meu\s+contacto\s*(?:é|e|:)\s*([^\n,;.!?]+?)(?=\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?(?:n[uú]mero|telefone|telem[oó]vel|whatsapp)\b|[\n,;.!?]|$)/iu
+    /(?:^|[\n,;.!?]\s*|\s+)chamo[-\s]me\s+([^\n,;.!?]+?)(?=\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?(?:n[uú]mero|telefone|telem[oó]vel|contacto|whatsapp)\b|[\n,;.!?]|$)/iu
   ];
   for (const pattern of labelled) {
     const candidate = validNameCandidate(text.match(pattern)?.[1]);
     if (candidate) return candidate;
   }
   if (!phone) return '';
-  const phoneIndex = text.indexOf(text.match(/(?:\+?351[\s.-]*)?9\d{2}[\s.-]*\d{3}[\s.-]*\d{3}/)?.[0] || '');
+  const phoneMatch = text.match(/(?:\+?351[\s.-]*)?9\d{2}[\s.-]*\d{3}[\s.-]*\d{3}/)?.[0] || '';
+  const phoneIndex = text.indexOf(phoneMatch);
   const before = phoneIndex >= 0 ? text.slice(0, phoneIndex) : text;
   const segments = before.split(/[\n,;|]+/).map((part) => part.trim()).filter(Boolean);
   for (let index = segments.length - 1; index >= Math.max(0, segments.length - 2); index -= 1) {
@@ -164,22 +172,46 @@ function riskyReply(reply = '', question = '') {
   return availability || finance || valuation || commitment;
 }
 
-function safeReply(question = '') {
-  const text = normalize(question);
-  if (/dispon|stock|reserv/.test(text)) return 'A disponibilidade precisa de ser confirmada pelo Carlos, porque pode mudar a qualquer momento. Posso deixar o seu nome e contacto para ele verificar esta viatura.';
-  if (/retoma|avali/.test(text)) return 'O valor da retoma só pode ser indicado pelo Carlos depois de analisar a viatura e os respetivos dados. Posso recolher marca, modelo, ano e quilómetros para preparar o pedido.';
-  if (/financ|prestacao|mensalidade|renda|credito/.test(text)) return 'As condições e a prestação dependem da análise da entidade financeira e não podem ser confirmadas automaticamente. Pode indicar a entrada e a mensalidade pretendidas para o Carlos preparar uma simulação.';
-  return 'Essa informação concreta deve ser confirmada pelo Carlos. Posso deixar a pergunta e os seus dados organizados para ele responder diretamente.';
+function safeReply(question = '', intent = '') {
+  const text = normalize(`${intent} ${question}`);
+  if (/dispon|stock|reserv/.test(text)) return 'A disponibilidade será confirmada pelo Carlos. Os dados que indicou ficam preparados para o contacto, sem assumir que a viatura continua disponível.';
+  if (/retoma|avali/.test(text)) return 'Os dados da retoma ficam registados para análise. A avaliação e o valor só serão indicados pelo Carlos depois de verificar a viatura.';
+  if (/financ|prestacao|mensalidade|renda|credito/.test(text)) return 'A preferência de financiamento fica registada. A prestação, aprovação e condições concretas serão confirmadas pelo Carlos e pela entidade financeira.';
+  if (/visita|marcar|agendar/.test(text)) return 'O horário pretendido fica registado. A visita só fica marcada depois da confirmação do Carlos.';
+  return 'Essa informação concreta deve ser confirmada pelo Carlos. A sua questão fica organizada para ele responder diretamente.';
 }
 
-function fallback(message, lead) {
-  const text = normalize(message);
-  let reply = 'Posso ajudar com esta viatura e preparar o contacto com o Carlos.';
-  if (/dispon|stock|reserv/.test(text) || /retoma|avali/.test(text) || /financ|prestacao|renda|credito/.test(text)) reply = safeReply(message);
-  else if (lead.nome && lead.telefone) reply = `Obrigado, ${lead.nome}. A sua questão ficou registada para o Carlos responder diretamente.`;
-  else if (lead.telefone) reply = 'Obrigado. Indique apenas o seu nome para o Carlos poder responder.';
-  else if (lead.nome) reply = `Obrigado, ${lead.nome}. Indique o contacto/WhatsApp para o Carlos poder responder.`;
+function fallback(message, lead, intent = '') {
+  const phone = lead.telefone;
+  const name = lead.nome;
+  let reply;
+  if (intent === 'disponibilidade') {
+    if (name && phone) reply = `Obrigado, ${name}. O pedido para confirmar a disponibilidade ficou preparado para o Carlos.`;
+    else if (phone) reply = 'Obrigado. Falta apenas indicar o seu nome para o Carlos confirmar a disponibilidade.';
+    else if (name) reply = `Obrigado, ${name}. Falta apenas o contacto/WhatsApp para o Carlos confirmar a disponibilidade.`;
+    else reply = 'Indique o seu nome e contacto/WhatsApp para o Carlos confirmar a disponibilidade desta viatura.';
+  } else if (intent === 'retoma') {
+    reply = 'Os dados da sua viatura ficam preparados para avaliação. O valor da retoma será indicado apenas pelo Carlos após análise.';
+  } else if (intent === 'financiamento') {
+    reply = 'A preferência de financiamento fica registada. A prestação e as condições concretas serão confirmadas pelo Carlos e pela entidade financeira.';
+  } else if (intent === 'visita') {
+    reply = 'O dia e horário pretendidos ficam registados. A visita só fica marcada depois da confirmação do Carlos.';
+  } else {
+    reply = name && phone
+      ? `Obrigado, ${name}. A sua questão ficou preparada para o Carlos responder diretamente.`
+      : 'Posso ajudar com esta viatura e preparar o contacto com o Carlos.';
+  }
   return { reply, lead, precisa_humano: true, interesse_real: true };
+}
+
+function inferIntentData(intent, message, lead) {
+  const text = clean(message, 240);
+  const normalized = normalize(text);
+  if (intent === 'retoma' && !lead.retoma && (/\b(19|20)\d{2}\b/.test(text) || /\bkm\b|quilomet/.test(normalized))) lead.retoma = text;
+  if (intent === 'financiamento' && !lead.financiamento && /€|euro|entrada|meses|prazo|mensal|prestacao/.test(normalized)) lead.financiamento = text;
+  if (intent === 'visita' && !lead.visita && /hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|\b\d{1,2}[:h]\d{0,2}\b/.test(normalized)) lead.visita = text;
+  if (intent === 'disponibilidade' && !lead.observacoes) lead.observacoes = 'Pedido de confirmação de disponibilidade.';
+  return lead;
 }
 
 export default async function handler(req, res) {
@@ -189,14 +221,16 @@ export default async function handler(req, res) {
   const message = clean(redactForbidden(body.message), 1200);
   if (!message) return res.status(400).json({ error: 'Mensagem vazia.' });
 
+  const intent = ALLOWED_INTENTS.has(body.intent) ? body.intent : '';
   let lead = mergeLead({ viatura: body.contexto?.viatura || '' }, body.lead || {});
   const phone = extractPhone(message);
   const name = extractName(message, phone);
   if (phone) lead.telefone = phone;
   if (name) lead.nome = name;
+  lead = inferIntentData(intent, message, lead);
 
   const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) return res.status(200).json(fallback(message, lead));
+  if (!apiKey) return res.status(200).json(fallback(message, lead, intent));
 
   const history = Array.isArray(body.history) ? body.history.slice(-8).map((entry) => ({
     role: entry.role === 'assistant' ? 'assistant' : 'user',
@@ -212,6 +246,7 @@ export default async function handler(req, res) {
         max_output_tokens: 480,
         input: [
           { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `Assunto escolhido: ${intent || 'pergunta livre'}` },
           { role: 'user', content: `Viatura em contexto: ${clean(body.contexto?.viatura || lead.viatura, 200) || 'não selecionada'}` },
           { role: 'user', content: `Dados já recolhidos: ${JSON.stringify(lead)}` },
           ...history,
@@ -227,18 +262,19 @@ export default async function handler(req, res) {
     lead = mergeLead(lead, parsed.dados || {});
     if (!lead.nome && name) lead.nome = name;
     if (!lead.telefone && phone) lead.telefone = phone;
+    lead = inferIntentData(intent, message, lead);
 
     let reply = clean(parsed.resposta, 700);
-    if (!reply || riskyReply(reply, message)) reply = safeReply(message);
+    if (!reply || riskyReply(reply, message)) reply = safeReply(message, intent);
 
     return res.status(200).json({
       reply,
       lead,
-      precisa_humano: Boolean(parsed.precisa_humano) || /Carlos/i.test(reply),
+      precisa_humano: Boolean(parsed.precisa_humano) || Boolean(intent) || /Carlos/i.test(reply),
       interesse_real: Boolean(parsed.interesse_real)
     });
   } catch (error) {
     console.error('Assistente indisponível', error?.message);
-    return res.status(200).json(fallback(message, lead));
+    return res.status(200).json(fallback(message, lead, intent));
   }
 }
