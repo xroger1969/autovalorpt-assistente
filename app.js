@@ -418,7 +418,6 @@ function selectVehicle(item) {
   renderSelected();
   renderSummary();
   addBubble(item.title, 'user');
-  addBubble('Boa escolha. Selecione os assuntos que pretende tratar.', 'bot');
   renderPurposeActions();
 }
 
