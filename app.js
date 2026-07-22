@@ -268,7 +268,6 @@ function advanceIntent() {
   if (!state.intentQueue.length) {
     state.pendingIntent = '';
     $('chatTitle').textContent = 'Pedido preparado';
-    addBubble('Obrigado. Os assuntos escolhidos ficaram organizados para o Carlos.', 'bot');
     renderFollowupActions();
     setComposer('Pode acrescentar uma observação…');
     save();
