@@ -49,16 +49,17 @@ const ACTIONS = [
 ];
 
 function purgeSavedConversations() {
-  for (const key of Object.keys(localStorage)) {
-    if (key.startsWith('autovalorpt-assistente-')) localStorage.removeItem(key);
-  }
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('autovalorpt-assistente-')) localStorage.removeItem(key);
+    }
+  } catch {}
 }
 
-function safeText(value = '') { return String(value || ''); }
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined) node.textContent = safeText(text);
+  if (text !== undefined) node.textContent = String(text || '');
   return node;
 }
 
@@ -67,8 +68,33 @@ function removeActionPanels() {
   $('followupActions')?.remove();
 }
 
+function fitMobileViewport() {
+  const messages = $('messages');
+  if (!messages) return;
+  if (window.innerWidth > 820 || !$('chat').classList.contains('visible')) {
+    messages.style.removeProperty('height');
+    messages.style.removeProperty('min-height');
+    messages.style.removeProperty('max-height');
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const topbarHeight = document.querySelector('.topbar')?.getBoundingClientRect().height || 0;
+    const headHeight = document.querySelector('.chat-head')?.getBoundingClientRect().height || 0;
+    const composerHeight = document.querySelector('.composer')?.getBoundingClientRect().height || 0;
+    const available = Math.max(230, viewportHeight - topbarHeight - headHeight - composerHeight);
+    messages.style.height = `${available}px`;
+    messages.style.minHeight = '0';
+    messages.style.maxHeight = `${available}px`;
+  });
+}
+
 function scrollEnd() {
-  requestAnimationFrame(() => { $('messages').scrollTop = $('messages').scrollHeight; });
+  requestAnimationFrame(() => {
+    $('messages').scrollTop = $('messages').scrollHeight;
+    fitMobileViewport();
+  });
 }
 
 function addBubble(text, role = 'bot', remember = true) {
@@ -86,29 +112,38 @@ function showTyping() {
   $('messages').appendChild(bubble);
   scrollEnd();
 }
-function hideTyping() { $('typing')?.remove(); }
+
+function hideTyping() {
+  $('typing')?.remove();
+}
 
 function imageBlock(item, className) {
   const wrap = el('div', className);
-  if (item?.image) {
-    const img = document.createElement('img');
-    img.src = item.image;
-    img.alt = item.title || 'Viatura';
-    img.loading = 'lazy';
-    img.onerror = () => { wrap.innerHTML = '<div class="car-fallback">AV</div>'; };
-    wrap.appendChild(img);
-  } else {
+  if (!item?.image) {
     wrap.appendChild(el('div', 'car-fallback', 'AV'));
+    return wrap;
   }
+
+  const img = document.createElement('img');
+  img.src = item.image;
+  img.alt = item.title || 'Viatura';
+  img.loading = 'lazy';
+  img.onerror = () => { wrap.innerHTML = '<div class="car-fallback">AV</div>'; };
+  wrap.appendChild(img);
   return wrap;
 }
 
-function metaValues(item) { return [item?.year, item?.mileage, item?.fuel].filter(Boolean); }
+function metaValues(item) {
+  return [item?.year, item?.mileage, item?.fuel].filter(Boolean);
+}
 
 function whatsappText() {
   const lines = ['Olá Carlos, venho do assistente AutoValorPT.'];
   if (state.lead.viatura) lines.push(`Viatura: ${state.lead.viatura}`);
-  if (state.selectedIntents.length) lines.push(`Assuntos: ${state.selectedIntents.map((item) => ACTIONS.find((action) => action[0] === item)?.[2] || item).join(', ')}`);
+  if (state.selectedIntents.length) {
+    const labels = state.selectedIntents.map((intent) => ACTIONS.find((action) => action[0] === intent)?.[2] || intent);
+    lines.push(`Assuntos: ${labels.join(', ')}`);
+  }
   if (state.lead.nome) lines.push(`Nome: ${state.lead.nome}`);
   if (state.lead.telefone) lines.push(`Contacto: ${state.lead.telefone}`);
   if (state.lead.financiamento) lines.push(`Financiamento: ${state.lead.financiamento}`);
@@ -117,20 +152,29 @@ function whatsappText() {
   if (state.lead.observacoes) lines.push(`Observações: ${state.lead.observacoes}`);
   return lines.join('\n');
 }
-function whatsappUrl() { return `https://wa.me/${PHONE}?text=${encodeURIComponent(whatsappText())}`; }
+
+function whatsappUrl() {
+  return `https://wa.me/${PHONE}?text=${encodeURIComponent(whatsappText())}`;
+}
 
 function renderSummary() {
   const target = $('summary');
   target.textContent = '';
   const rows = [
-    ['Nome', state.lead.nome], ['Contacto', state.lead.telefone], ['Viatura', state.lead.viatura],
-    ['Financiamento', state.lead.financiamento], ['Retoma', state.lead.retoma], ['Visita', state.lead.visita]
+    ['Nome', state.lead.nome],
+    ['Contacto', state.lead.telefone],
+    ['Viatura', state.lead.viatura],
+    ['Financiamento', state.lead.financiamento],
+    ['Retoma', state.lead.retoma],
+    ['Visita', state.lead.visita]
   ];
+
   for (const [label, value] of rows) {
     const row = el('div', 'summary-row');
     row.append(el('b', '', label), el('span', value ? '' : 'empty', value || 'Por indicar'));
     target.appendChild(row);
   }
+
   const url = whatsappUrl();
   $('sideWhatsApp').href = url;
   $('topWhatsApp').href = url;
@@ -140,10 +184,12 @@ function renderSelected() {
   const card = $('selectedCard');
   card.textContent = '';
   card.appendChild(el('h2', '', 'Viatura selecionada'));
+
   if (!state.vehicle) {
     card.appendChild(el('div', 'selected-placeholder', 'A viatura escolhida aparecerá aqui.'));
     return;
   }
+
   card.appendChild(imageBlock(state.vehicle, 'selected-image'));
   card.appendChild(el('div', 'selected-title', state.vehicle.title));
   const meta = metaValues(state.vehicle).join(' · ');
@@ -169,6 +215,7 @@ function updateSelectionControls(wrap) {
 function renderPurposeActions() {
   removeActionPanels();
   if (!state.vehicle) return;
+
   state.pendingIntent = '';
   state.intentQueue = [];
   state.selectedIntents = [];
@@ -196,8 +243,8 @@ function renderPurposeActions() {
     });
     grid.appendChild(button);
   }
-  wrap.appendChild(grid);
 
+  wrap.appendChild(grid);
   const footer = el('div', 'selection-footer');
   footer.appendChild(el('div', 'selection-count', 'Selecione uma ou várias opções'));
   const continueButton = el('button', 'continue-selection', 'Continuar');
@@ -214,9 +261,9 @@ function beginSelectedIntents() {
   if (!state.selectedIntents.length) return;
   removeActionPanels();
   state.intentQueue = state.selectedIntents.filter((intent) => ['financiamento', 'retoma', 'visita'].includes(intent));
-  if (state.selectedIntents.includes('disponibilidade')) {
-    state.lead.observacoes = 'Pedido de confirmação de disponibilidade.';
-  }
+  state.lead.observacoes = state.selectedIntents.includes('disponibilidade')
+    ? 'Pedido de confirmação de disponibilidade.'
+    : '';
   advanceIntent();
 }
 
@@ -261,12 +308,14 @@ function renderFollowupActions() {
   removeActionPanels();
   const wrap = el('div', 'followup-actions');
   wrap.id = 'followupActions';
+
   const whatsapp = document.createElement('a');
   whatsapp.className = 'followup-main';
   whatsapp.href = whatsappUrl();
   whatsapp.target = '_blank';
   whatsapp.rel = 'noopener';
   whatsapp.textContent = 'Continuar no WhatsApp';
+
   const other = el('button', 'followup-secondary', 'Adicionar outros assuntos');
   other.type = 'button';
   other.addEventListener('click', renderPurposeActions);
@@ -280,19 +329,23 @@ function renderStock(items) {
   $('stockStatus')?.remove();
   const grid = el('div', 'stock-grid');
   grid.id = 'stockGrid';
+
   for (const item of items) {
     const card = el('article', 'car');
     card.appendChild(imageBlock(item, 'car-image'));
     const body = el('div', 'car-body');
     body.appendChild(el('div', 'car-title', item.title));
+
     const meta = el('div', 'car-meta');
     for (const value of metaValues(item)) meta.appendChild(el('span', '', value));
     if (meta.children.length) body.appendChild(meta);
     if (item.price) body.appendChild(el('div', 'car-price', item.price));
+
     const actions = el('div', 'car-actions');
     const choose = el('button', 'choose', 'Escolher');
     choose.type = 'button';
     choose.addEventListener('click', () => selectVehicle(item));
+
     const view = document.createElement('a');
     view.className = 'view';
     view.textContent = 'Ver anúncio';
@@ -304,6 +357,7 @@ function renderStock(items) {
     card.appendChild(body);
     grid.appendChild(card);
   }
+
   $('messages').appendChild(grid);
   scrollEnd();
 }
@@ -316,6 +370,7 @@ async function loadStock() {
   status.id = 'stockStatus';
   $('messages').appendChild(status);
   scrollEnd();
+
   try {
     const response = await fetch('/api/stock');
     const data = await response.json();
@@ -339,7 +394,8 @@ function selectVehicle(item) {
   state.selectedIntents = [];
   state.intentQueue = [];
   state.pendingIntent = '';
-  $('stockGrid')?.remove();
+
+  $('messages').textContent = '';
   $('changeBtn').hidden = false;
   $('chatTitle').textContent = 'Viatura selecionada';
   renderSelected();
@@ -347,6 +403,7 @@ function selectVehicle(item) {
   addBubble(item.title, 'user');
   addBubble('Boa escolha. Selecione os assuntos que pretende tratar.', 'bot');
   renderPurposeActions();
+  fitMobileViewport();
 }
 
 function incompleteMessage(intent) {
@@ -361,6 +418,7 @@ function incompleteMessage(intent) {
 async function sendMessage(message) {
   const text = String(message || '').trim();
   if (!text) return;
+
   const currentIntent = state.pendingIntent;
   const apiIntent = currentIntent === 'contacto' ? 'disponibilidade' : currentIntent;
   $('messageInput').value = '';
@@ -381,13 +439,16 @@ async function sendMessage(message) {
         history: currentIntent ? [] : state.history.slice(-8, -1)
       })
     });
+
     const data = await response.json();
     hideTyping();
     if (!response.ok) throw new Error(data.error || 'Erro');
     if (data.lead) state.lead = { ...state.lead, ...data.lead };
+
     if (currentIntent === 'contacto' && !state.selectedIntents.includes('disponibilidade') && state.lead.observacoes === 'Pedido de confirmação de disponibilidade.') {
       state.lead.observacoes = '';
     }
+
     renderSummary();
     renderSelected();
 
@@ -409,6 +470,7 @@ async function sendMessage(message) {
     renderFollowupActions();
   } finally {
     $('sendBtn').disabled = false;
+    fitMobileViewport();
   }
 }
 
@@ -425,6 +487,7 @@ function enterChat() {
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
+  fitMobileViewport();
   loadStock();
 }
 
@@ -457,6 +520,7 @@ function resetAll() {
   $('changeBtn').hidden = true;
   renderSelected();
   renderSummary();
+  fitMobileViewport();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -468,6 +532,11 @@ $('composer').addEventListener('submit', (event) => {
   sendMessage($('messageInput').value);
 });
 
+window.addEventListener('resize', fitMobileViewport);
+window.visualViewport?.addEventListener('resize', fitMobileViewport);
+window.visualViewport?.addEventListener('scroll', fitMobileViewport);
+
 purgeSavedConversations();
 renderSelected();
 renderSummary();
+fitMobileViewport();
