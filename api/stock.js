@@ -39,14 +39,33 @@ function attribute(source = '', name = '') {
   return (String(source).match(new RegExp(`${name}=["']([^"']+)["']`, 'i')) || [])[1] || '';
 }
 
+function titleCase(value = '') {
+  return String(value)
+    .toLowerCase()
+    .replace(/(^|\s)([a-záàâãéêíóôõúç])/g, (match, space, letter) => `${space}${letter.toUpperCase()}`)
+    .replace(/\bMg\b/g, 'MG')
+    .replace(/\bBmw\b/g, 'BMW')
+    .replace(/\bVw\b/g, 'VW')
+    .replace(/\bEv\b/g, 'EV')
+    .replace(/\bAwd\b/g, 'AWD')
+    .replace(/\bRwd\b/g, 'RWD')
+    .replace(/\bKwh\b/g, 'kWh')
+    .replace(/\bE Tron\b/g, 'e-tron')
+    .replace(/\bS Line\b/g, 'S line');
+}
+
 function cleanTitle(value = '') {
   const title = stripHtml(value)
     .replace(/\s*[|–-]\s*Standvirtual.*$/i, '')
+    .replace(/(?:[-_\s]+)?ID[0-9A-Z]+(?:\.html?)?\s*$/i, '')
+    .replace(/\btra o\b/gi, 'tração')
+    .replace(/\bel trico\b/gi, 'elétrico')
+    .replace(/\bh brido\b/gi, 'híbrido')
     .replace(/\s+/g, ' ')
     .trim();
   if (!title || title.length < 4 || title.length > 150) return '';
   if (/(privacy|privacidade|cookies|inventory|ver detalhes|livro de reclama)/i.test(title)) return '';
-  return title;
+  return titleCase(title);
 }
 
 function titleFromUrl(url = '') {
@@ -56,6 +75,7 @@ function titleFromUrl(url = '') {
     if (/^id[0-9a-z]+/i.test(raw) && parts.length > 1) raw = parts.at(-2);
     return cleanTitle(decodeURIComponent(raw)
       .replace(/\.html?$/i, '')
+      .replace(/(?:[-_])?ID[0-9a-z]+$/i, '')
       .replace(/^(anuncio|carros)[-_]?/i, '')
       .replace(/[-_]+/g, ' '));
   } catch {
@@ -79,20 +99,39 @@ function imageFromHtml(html = '') {
 }
 
 function formatPrice(raw = '') {
-  const digits = String(raw).replace(/[^\d]/g, '');
-  const number = Number(digits);
+  const source = String(raw).trim();
+  let digits = source.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  let number = Number(digits);
+  if (/[,\.]\d{2}\s*(?:€|EUR)\b/i.test(source) && number > 500000) number = Math.round(number / 100);
   if (!number || number < 1000 || number > 500000) return '';
   return new Intl.NumberFormat('pt-PT', {
     style: 'currency', currency: 'EUR', maximumFractionDigits: 0
   }).format(number);
 }
 
+function structuredPrice(raw = '') {
+  const source = String(raw);
+  const patterns = [
+    /(?:property|itemprop)=["'](?:product:price:amount|price)["'][^>]*content=["'](\d{4,6}(?:[.,]\d{1,2})?)["']/i,
+    /content=["'](\d{4,6}(?:[.,]\d{1,2})?)["'][^>]*(?:property|itemprop)=["'](?:product:price:amount|price)["']/i,
+    /["'](?:price|priceAmount)["']\s*:\s*["']?(\d{4,6}(?:[.,]\d{1,2})?)["']?/i
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return '';
+}
+
 function metadata(text = '') {
-  const clean = stripHtml(text);
-  const priceRaw = (clean.match(/(?:€\s*)?\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?\s*€?|\b\d{4,6}\s*€/i) || [])[0] || '';
+  const raw = String(text);
+  const clean = stripHtml(raw);
+  const explicitPrice = (clean.match(/(?:€\s*\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?|\b\d{1,3}(?:[.\s]\d{3})+(?:,\d{2})?\s*(?:€|EUR)\b|\b\d{4,6}(?:,\d{2})?\s*(?:€|EUR)\b)/i) || [])[0] || '';
+  const priceRaw = structuredPrice(raw) || explicitPrice;
   const year = (clean.match(/\b(?:19|20)\d{2}\b/) || [])[0] || '';
   const mileage = (clean.match(/\b\d{1,3}(?:[.\s]\d{3})*\s*(?:km|quil[oó]metros)\b/i) || [])[0] || '';
-  const fuel = (clean.match(/\b(el[eé]trico|h[ií]brido plug-in|h[ií]brido|gasolina|diesel|GPL)\b/i) || [])[0] || '';
+  const fuel = (clean.match(/\b(el[eé]trico|h[ií]brido plug-in|h[ií]brido|gasolina|diesel|gasóleo|GPL)\b/i) || [])[0] || '';
   return {
     price: formatPrice(priceRaw),
     year,
