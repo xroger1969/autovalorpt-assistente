@@ -78,5 +78,34 @@
     </section>
   </div>
   <script src="/app.js" defer></script>
+  <script>
+    (() => {
+      const financingQuestion = 'Para preparar uma simulação ajustada a si, qual seria uma prestação mensal confortável? Pretende dar alguma entrada inicial? Tem atualmente algum crédito automóvel a decorrer? Pode responder às três perguntas na mesma mensagem.';
+      const financingPlaceholder = 'Ex.: até 350 €/mês, entrada de 2 000 €, sem crédito atual';
+
+      const applyFinancingCopy = () => {
+        const title = document.getElementById('chatTitle');
+        const input = document.getElementById('messageInput');
+        const messages = document.getElementById('messages');
+        if (!title || !input || !messages || title.textContent.trim() !== 'Financiamento') return;
+
+        const bubbles = [...messages.querySelectorAll('.bubble.bot')];
+        const target = bubbles.at(-1);
+        if (target && /entrada pretendida|prazo ou mensalidade/i.test(target.textContent)) {
+          target.textContent = financingQuestion;
+        }
+        input.placeholder = financingPlaceholder;
+      };
+
+      const observer = new MutationObserver(applyFinancingCopy);
+      document.addEventListener('DOMContentLoaded', () => {
+        const messages = document.getElementById('messages');
+        const title = document.getElementById('chatTitle');
+        if (messages) observer.observe(messages, { childList: true, subtree: true, characterData: true });
+        if (title) observer.observe(title, { childList: true, subtree: true, characterData: true });
+        applyFinancingCopy();
+      });
+    })();
+  </script>
 </body>
 </html>
