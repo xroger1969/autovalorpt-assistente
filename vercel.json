@@ -1,15 +1,6 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
-  "redirects": [
-    { "source": "/", "destination": "/welcome", "permanent": false }
-  ],
-  "rewrites": [
-    {
-      "source": "/assistant-app",
-      "destination": "https://autovalorpt-assistente-a7mbld82u-xroger1969s-projects.vercel.app"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
