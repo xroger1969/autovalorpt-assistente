@@ -6,106 +6,78 @@
   <meta name="theme-color" content="#0b5ed7">
   <title>AutoValorPT — Assistente do Carlos</title>
   <style>
-    :root{
-      --blue:#0b5ed7;--blue-dark:#0847a6;--ink:#122033;--muted:#64748b;--line:#dce5f0;
-      --page:#f3f7fb;--green:#168257;--shadow:0 18px 55px rgba(20,45,80,.12)
-    }
-    *{box-sizing:border-box}
-    html{background:var(--page)}
-    body{margin:0;min-height:100vh;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:radial-gradient(circle at 50% -10%,#fff 0,#f7faff 36%,var(--page) 78%)}
-    button,input{font:inherit}button,a{-webkit-tap-highlight-color:transparent}
-    button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(11,94,215,.28);outline-offset:3px}
-    .shell{width:min(1180px,100%);min-height:100vh;margin:auto;padding:18px 14px calc(18px + env(safe-area-inset-bottom))}
-    .app{overflow:hidden;border:1px solid var(--line);border-radius:28px;background:#fff;box-shadow:var(--shadow)}
-    .topbar{min-height:70px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #e9eef5;background:#fff}
-    .brand{display:flex;align-items:center;gap:11px;min-width:0}.brand-mark{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;color:#fff;font-size:18px;font-weight:950;letter-spacing:-.05em;background:linear-gradient(145deg,#1372ff,#073e9a);box-shadow:0 10px 24px rgba(11,94,215,.25)}
-    .brand-name{font-weight:950;letter-spacing:-.03em;font-size:19px;line-height:1}.brand-sub{margin-top:4px;font-size:12px;color:var(--muted)}
-    .top-actions{display:flex;align-items:center;gap:8px}.online{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#effaf5;color:#087348;font-size:12px;font-weight:800;white-space:nowrap}.online::before{content:"";width:8px;height:8px;border-radius:50%;background:#28b779;box-shadow:0 0 0 3px rgba(40,183,121,.16)}
-    .whatsapp-top{min-height:40px;padding:0 13px;border:1px solid #bce6d2;border-radius:12px;background:#f1fbf6;color:#087348;text-decoration:none;display:inline-flex;align-items:center;font-weight:850;font-size:13px}
-    .layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:690px}.main{min-width:0;border-right:1px solid var(--line);display:flex;flex-direction:column}
-    .welcome{padding:54px 34px 38px;text-align:center}.hero-logo{width:126px;height:126px;margin:0 auto 24px;border-radius:35px;display:grid;place-items:center;background:linear-gradient(145deg,#e6f1ff,#fff);border:1px solid #d5e5fb;box-shadow:0 20px 40px rgba(11,94,215,.14);transform:rotate(-2deg)}
-    .hero-logo-inner{transform:rotate(2deg);text-align:center;color:var(--blue-dark)}.hero-logo b{display:block;font-size:38px;letter-spacing:-.08em;line-height:.9}.hero-logo span{display:block;margin-top:7px;font-size:11px;font-weight:950;letter-spacing:.14em}
-    .welcome h1{max-width:650px;margin:0 auto;font-size:clamp(32px,5.4vw,52px);line-height:1.02;letter-spacing:-.045em}.welcome p{max-width:620px;margin:17px auto 0;color:var(--muted);font-size:17px;line-height:1.55}
-    .primary{min-height:52px;margin-top:25px;padding:0 21px;border:0;border-radius:15px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:#fff;font-weight:900;cursor:pointer;box-shadow:0 13px 28px rgba(11,94,215,.24)}.primary:hover{transform:translateY(-1px)}
-    .trust{margin-top:18px;display:flex;justify-content:center;gap:15px;flex-wrap:wrap;color:#536176;font-size:12px;font-weight:750}
-    .chat{display:none;flex:1;min-height:0;flex-direction:column}.chat.visible{display:flex}.chat-head{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);background:#fbfdff}.chat-title{font-size:14px;font-weight:950;color:#344258}.small-actions{display:flex;gap:7px}
-    .text-btn{min-height:38px;padding:0 11px;border:1px solid var(--line);border-radius:11px;background:#fff;color:#40506a;font-weight:800;font-size:12px;cursor:pointer}
-    .messages{flex:1;min-height:410px;max-height:610px;overflow-y:auto;padding:20px 18px 12px;scroll-behavior:smooth}.bubble{width:fit-content;max-width:min(82%,660px);margin:0 0 12px;padding:12px 15px;border-radius:17px;line-height:1.48;font-size:15px;white-space:pre-wrap}.bubble.bot{border:1px solid #dce7f4;background:#f5f9ff;border-top-left-radius:6px}.bubble.user{margin-left:auto;background:var(--blue);color:#fff;border-top-right-radius:6px}
-    .stock-status{padding:10px 0;color:var(--muted);font-size:14px;text-align:center}.stock-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:4px 0 16px}.car{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 7px 20px rgba(25,50,80,.07);transition:.18s ease}.car:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(25,50,80,.11)}
-    .car-image{position:relative;height:170px;background:linear-gradient(135deg,#dceaff,#f7faff);overflow:hidden}.car-image img{width:100%;height:100%;display:block;object-fit:cover}.car-fallback{height:100%;display:grid;place-items:center;color:#1b5eb9;font-size:28px;font-weight:950;letter-spacing:-.08em}.car-body{padding:13px}.car-title{min-height:42px;font-size:15px;font-weight:900;line-height:1.35}.car-meta{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;color:#536176;font-size:11px;font-weight:750}.car-meta span{padding:5px 7px;border-radius:8px;background:#f2f5f9}.car-price{margin-top:5px;color:var(--blue-dark);font-size:17px;font-weight:950}
-    .car-actions{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:12px}.choose,.view{min-height:40px;border-radius:11px;font-weight:850;cursor:pointer}.choose{border:0;background:var(--blue);color:#fff}.view{padding:0 11px;border:1px solid var(--line);background:#fff;color:#44536a;text-decoration:none;display:grid;place-items:center;font-size:12px}
-    .action-panel{margin:5px 0 15px;padding:14px;border:1px solid #d7e4f5;border-radius:18px;background:#f8fbff}.action-heading{margin-bottom:10px;color:#32445e;font-size:13px;font-weight:900}.quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.quick{position:relative;min-height:58px;padding:10px 42px 10px 12px;border:1px solid #cfe0f5;border-radius:14px;background:#fff;color:#164b91;font-weight:850;text-align:left;cursor:pointer;display:flex;align-items:center;gap:9px;transition:.16s ease}.quick:hover{background:#eaf3ff}.quick.selected{border-color:var(--blue);background:#eaf3ff;color:#073e9a;box-shadow:0 0 0 2px rgba(11,94,215,.12)}.quick-icon{font-size:19px}.quick-label{flex:1}.selection-mark{position:absolute;right:13px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#dce6f3;color:transparent;font-weight:950}.quick.selected .selection-mark{background:var(--blue);color:#fff}
-    .selection-footer{margin-top:12px;padding-top:12px;border-top:1px solid #dce6f2;display:flex;align-items:center;justify-content:space-between;gap:12px}.selection-count{color:#536176;font-size:12px;font-weight:800}.continue-selection{min-height:43px;padding:0 17px;border:0;border-radius:12px;background:var(--blue);color:#fff;font-weight:900;cursor:pointer}.continue-selection:disabled{background:#c9d4e2;color:#6f7d90;cursor:not-allowed}
-    .followup-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:7px 0 15px}.followup-main,.followup-secondary{min-height:48px;border-radius:14px;display:grid;place-items:center;font-weight:900;text-align:center}.followup-main{background:#15905f;color:#fff;text-decoration:none}.followup-secondary{border:1px solid #cfe0f5;background:#f4f8ff;color:#164b91;cursor:pointer}
-    .composer{padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#fff}.input-row{display:flex;gap:9px;align-items:flex-end}.input-row input{width:100%;min-height:50px;padding:0 15px;border:1px solid #cfd9e6;border-radius:15px;background:#fdfefe;color:var(--ink)}.send{width:52px;height:50px;flex:0 0 52px;border:0;border-radius:15px;background:var(--blue);color:#fff;font-size:21px;font-weight:900;cursor:pointer}.send:disabled{opacity:.55;cursor:wait}.privacy{margin:8px 2px 0;color:#7a8799;font-size:10.5px;line-height:1.35}
-    .side{padding:20px;background:#f8fbff}.side-card{padding:16px;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(25,50,80,.05)}.side-card+.side-card{margin-top:13px}.side h2{margin:0 0 12px;font-size:15px;letter-spacing:-.02em}.selected-placeholder{padding:28px 10px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}.selected-image{height:150px;margin:-16px -16px 13px;border-radius:18px 18px 0 0;overflow:hidden;background:#eaf2fd}.selected-image img{width:100%;height:100%;object-fit:cover}.selected-title{font-weight:950;line-height:1.35}.selected-meta{margin-top:8px;color:var(--muted);font-size:12px}.summary{display:grid;gap:8px}.summary-row{display:grid;grid-template-columns:90px 1fr;gap:8px;font-size:12px}.summary-row b{color:#536176}.summary-row span{overflow-wrap:anywhere}.side-whatsapp{width:100%;min-height:47px;margin-top:13px;border:0;border-radius:13px;background:#15905f;color:#fff;text-decoration:none;display:grid;place-items:center;font-weight:900}.empty{color:#8a96a7;font-style:italic}
-    .typing{display:inline-flex;gap:4px;align-items:center}.typing i{width:6px;height:6px;border-radius:50%;background:#8290a4;animation:pulse 1s infinite}.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}@keyframes pulse{50%{opacity:.3;transform:translateY(-2px)}}
-    @media(max-width:820px){
-      .shell{padding:0}.app{min-height:100vh;border:0;border-radius:0;box-shadow:none}.layout{display:block}.main{border:0}.side{display:none}.topbar{position:sticky;top:0;z-index:5;padding:10px 12px}.brand-sub{display:none}.online{display:none}.whatsapp-top{font-size:0;width:42px;padding:0;justify-content:center}.whatsapp-top::after{content:"💬";font-size:18px}.welcome{padding:42px 22px 28px}.hero-logo{width:105px;height:105px;border-radius:29px}.hero-logo b{font-size:32px}.messages{min-height:calc(100vh - 194px);max-height:none;padding:15px 12px 8px}.stock-grid{grid-template-columns:1fr}.car-image{height:210px}.bubble{max-width:90%}.quick-actions,.followup-actions{grid-template-columns:1fr}.selection-footer{align-items:stretch;flex-direction:column}.continue-selection{width:100%}.composer{position:sticky;bottom:0}.chat-head{position:sticky;top:66px;z-index:4;padding:9px 12px}.chat-title{font-size:13px}.text-btn{min-height:36px;padding:0 9px;font-size:11px}}
-    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+    :root{--blue:#0b5ed7;--blue-dark:#0847a6;--ink:#122033;--muted:#64748b;--line:#dce5f0;--page:#f3f7fb;--green:#168257;--shadow:0 18px 55px rgba(20,45,80,.12)}
+    *{box-sizing:border-box}html{background:var(--page)}body{margin:0;min-height:100vh;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:radial-gradient(circle at 50% -10%,#fff 0,#f7faff 36%,var(--page) 78%)}button,input{font:inherit}button,a{-webkit-tap-highlight-color:transparent}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(11,94,215,.28);outline-offset:3px}
+    .shell{width:min(1180px,100%);min-height:100vh;margin:auto;padding:18px 14px calc(18px + env(safe-area-inset-bottom))}.app{overflow:hidden;border:1px solid var(--line);border-radius:28px;background:#fff;box-shadow:var(--shadow)}.topbar{min-height:70px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #e9eef5;background:#fff}.brand{display:flex;align-items:center;gap:11px;min-width:0}.brand-mark{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;color:#fff;font-size:18px;font-weight:950;letter-spacing:-.05em;background:linear-gradient(145deg,#1372ff,#073e9a);box-shadow:0 10px 24px rgba(11,94,215,.25)}.brand-name{font-weight:950;letter-spacing:-.03em;font-size:19px;line-height:1}.brand-sub{margin-top:4px;font-size:12px;color:var(--muted)}.top-actions{display:flex;align-items:center;gap:8px}.online{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#effaf5;color:#087348;font-size:12px;font-weight:800;white-space:nowrap}.online::before{content:"";width:8px;height:8px;border-radius:50%;background:#28b779;box-shadow:0 0 0 3px rgba(40,183,121,.16)}.whatsapp-top{min-height:40px;padding:0 13px;border:1px solid #bce6d2;border-radius:12px;background:#f1fbf6;color:#087348;text-decoration:none;display:inline-flex;align-items:center;font-weight:850;font-size:13px}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:690px}.main{min-width:0;border-right:1px solid var(--line);display:flex;flex-direction:column}.welcome{padding:54px 34px 38px;text-align:center}.hero-logo{width:126px;height:126px;margin:0 auto 24px;border-radius:35px;display:grid;place-items:center;background:linear-gradient(145deg,#e6f1ff,#fff);border:1px solid #d5e5fb;box-shadow:0 20px 40px rgba(11,94,215,.14);transform:rotate(-2deg)}.hero-logo-inner{transform:rotate(2deg);text-align:center;color:var(--blue-dark)}.hero-logo b{display:block;font-size:38px;letter-spacing:-.08em;line-height:.9}.hero-logo span{display:block;margin-top:7px;font-size:11px;font-weight:950;letter-spacing:.14em}.welcome h1{max-width:650px;margin:0 auto;font-size:clamp(32px,5.4vw,52px);line-height:1.02;letter-spacing:-.045em}.welcome p{max-width:620px;margin:17px auto 0;color:var(--muted);font-size:17px;line-height:1.55}.primary{min-height:52px;margin-top:25px;padding:0 21px;border:0;border-radius:15px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:#fff;font-weight:900;cursor:pointer;box-shadow:0 13px 28px rgba(11,94,215,.24)}.trust{margin-top:18px;display:flex;justify-content:center;gap:15px;flex-wrap:wrap;color:#536176;font-size:12px;font-weight:750}
+    .chat{display:none;flex:1;min-height:0;flex-direction:column}.chat.visible{display:flex}.chat-head{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);background:#fbfdff}.chat-title{font-size:14px;font-weight:950;color:#344258}.small-actions{display:flex;gap:7px}.text-btn{min-height:38px;padding:0 11px;border:1px solid var(--line);border-radius:11px;background:#fff;color:#40506a;font-weight:800;font-size:12px;cursor:pointer}.messages{flex:1;min-height:410px;max-height:610px;overflow-y:auto;padding:20px 18px 12px;scroll-behavior:smooth}.bubble{width:fit-content;max-width:min(82%,660px);margin:0 0 12px;padding:12px 15px;border-radius:17px;line-height:1.48;font-size:15px;white-space:pre-wrap}.bubble.bot{border:1px solid #dce7f4;background:#f5f9ff;border-top-left-radius:6px}.bubble.user{margin-left:auto;background:var(--blue);color:#fff;border-top-right-radius:6px}
+    .stock-status{padding:10px 0;color:var(--muted);font-size:14px;text-align:center}.stock-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:4px 0 16px}.car{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 7px 20px rgba(25,50,80,.07)}.car-image{position:relative;height:170px;background:linear-gradient(135deg,#dceaff,#f7faff);overflow:hidden}.car-image img{width:100%;height:100%;display:block;object-fit:cover}.car-fallback{height:100%;display:grid;place-items:center;color:#1b5eb9;font-size:28px;font-weight:950}.car-body{padding:13px}.car-title{min-height:42px;font-size:15px;font-weight:900;line-height:1.35}.car-meta{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;color:#536176;font-size:11px;font-weight:750}.car-meta span{padding:5px 7px;border-radius:8px;background:#f2f5f9}.car-price{margin-top:5px;color:var(--blue-dark);font-size:17px;font-weight:950}.car-actions{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:12px}.choose,.view{min-height:40px;border-radius:11px;font-weight:850;cursor:pointer}.choose{border:0;background:var(--blue);color:#fff}.view{padding:0 11px;border:1px solid var(--line);background:#fff;color:#44536a;text-decoration:none;display:grid;place-items:center;font-size:12px}
+    .action-panel{margin:5px 0 15px;padding:14px;border:1px solid #d7e4f5;border-radius:18px;background:#f8fbff}.action-heading{margin-bottom:10px;color:#32445e;font-size:13px;font-weight:900}.quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.quick{position:relative;min-height:58px;padding:10px 42px 10px 12px;border:1px solid #cfe0f5;border-radius:14px;background:#fff;color:#164b91;font-weight:850;text-align:left;cursor:pointer;display:flex;align-items:center;gap:9px}.quick.selected{border-color:var(--blue);background:#eaf3ff;color:#073e9a;box-shadow:0 0 0 2px rgba(11,94,215,.12)}.quick-icon{font-size:19px}.quick-label{flex:1}.selection-mark{position:absolute;right:13px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#dce6f3;color:transparent;font-weight:950}.quick.selected .selection-mark{background:var(--blue);color:#fff}.selection-footer{margin-top:12px;padding-top:12px;border-top:1px solid #dce6f2;display:flex;align-items:center;justify-content:space-between;gap:12px}.selection-count{color:#536176;font-size:12px;font-weight:800}.continue-selection{min-height:43px;padding:0 17px;border:0;border-radius:12px;background:var(--blue);color:#fff;font-weight:900;cursor:pointer}.continue-selection:disabled{background:#c9d4e2;color:#6f7d90}.followup-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:7px 0 15px}.followup-main,.followup-secondary{min-height:48px;border-radius:14px;display:grid;place-items:center;font-weight:900;text-align:center}.followup-main{background:#15905f;color:#fff;text-decoration:none}.followup-secondary{border:1px solid #cfe0f5;background:#f4f8ff;color:#164b91;cursor:pointer}
+    .availability-choices{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 14px}.availability-choice{min-height:52px;padding:10px 12px;border:1px solid #cfe0f5;border-radius:14px;background:#fff;color:#164b91;font-weight:900;cursor:pointer}.availability-choice:hover{background:#eef5ff}
+    .composer{padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#fff}.input-row{display:flex;gap:9px}.input-row input{width:100%;min-height:50px;padding:0 15px;border:1px solid #cfd9e6;border-radius:15px}.send{width:52px;height:50px;border:0;border-radius:15px;background:var(--blue);color:#fff;font-size:21px;font-weight:900}.privacy{margin:8px 2px 0;color:#7a8799;font-size:10.5px}.side{padding:20px;background:#f8fbff}.side-card{padding:16px;border:1px solid var(--line);border-radius:18px;background:#fff}.side-card+.side-card{margin-top:13px}.side h2{margin:0 0 12px;font-size:15px}.selected-placeholder{padding:28px 10px;text-align:center;color:var(--muted)}.selected-image{height:150px;margin:-16px -16px 13px;overflow:hidden}.selected-image img{width:100%;height:100%;object-fit:cover}.selected-title{font-weight:950}.summary{display:grid;gap:8px}.summary-row{display:grid;grid-template-columns:90px 1fr;gap:8px;font-size:12px}.side-whatsapp{width:100%;min-height:47px;margin-top:13px;border-radius:13px;background:#15905f;color:#fff;text-decoration:none;display:grid;place-items:center;font-weight:900}.empty{color:#8a96a7;font-style:italic}.typing{display:inline-flex;gap:4px}.typing i{width:6px;height:6px;border-radius:50%;background:#8290a4}
+    @media(max-width:820px){.shell{padding:0}.app{min-height:100vh;border:0;border-radius:0;box-shadow:none}.layout{display:block}.main{border:0}.side{display:none}.topbar{position:sticky;top:0;z-index:5;padding:10px 12px}.brand-sub,.online{display:none}.whatsapp-top{font-size:0;width:42px;padding:0;justify-content:center}.whatsapp-top::after{content:"💬";font-size:18px}.welcome{padding:42px 22px 28px}.messages{min-height:calc(100vh - 194px);max-height:none;padding:15px 12px 8px}.stock-grid{grid-template-columns:1fr}.car-image{height:210px}.bubble{max-width:90%}.quick-actions,.followup-actions,.availability-choices{grid-template-columns:1fr}.selection-footer{align-items:stretch;flex-direction:column}.continue-selection{width:100%}.composer{position:sticky;bottom:0}.chat-head{position:sticky;top:66px;z-index:4;padding:9px 12px}}
   </style>
 </head>
 <body>
-  <div class="shell">
-    <section class="app" aria-label="Assistente comercial AutoValorPT">
-      <header class="topbar">
-        <div class="brand"><div class="brand-mark" aria-hidden="true">AV</div><div><div class="brand-name">AutoValorPT</div><div class="brand-sub">Assistente do Carlos Vasconcelos</div></div></div>
-        <div class="top-actions"><span class="online">Assistente online</span><a class="whatsapp-top" id="topWhatsApp" href="https://wa.me/351918404101" target="_blank" rel="noopener">Falar com o Carlos</a></div>
-      </header>
-      <div class="layout">
-        <main class="main">
-          <section class="welcome" id="welcome">
-            <div class="hero-logo" aria-hidden="true"><div class="hero-logo-inner"><b>AV</b><span>AUTOVALORPT</span></div></div>
-            <h1>Encontre a viatura certa de forma simples</h1>
-            <p>Veja as viaturas com fotografias, escolha uma e selecione todos os assuntos que pretende tratar. Disponibilidade, retoma e financiamento são sempre confirmados pelo Carlos.</p>
-            <button class="primary" id="startBtn">Ver viaturas</button>
-            <div class="trust"><span>✓ Sem compromisso</span><span>✓ Respostas rápidas</span><span>✓ Atendimento humano</span></div>
-          </section>
-          <section class="chat" id="chat">
-            <div class="chat-head"><span class="chat-title" id="chatTitle">Escolha uma viatura</span><div class="small-actions"><button class="text-btn" id="changeBtn" hidden>Mudar viatura</button><button class="text-btn" id="resetBtn">Recomeçar</button></div></div>
-            <div class="messages" id="messages" aria-live="polite"></div>
-            <form class="composer" id="composer">
-              <div class="input-row"><input id="messageInput" autocomplete="off" maxlength="900" placeholder="Escreva a sua dúvida…" aria-label="Mensagem"><button class="send" id="sendBtn" aria-label="Enviar mensagem">➜</button></div>
-              <div class="privacy">Não envie NIF, IBAN, documentos, cartões, palavras-passe ou códigos.</div>
-            </form>
-          </section>
-        </main>
-        <aside class="side" aria-label="Resumo do pedido">
-          <div class="side-card" id="selectedCard"><h2>Viatura selecionada</h2><div class="selected-placeholder">A viatura escolhida aparecerá aqui.</div></div>
-          <div class="side-card"><h2>Dados já recolhidos</h2><div class="summary" id="summary"></div><a class="side-whatsapp" id="sideWhatsApp" href="https://wa.me/351918404101" target="_blank" rel="noopener">Continuar no WhatsApp</a></div>
-        </aside>
-      </div>
-    </section>
-  </div>
+  <div class="shell"><section class="app" aria-label="Assistente comercial AutoValorPT"><header class="topbar"><div class="brand"><div class="brand-mark">AV</div><div><div class="brand-name">AutoValorPT</div><div class="brand-sub">Assistente do Carlos Vasconcelos</div></div></div><div class="top-actions"><span class="online">Assistente online</span><a class="whatsapp-top" id="topWhatsApp" href="https://wa.me/351918404101" target="_blank" rel="noopener">Falar com o Carlos</a></div></header><div class="layout"><main class="main"><section class="welcome" id="welcome"><div class="hero-logo"><div class="hero-logo-inner"><b>AV</b><span>AUTOVALORPT</span></div></div><h1>Encontre a viatura certa de forma simples</h1><p>Veja as viaturas com fotografias, escolha uma e selecione todos os assuntos que pretende tratar. Disponibilidade, retoma e financiamento são sempre confirmados pelo Carlos.</p><button class="primary" id="startBtn">Ver viaturas</button><div class="trust"><span>✓ Sem compromisso</span><span>✓ Respostas rápidas</span><span>✓ Atendimento humano</span></div></section><section class="chat" id="chat"><div class="chat-head"><span class="chat-title" id="chatTitle">Escolha uma viatura</span><div class="small-actions"><button class="text-btn" id="changeBtn" hidden>Mudar viatura</button><button class="text-btn" id="resetBtn">Recomeçar</button></div></div><div class="messages" id="messages" aria-live="polite"></div><form class="composer" id="composer"><div class="input-row"><input id="messageInput" autocomplete="off" maxlength="900" placeholder="Escreva a sua dúvida…" aria-label="Mensagem"><button class="send" id="sendBtn" aria-label="Enviar mensagem">➜</button></div><div class="privacy">Não envie NIF, IBAN, documentos, cartões, palavras-passe ou códigos.</div></form></section></main><aside class="side"><div class="side-card" id="selectedCard"><h2>Viatura selecionada</h2><div class="selected-placeholder">A viatura escolhida aparecerá aqui.</div></div><div class="side-card"><h2>Dados já recolhidos</h2><div class="summary" id="summary"></div><a class="side-whatsapp" id="sideWhatsApp" href="https://wa.me/351918404101" target="_blank" rel="noopener">Continuar no WhatsApp</a></div></aside></div></section></div>
   <script src="/app.js" defer></script>
   <script>
-    (() => {
+    document.addEventListener('DOMContentLoaded', () => {
       const financingQuestion = 'Para preparar uma simulação ajustada a si, qual seria uma prestação mensal confortável? Pretende dar alguma entrada inicial? Tem atualmente algum crédito automóvel a decorrer? Pode responder às três perguntas na mesma mensagem.';
-      const financingPlaceholder = 'Ex.: até 350 €/mês, entrada de 2 000 €, sem crédito atual';
+      const originalAdvance = window.advanceIntent;
 
-      const applyFinancingCopy = () => {
-        const title = document.getElementById('chatTitle');
-        const input = document.getElementById('messageInput');
-        const messages = document.getElementById('messages');
-        if (!title || !input || !messages || title.textContent.trim() !== 'Financiamento') return;
-
-        const bubbles = [...messages.querySelectorAll('.bubble.bot')];
-        const target = bubbles.at(-1);
-        if (target && /entrada pretendida|prazo ou mensalidade/i.test(target.textContent)) {
-          target.textContent = financingQuestion;
-        }
-        input.placeholder = financingPlaceholder;
+      window.beginSelectedIntents = function () {
+        if (!state.selectedIntents.length) return;
+        removeActionPanels();
+        state.intentQueue = state.selectedIntents.filter((intent) => ['disponibilidade', 'financiamento', 'retoma', 'visita'].includes(intent));
+        state.lead.observacoes = '';
+        window.advanceIntent();
       };
 
-      const observer = new MutationObserver(applyFinancingCopy);
-      document.addEventListener('DOMContentLoaded', () => {
-        const messages = document.getElementById('messages');
-        const title = document.getElementById('chatTitle');
-        if (messages) observer.observe(messages, { childList: true, subtree: true, characterData: true });
-        if (title) observer.observe(title, { childList: true, subtree: true, characterData: true });
-        applyFinancingCopy();
-      });
-    })();
+      window.advanceIntent = function () {
+        if (state.intentQueue.length) {
+          const intent = state.intentQueue.shift();
+          if (intent === 'disponibilidade') {
+            state.pendingIntent = 'disponibilidade';
+            document.getElementById('chatTitle').textContent = 'Disponibilidade';
+            addBubble('Muito bem. Se a viatura estiver disponível, prefere agendar uma visita ou receber mais informações do Carlos?', 'bot');
+            const choices = document.createElement('div');
+            choices.className = 'availability-choices';
+            const visit = document.createElement('button');
+            visit.type = 'button'; visit.className = 'availability-choice'; visit.textContent = '📅 Quero agendar uma visita';
+            const info = document.createElement('button');
+            info.type = 'button'; info.className = 'availability-choice'; info.textContent = '💬 Quero mais informações';
+            const choose = (kind) => {
+              choices.remove();
+              state.pendingIntent = '';
+              if (kind === 'visit') {
+                addBubble('Gostaria de agendar uma visita.', 'user');
+                state.lead.observacoes = 'Confirmar disponibilidade. Se estiver disponível, o cliente pretende agendar uma visita.';
+                if (!state.intentQueue.includes('visita')) state.intentQueue.unshift('visita');
+              } else {
+                addBubble('Prefiro receber mais informações do Carlos.', 'user');
+                state.lead.observacoes = 'Confirmar disponibilidade. O cliente pretende receber mais informações do Carlos.';
+              }
+              renderSummary();
+              window.advanceIntent();
+            };
+            visit.addEventListener('click', () => choose('visit'));
+            info.addEventListener('click', () => choose('info'));
+            choices.append(visit, info);
+            document.getElementById('messages').appendChild(choices);
+            scrollEnd();
+            return;
+          }
+          const config = INTENTS[intent];
+          state.pendingIntent = intent;
+          document.getElementById('chatTitle').textContent = config.short;
+          addBubble(intent === 'financiamento' ? financingQuestion : config.prompt, 'bot');
+          setComposer(intent === 'financiamento' ? 'Ex.: até 350 €/mês, entrada de 2 000 €, sem crédito atual' : config.placeholder);
+          return;
+        }
+        originalAdvance();
+      };
+    });
   </script>
 </body>
 </html>
