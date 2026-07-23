@@ -1,54 +1,52 @@
 document.addEventListener('DOMContentLoaded', () => {
-  let pendingFreeRequest = '';
-  const originalSendMessage = window.sendMessage;
+  const originalSendMessage = sendMessage;
 
   function appendObservation(text) {
     const clean = String(text || '').trim();
-    if (!clean) return;
+    if (!clean || /^(ok|okay|obrigad[oa]|certo|perfeito)[.!?]*$/i.test(clean)) return;
     const request = `Pedido de informação: ${clean}`;
-    const current = String(window.state?.lead?.observacoes || '');
-    if (current.includes(clean)) return;
-    window.state.lead.observacoes = [current, request].filter(Boolean).join(' | ').slice(0, 350);
-    window.renderSummary?.();
+    const current = String(state.lead.observacoes || '');
+    if (current.toLocaleLowerCase('pt-PT').includes(clean.toLocaleLowerCase('pt-PT'))) return;
+    state.lead.observacoes = [current, request].filter(Boolean).join(' | ').slice(0, 500);
+    renderSummary();
   }
 
-  function requestContactForFreeQuestion() {
-    window.removeActionPanels?.();
-    window.state.pendingIntent = 'contacto';
-    const title = document.getElementById('chatTitle');
-    if (title) title.textContent = 'Contacto';
+  function hasPreparedLead() {
+    return Boolean(
+      state.lead.nome &&
+      state.lead.telefone &&
+      (state.selectedIntents.length || state.lead.financiamento || state.lead.retoma || state.lead.visita || state.lead.observacoes)
+    );
+  }
 
-    const messages = document.getElementById('messages');
-    const lastBot = [...(messages?.querySelectorAll('.bubble.bot') || [])].at(-1)?.textContent || '';
-    const alreadyAsked = /nome.*(contacto|telem[oó]vel|whatsapp)|contacto.*nome/i.test(lastBot);
-    if (!alreadyAsked) {
-      window.addBubble?.('Para enviar este pedido ao Carlos, indique o seu nome e número de telemóvel ou WhatsApp.', 'bot');
+  sendMessage = async function stableSendMessage(message) {
+    const text = String(message || '').trim();
+    if (!text || state.busy) return;
+
+    const wasFreeQuestion = !state.pendingIntent && !state.finished;
+    const preparedBefore = hasPreparedLead();
+    const selectedBefore = [...state.selectedIntents];
+
+    await originalSendMessage(text);
+
+    if (!wasFreeQuestion) return;
+
+    appendObservation(text);
+
+    if (preparedBefore || (state.lead.nome && state.lead.telefone)) {
+      state.selectedIntents = selectedBefore;
+      state.intentQueue = [];
+      state.pendingIntent = '';
+      finishFlow();
+      return;
     }
-    window.setComposer?.('Ex.: Cristina, 989 999 999');
-  }
 
-  if (typeof originalSendMessage === 'function') {
-    window.sendMessage = async function stableSendMessage(message) {
-      const text = String(message || '').trim();
-      if (!text) return;
-
-      const isFreeQuestion = !window.state.pendingIntent && !window.state.finished;
-      if (isFreeQuestion) pendingFreeRequest = text;
-
-      await originalSendMessage(text);
-
-      if (!pendingFreeRequest || window.state.finished) return;
-      appendObservation(pendingFreeRequest);
-
-      if (window.state.lead.nome && window.state.lead.telefone) {
-        pendingFreeRequest = '';
-        window.finishFlow?.();
-        return;
-      }
-
-      requestContactForFreeQuestion();
-    };
-  }
+    removeActionPanels();
+    state.pendingIntent = 'contacto';
+    document.getElementById('chatTitle').textContent = 'Contacto';
+    addBubble('Para enviar este pedido ao Carlos, indique o seu nome e número de telemóvel ou WhatsApp.', 'bot');
+    setComposer(INTENTS.contacto.placeholder);
+  };
 
   document.getElementById('startBtn')?.click();
 });
