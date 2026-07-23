@@ -47,20 +47,28 @@
             visit.type = 'button'; visit.className = 'availability-choice'; visit.textContent = '📅 Quero agendar uma visita';
             const info = document.createElement('button');
             info.type = 'button'; info.className = 'availability-choice'; info.textContent = '💬 Quero mais informações';
+
             const choose = (kind) => {
               choices.remove();
-              state.pendingIntent = '';
               if (kind === 'visit') {
+                state.pendingIntent = '';
                 addBubble('Gostaria de agendar uma visita.', 'user');
                 state.lead.observacoes = 'Confirmar disponibilidade. Se estiver disponível, o cliente pretende agendar uma visita.';
                 if (!state.intentQueue.includes('visita')) state.intentQueue.unshift('visita');
-              } else {
-                addBubble('Prefiro receber mais informações do Carlos.', 'user');
-                state.lead.observacoes = 'Confirmar disponibilidade. O cliente pretende receber mais informações do Carlos.';
+                renderSummary();
+                window.advanceIntent();
+                return;
               }
+
+              addBubble('Prefiro receber mais informações do Carlos.', 'user');
+              state.pendingIntent = 'informacoes';
+              state.lead.observacoes = 'Confirmar disponibilidade. O cliente pretende receber mais informações do Carlos.';
+              document.getElementById('chatTitle').textContent = 'Informações pretendidas';
+              addBubble('Perfeito. Que tipo de informações gostaria de receber do Carlos? Pode indicar, por exemplo, dúvidas sobre o estado da viatura, equipamento, histórico, garantia, autonomia ou carregamento.', 'bot');
+              setComposer('Ex.: gostaria de saber o estado da bateria e se tem histórico de revisões');
               renderSummary();
-              window.advanceIntent();
             };
+
             visit.addEventListener('click', () => choose('visit'));
             info.addEventListener('click', () => choose('info'));
             choices.append(visit, info);
@@ -68,6 +76,7 @@
             scrollEnd();
             return;
           }
+
           const config = INTENTS[intent];
           state.pendingIntent = intent;
           document.getElementById('chatTitle').textContent = config.short;
@@ -77,6 +86,24 @@
         }
         originalAdvance();
       };
+
+      const composer = document.getElementById('composer');
+      composer.addEventListener('submit', (event) => {
+        if (state.pendingIntent !== 'informacoes') return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        const input = document.getElementById('messageInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        input.value = '';
+        addBubble(text, 'user');
+        state.lead.observacoes = `${state.lead.observacoes} Informações pretendidas: ${text}`.trim();
+        state.pendingIntent = '';
+        renderSummary();
+        window.advanceIntent();
+      }, true);
     });
   </script>
 </body>
