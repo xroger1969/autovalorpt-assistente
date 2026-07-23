@@ -4,6 +4,9 @@
   "redirects": [
     { "source": "/", "destination": "/welcome", "permanent": false }
   ],
+  "rewrites": [
+    { "source": "/assistant-app", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
