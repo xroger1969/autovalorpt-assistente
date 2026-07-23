@@ -17,54 +17,68 @@
 <script src="/app.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
-  const originalSendMessage=window.sendMessage;
+  const form=document.getElementById('composer');
+  const input=document.getElementById('messageInput');
   const originalAdvanceIntent=window.advanceIntent;
-  let answeredIntent='';
-  let waitingForValidatedAdvance=false;
+  let pendingConfirmationIntent='';
 
   function confirmationFor(intent){
     if(intent==='visita') return `✓ Data e horário compreendidos: ${state.lead.visita}. A visita fica sujeita à confirmação do Carlos.`;
-    if(intent==='contacto'){
-      const name=state.lead.nome?`, ${state.lead.nome}`:'';
-      return `✓ Obrigado${name}. O nome e o contacto foram registados corretamente.`;
-    }
     if(intent==='financiamento') return `✓ Informação de financiamento compreendida: ${state.lead.financiamento}.`;
     if(intent==='retoma') return `✓ Informação da retoma compreendida: ${state.lead.retoma}.`;
     return '✓ Resposta compreendida e registada corretamente.';
   }
 
   window.advanceIntent=function(){
-    if(waitingForValidatedAdvance && answeredIntent){
-      const confirmed=addBubble(confirmationFor(answeredIntent),'bot');
+    if(pendingConfirmationIntent){
+      const confirmed=addBubble(confirmationFor(pendingConfirmationIntent),'bot');
       confirmed.classList.add('confirmed');
-      waitingForValidatedAdvance=false;
-      answeredIntent='';
-      return originalAdvanceIntent();
+      pendingConfirmationIntent='';
     }
     return originalAdvanceIntent();
   };
 
-  window.sendMessage=async function(message){
-    answeredIntent=state.pendingIntent;
-    waitingForValidatedAdvance=Boolean(answeredIntent);
-    try{
-      return await originalSendMessage(message);
-    }finally{
-      if(state.pendingIntent===answeredIntent){
-        waitingForValidatedAdvance=false;
-        answeredIntent='';
-      }
-    }
-  };
+  form.addEventListener('submit',event=>{
+    if(state.pendingIntent==='contacto'){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const text=input.value.trim();
+      if(!text) return;
+      input.value='';
+      addBubble(text,'user');
 
-  const renameSendButton=()=>{
-    document.querySelectorAll('.followup-main').forEach(button=>{button.textContent='Enviar pedido ao Carlos';});
-  };
+      const compact=text.replace(/\s+/g,' ').trim();
+      const phoneMatch=compact.match(/(?:\+?351[\s.-]*)?(9\d{2}[\s.-]?\d{3}[\s.-]?\d{3})/);
+      const phone=phoneMatch?phoneMatch[1].replace(/\D/g,''):'';
+      const name=compact.replace(phoneMatch?.[0]||'','').replace(/[,:;|/\\-]+/g,' ').replace(/\s+/g,' ').trim();
+
+      if(!name || !phone){
+        const missing=!name&& !phone?'o seu nome e um número de telemóvel válido':!name?'o seu nome':'um número de telemóvel válido com 9 dígitos';
+        addBubble(`Não consegui validar ${missing}. Pode escrever, por exemplo: Cristina 989 999 999.`,'bot');
+        state.pendingIntent='contacto';
+        setComposer('Ex.: Cristina, 989 999 999');
+        return;
+      }
+
+      state.lead.nome=name;
+      state.lead.telefone=phone;
+      state.pendingIntent='';
+      renderSummary();
+      renderSelected();
+      const confirmed=addBubble(`✓ Obrigado, ${name}. O nome e o contacto foram registados corretamente.`,'bot');
+      confirmed.classList.add('confirmed');
+      finishFlow();
+      document.querySelectorAll('.followup-main').forEach(button=>button.textContent='Enviar pedido ao Carlos');
+      return;
+    }
+
+    pendingConfirmationIntent=state.pendingIntent||'';
+  },true);
+
+  const renameSendButton=()=>document.querySelectorAll('.followup-main').forEach(button=>button.textContent='Enviar pedido ao Carlos');
   new MutationObserver(renameSendButton).observe(document.getElementById('messages'),{childList:true,subtree:true});
   renameSendButton();
-
-  const start=document.getElementById('startBtn');
-  if(start) start.click();
+  document.getElementById('startBtn')?.click();
 });
 </script>
 </body>
