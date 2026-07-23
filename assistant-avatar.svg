@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-label="Assistente pessoal do Carlos">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2f8cff"/><stop offset="1" stop-color="#0748b9"/></linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#163f73"/><stop offset="1" stop-color="#09284d"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0754c8" flood-opacity=".28"/></filter>
+  </defs>
+  <circle cx="300" cy="300" r="276" fill="url(#bg)" filter="url(#shadow)"/>
+  <circle cx="300" cy="300" r="264" fill="none" stroke="#fff" stroke-width="12" opacity=".94"/>
+  <path d="M148 520c17-104 77-153 152-153s135 49 152 153" fill="url(#shirt)"/>
+  <path d="M215 380c14 44 43 66 85 66s72-22 86-66" fill="#efb58d"/>
+  <ellipse cx="300" cy="270" rx="112" ry="132" fill="#f2bd97"/>
+  <path d="M192 241c-5-83 47-139 109-139 78 0 122 55 110 147-20-35-37-58-69-70-35 20-88 31-150 24z" fill="#302017"/>
+  <path d="M206 220c22-73 77-109 141-89 38 12 66 47 72 92-30-28-64-42-101-42-42 0-79 14-112 39z" fill="#4a2b1c"/>
+  <ellipse cx="255" cy="276" rx="15" ry="18" fill="#fff"/><ellipse cx="345" cy="276" rx="15" ry="18" fill="#fff"/>
+  <circle cx="258" cy="279" r="8" fill="#54341f"/><circle cx="342" cy="279" r="8" fill="#54341f"/>
+  <circle cx="260" cy="277" r="3" fill="#fff"/><circle cx="344" cy="277" r="3" fill="#fff"/>
+  <path d="M235 247c17-12 35-13 51-4M315 243c18-8 36-6 51 6" fill="none" stroke="#3d281e" stroke-width="10" stroke-linecap="round"/>
+  <path d="M286 305c5 6 10 9 15 9s10-3 15-9" fill="none" stroke="#c98261" stroke-width="7" stroke-linecap="round"/>
+  <path d="M247 332c16 28 34 40 55 40 22 0 41-13 56-40-34 14-73 14-111 0z" fill="#fff"/>
+  <path d="M251 340c31 14 66 14 102 0" fill="none" stroke="#d88675" stroke-width="5" stroke-linecap="round"/>
+  <path d="M150 365c-42-20-68-4-73 24-5 29 19 51 49 51 18 0 34-8 44-20" fill="#f2bd97"/>
+  <path d="M118 403l-14-42m19 39 2-48m7 51 18-43m-9 51 31-31" stroke="#efb58d" stroke-width="17" stroke-linecap="round"/>
+  <g transform="translate(397 120)"><path d="M0 18C0 8 8 0 18 0h112c10 0 18 8 18 18v70c0 10-8 18-18 18H66l-30 29 5-29H18C8 106 0 98 0 88z" fill="#fff"/><circle cx="48" cy="53" r="8" fill="#1670e9"/><circle cx="74" cy="53" r="8" fill="#1670e9"/><circle cx="100" cy="53" r="8" fill="#1670e9"/></g>
+</svg>
