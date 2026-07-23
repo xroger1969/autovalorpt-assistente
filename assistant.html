@@ -39,8 +39,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       confirmed.classList.add('confirmed');
       waitingForValidatedAdvance=false;
       answeredIntent='';
-      window.setTimeout(()=>originalAdvanceIntent(),550);
-      return;
+      return originalAdvanceIntent();
     }
     return originalAdvanceIntent();
   };
