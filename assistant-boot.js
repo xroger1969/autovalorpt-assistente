@@ -46,8 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-  function saveValidatedIntent(intent, text) {
-    const clean = String(text || '').trim().slice(0, 180);
+  function saveValidatedIntent(intent, text, normalized = '') {
+    const clean = String(normalized || text || '').trim().slice(0, 180);
     if (intent === 'retoma') state.lead.retoma = clean;
     if (intent === 'financiamento') state.lead.financiamento = clean;
     if (intent === 'visita') state.lead.visita = clean;
@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentIntent = state.pendingIntent;
     const wasFinished = state.finished;
+    let validation = null;
+    let originalRetry = '';
 
     if (wasFinished && isSimpleAcknowledgement(text)) {
       document.getElementById('messageInput').value = '';
@@ -155,10 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (currentIntent && currentIntent !== 'contacto') {
       const validator = globalThis.AutoValorValidation?.validateIntent;
-      const validation = validator
+      validation = validator
         ? validator(currentIntent, text)
-        : { ok: false, retry: INTENTS[currentIntent]?.retry || 'Falta completar esta informação.' };
-      if (!validation.ok) {
+        : { ok: false, hardReject: false, retry: INTENTS[currentIntent]?.retry || 'Falta completar esta informação.' };
+
+      if (!validation.ok && validation.hardReject) {
         document.getElementById('messageInput').value = '';
         addBubble(text, 'user');
         addBubble(validation.retry, 'bot');
@@ -168,7 +171,13 @@ document.addEventListener('DOMContentLoaded', () => {
         saveDraft();
         return;
       }
-      saveValidatedIntent(currentIntent, text);
+
+      if (validation.ok) saveValidatedIntent(currentIntent, text, validation.normalized);
+
+      if (!validation.ok && validation.retry && INTENTS[currentIntent]) {
+        originalRetry = INTENTS[currentIntent].retry;
+        INTENTS[currentIntent].retry = validation.retry;
+      }
     }
 
     const wasFreeQuestion = !currentIntent && !wasFinished;
@@ -176,7 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedBefore = [...completedIntents];
 
     if (wasFinished) state.finished = false;
-    await originalSendMessage(text);
+    try {
+      await originalSendMessage(text);
+    } finally {
+      if (currentIntent && originalRetry && INTENTS[currentIntent]) INTENTS[currentIntent].retry = originalRetry;
+    }
 
     if (wasFinished) {
       appendObservation(text);
@@ -188,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (currentIntent) {
-      if (currentIntent !== 'contacto') {
+      if (currentIntent !== 'contacto' && intentComplete(currentIntent)) {
         completedIntents.add(currentIntent);
         restoreCompletedIntents();
         if (state.pendingIntent === currentIntent) {
@@ -196,6 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
           addConfirmation(currentIntent);
           advanceIntent();
         }
+      } else if (currentIntent !== 'contacto') {
+        state.pendingIntent = currentIntent;
+        document.getElementById('chatTitle').textContent = INTENTS[currentIntent].short;
+        setComposer(INTENTS[currentIntent].placeholder);
       }
       renderSummary();
       saveDraft();
