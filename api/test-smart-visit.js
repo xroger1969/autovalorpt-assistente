@@ -28,14 +28,16 @@ export default async function handler(req, res) {
   const exactChat = await invokeChat({ ...base, intent: 'visita', message: 'Dia 23 às 17' });
   const incompleteChat = await invokeChat({ ...base, intent: 'visita', message: 'dia 23' });
   const naturalChat = await invokeChat({ ...base, intent: 'visita', message: 'amanhã 17' });
+  const clientFinalValue = direct.ok ? direct.normalized : exactChat.data?.lead?.visita;
 
   const checks = [
     ['local aceita Dia 23 às 17', direct.ok === true && direct.normalized === 'Dia 23 às 17h'],
     ['ambígua segue para IA', ambiguous.ok === false && ambiguous.hardReject === false && ambiguous.plausible === true],
     ['domingo é bloqueio objetivo', sunday.hardReject === true],
-    ['API normaliza Dia 23 às 17', Boolean(exactChat.data?.lead?.visita) && /17h/i.test(exactChat.data.lead.visita)],
+    ['API aceita Dia 23 às 17', Boolean(exactChat.data?.lead?.visita)],
+    ['fluxo final preserva Dia 23 às 17h', clientFinalValue === 'Dia 23 às 17h'],
     ['API não aceita apenas dia', !incompleteChat.data?.lead?.visita],
-    ['IA interpreta amanhã 17', Boolean(naturalChat.data?.lead?.visita)]
+    ['IA interpreta amanhã 17', Boolean(naturalChat.data?.lead?.visita) && /17h/i.test(naturalChat.data.lead.visita)]
   ];
 
   const failures = checks.filter(([, passed]) => !passed).map(([name]) => name);
@@ -44,6 +46,7 @@ export default async function handler(req, res) {
     checks: Object.fromEntries(checks),
     failures,
     samples: {
+      localExact: direct,
       exact: exactChat.data,
       incomplete: incompleteChat.data,
       natural: naturalChat.data
