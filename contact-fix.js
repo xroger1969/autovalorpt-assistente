@@ -38,26 +38,119 @@ document.addEventListener('DOMContentLoaded', () => {
     advanceIntent();
   };
 
+  const style = document.createElement('style');
+  style.textContent = `
+    .free-question-box{margin:0;padding:12px;border:2px solid #9fc5f4;border-radius:18px;background:#f5f9ff;box-shadow:0 5px 18px rgba(11,94,215,.08)}
+    .free-question-title{display:flex;align-items:center;gap:7px;color:#124b92;font-size:13px;font-weight:950;line-height:1.3}
+    .free-question-hint{margin:4px 0 10px;color:#526783;font-size:11px;line-height:1.35}
+    .free-question-box .input-row input{border:2px solid #c5d9f2;background:#fff}
+    .free-question-box .input-row input:focus{outline:3px solid rgba(11,94,215,.12);border-color:#0b5ed7}
+    #quickSendPartial{margin:0 0 10px;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)}
+    #quickSendPartial strong{display:block;font-size:13px;font-weight:950}
+    #quickSendPartial span{display:block;margin-top:3px;font-size:11px;color:#39735c}
+    @media(max-width:820px){.free-question-box{padding:11px}.free-question-title{font-size:12.5px}.free-question-hint{font-size:10.5px}}
+  `;
+  document.head.appendChild(style);
+
   const composer = document.getElementById('composer');
   const inputRow = composer?.querySelector('.input-row');
+  const privacy = composer?.querySelector('.privacy');
+
+  const freeQuestionBox = document.createElement('section');
+  freeQuestionBox.id = 'freeQuestionBox';
+  freeQuestionBox.className = 'free-question-box';
+  const freeQuestionTitle = document.createElement('div');
+  freeQuestionTitle.className = 'free-question-title';
+  const freeQuestionHint = document.createElement('div');
+  freeQuestionHint.className = 'free-question-hint';
+  freeQuestionBox.append(freeQuestionTitle, freeQuestionHint);
+  if (composer && inputRow) {
+    composer.insertBefore(freeQuestionBox, privacy || inputRow);
+    freeQuestionBox.appendChild(inputRow);
+  }
+
   const quickSend = document.createElement('a');
   quickSend.id = 'quickSendPartial';
   quickSend.target = '_blank';
   quickSend.rel = 'noopener';
   quickSend.hidden = true;
   quickSend.innerHTML = '<strong>Enviar o que já foi reunido ao Carlos</strong><span>Pode enviar agora e continuar a conversa depois.</span>';
-  quickSend.style.cssText = 'display:none;margin:0 0 10px;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)';
-  quickSend.querySelector('strong').style.cssText = 'display:block;font-size:13px;font-weight:950';
-  quickSend.querySelector('span').style.cssText = 'display:block;margin-top:3px;font-size:11px;color:#39735c';
-  if (composer && inputRow) composer.insertBefore(quickSend, inputRow);
+  if (composer && freeQuestionBox) composer.insertBefore(quickSend, freeQuestionBox);
+
+  let messageInteraction = false;
+
+  function updateFreeQuestionPrompt() {
+    if (!freeQuestionTitle || !freeQuestionHint) return;
+    if (!state.vehicle) {
+      freeQuestionTitle.textContent = '💬 Escreva diretamente a sua dúvida';
+      freeQuestionHint.textContent = 'Depois de escolher uma viatura, pode conversar livremente com o assistente.';
+      return;
+    }
+    if (state.finished) {
+      freeQuestionTitle.textContent = '💬 Ainda tem alguma dúvida?';
+      freeQuestionHint.textContent = 'Pode continuar a perguntar sem voltar a preencher o pedido.';
+      return;
+    }
+    if (state.pendingIntent) {
+      freeQuestionTitle.textContent = '💬 Responda aqui ou escreva outra necessidade';
+      freeQuestionHint.textContent = 'Não precisa de completar tudo agora. Pode enviar ao Carlos quando entender.';
+      return;
+    }
+    freeQuestionTitle.textContent = '💬 Prefere escrever diretamente?';
+    freeQuestionHint.textContent = 'Ex.: “Tem garantia?”, “Aceitam retoma?” ou “Quanto poderá ficar por mês?”';
+  }
+
+  function hasCollectedInformation() {
+    const lead = state.lead || {};
+    return Boolean(
+      messageInteraction
+      || state.selectedIntents?.length
+      || state.pendingIntent
+      || state.finished
+      || lead.nome
+      || lead.telefone
+      || lead.financiamento
+      || lead.retoma
+      || lead.visita
+      || lead.observacoes
+    );
+  }
 
   function syncQuickSend() {
-    if (!quickSend) return;
-    const available = Boolean(state.vehicle || state.lead.viatura);
+    const hasVehicle = Boolean(state.vehicle || state.lead?.viatura);
+    const available = hasVehicle && hasCollectedInformation();
     quickSend.hidden = !available;
     quickSend.style.display = available ? 'block' : 'none';
     if (available) quickSend.href = whatsappUrl();
+
+    const sideSend = document.getElementById('sideWhatsApp');
+    if (sideSend) {
+      sideSend.hidden = !available;
+      sideSend.style.display = available ? 'grid' : 'none';
+      if (available) sideSend.href = whatsappUrl();
+    }
+    updateFreeQuestionPrompt();
   }
+
+  const previousSetComposer = setComposer;
+  setComposer = function setComposerWithFreePrompt(placeholder, hidden = false) {
+    previousSetComposer(placeholder, hidden);
+    updateFreeQuestionPrompt();
+  };
+
+  const previousRenderPurposeActions = renderPurposeActions;
+  renderPurposeActions = function renderPurposeActionsWithFreeWriting() {
+    previousRenderPurposeActions();
+    const wrap = document.getElementById('purposeActions');
+    wrap?.querySelectorAll('.quick').forEach((button) => {
+      button.addEventListener('click', syncQuickSend);
+    });
+    const heading = wrap?.querySelector('.action-heading');
+    if (heading) heading.textContent = 'Opções rápidas — escolha uma ou várias';
+    const input = document.getElementById('messageInput');
+    if (input && !state.pendingIntent) input.placeholder = 'Escreva aqui a sua dúvida ou necessidade…';
+    syncQuickSend();
+  };
 
   const previousRenderSummary = renderSummary;
   renderSummary = function renderSummaryWithPartialSend() {
@@ -71,8 +164,16 @@ document.addEventListener('DOMContentLoaded', () => {
     syncQuickSend();
   };
 
+  const previousSelectVehicle = selectVehicle;
+  selectVehicle = function selectVehicleWithoutPrematureSend(item) {
+    messageInteraction = false;
+    previousSelectVehicle(item);
+    syncQuickSend();
+  };
+
   const previousResetState = resetState;
   resetState = function resetStateWithPartialSend() {
+    messageInteraction = false;
     previousResetState();
     syncQuickSend();
   };
@@ -130,6 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
   sendMessage = async function conversationalPreparedSend(message) {
     const text = String(message || '').trim();
     if (!text || state.busy) return;
+
+    messageInteraction = true;
+    syncQuickSend();
+
     if (!state.finished) return previousSendMessage(text);
 
     if (/^(ok|okay|obrigad[oa]|certo|perfeito|sim|entendido)[.!?]*$/i.test(text)) {
