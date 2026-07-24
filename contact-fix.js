@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .free-question-hint{margin:4px 0 10px;color:#526783;font-size:11px;line-height:1.35}
     .free-question-box .input-row input{border:2px solid #c5d9f2;background:#fff}
     .free-question-box .input-row input:focus{outline:3px solid rgba(11,94,215,.12);border-color:#0b5ed7}
-    #quickSendPartial{margin:0 0 10px;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)}
+    #quickSendPartial{margin:12px 0 0;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)}
     #quickSendPartial strong{display:block;font-size:13px;font-weight:950}
     #quickSendPartial span{display:block;margin-top:3px;font-size:11px;color:#39735c}
     @media(max-width:820px){.free-question-box{padding:11px}.free-question-title{font-size:12.5px}.free-question-hint{font-size:10.5px}}
@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const composer = document.getElementById('composer');
   const inputRow = composer?.querySelector('.input-row');
   const privacy = composer?.querySelector('.privacy');
+  const messageInput = document.getElementById('messageInput');
 
   const freeQuestionBox = document.createElement('section');
   freeQuestionBox.id = 'freeQuestionBox';
@@ -75,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
   quickSend.rel = 'noopener';
   quickSend.hidden = true;
   quickSend.innerHTML = '<strong>Enviar o que já foi reunido ao Carlos</strong><span>Pode enviar agora e continuar a conversa depois.</span>';
-  if (composer && freeQuestionBox) composer.insertBefore(quickSend, freeQuestionBox);
+  if (composer) composer.appendChild(quickSend);
 
   let messageInteraction = false;
 
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lead = state.lead || {};
     return Boolean(
       messageInteraction
+      || messageInput?.value.trim()
       || state.selectedIntents?.length
       || state.pendingIntent
       || state.finished
@@ -116,18 +118,24 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
+  function quickSendUrl() {
+    const draft = String(messageInput?.value || '').trim();
+    if (!draft) return whatsappUrl();
+    return `https://wa.me/${PHONE}?text=${encodeURIComponent(`${whatsappText()}\nMensagem: ${draft}`)}`;
+  }
+
   function syncQuickSend() {
     const hasVehicle = Boolean(state.vehicle || state.lead?.viatura);
     const available = hasVehicle && hasCollectedInformation();
     quickSend.hidden = !available;
     quickSend.style.display = available ? 'block' : 'none';
-    if (available) quickSend.href = whatsappUrl();
+    if (available) quickSend.href = quickSendUrl();
 
     const sideSend = document.getElementById('sideWhatsApp');
     if (sideSend) {
       sideSend.hidden = !available;
       sideSend.style.display = available ? 'grid' : 'none';
-      if (available) sideSend.href = whatsappUrl();
+      if (available) sideSend.href = quickSendUrl();
     }
     updateFreeQuestionPrompt();
   }
@@ -179,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   syncQuickSend();
+  messageInput?.addEventListener('input', syncQuickSend);
 
   const previousSendMessage = sendMessage;
 
