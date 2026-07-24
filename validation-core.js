@@ -93,14 +93,30 @@ globalThis.AutoValorValidation = (() => {
       || /\bsem entrada\b/.test(clean)
       || euroValues.length >= 2
       || (euroValues.length >= 1 && hasTerm);
+    const ok = Boolean(hasEntry && (hasTerm || hasMonthly));
     return {
-      ok: Boolean(hasEntry && (hasTerm || hasMonthly)),
+      ok,
+      plausible: ok || /€|euro|entrada|mes|prazo|mensal|prestacao|renda|financ/.test(clean),
+      hardReject: false,
+      normalized: String(text).replace(/\s+/g, ' ').trim(),
       retry: 'Falta completar o financiamento. Indique a entrada e o prazo ou mensalidade, por exemplo: 3 000 € de entrada e 84 meses.'
     };
   }
 
   function validateTradeIn(text = '') {
     const clean = String(text).trim();
+    const fourDigitYears = [...clean.matchAll(/\b\d{4}\b/g)].map((match) => match[0]);
+    const invalidYear = fourDigitYears.find((value) => Number(value) < 1900 || Number(value) > 2099);
+    if (invalidYear) {
+      return {
+        ok: false,
+        plausible: true,
+        hardReject: true,
+        normalized: clean,
+        retry: `O ano ${invalidYear} parece incorreto. Indique um ano válido, por exemplo: 2019.`
+      };
+    }
+
     const yearMatches = [...clean.matchAll(/\b(19|20)\d{2}\b/g)];
     const year = yearMatches.at(-1)?.[0] || '';
     let withoutYear = clean;
@@ -122,31 +138,71 @@ globalThis.AutoValorValidation = (() => {
       .map((match) => match[0])
       .filter((value) => Number(value) < 5000);
 
+    const ok = Boolean(year && (labelledMileage || unlabelledMileage) && meaningfulTokens.length + numericModelTokens.length >= 2);
     return {
-      ok: Boolean(year && (labelledMileage || unlabelledMileage) && meaningfulTokens.length + numericModelTokens.length >= 2),
+      ok,
+      plausible: ok || Boolean(year || labelledMileage || unlabelledMileage || meaningfulTokens.length),
+      hardReject: false,
+      normalized: clean.replace(/\s+/g, ' '),
       retry: 'Faltam dados da retoma. Indique marca, modelo, ano e quilómetros, por exemplo: Renault Clio, 2019, 85 000 km.'
     };
   }
 
+  function normalizeVisit(text = '') {
+    let output = String(text).replace(/\s+/g, ' ').trim();
+    output = output.replace(/\b(as|às|pelas?)\s+([01]?\d|2[0-3])\b(?!\s*[:h])/giu, (match, prefix, hour) => {
+      const connector = normalizeText(prefix) === 'as' ? 'às' : prefix.toLocaleLowerCase('pt-PT');
+      return `${connector} ${Number(hour)}h`;
+    });
+    output = output.replace(/^dia\b/i, 'Dia');
+    return output;
+  }
+
   function validateVisit(text = '') {
-    const clean = normalizeText(text);
+    const original = String(text).replace(/\s+/g, ' ').trim();
+    const clean = normalizeText(original);
     if (/\bdomingo\b/.test(clean)) {
       return {
         ok: false,
+        plausible: true,
+        hardReject: true,
+        normalized: original,
         retry: 'Não estamos abertos ao domingo. Indique outro dia e horário.'
+      };
+    }
+
+    const invalidClock = clean.match(/\b(?:as|pelas?|por volta (?:das|de))\s+(\d{1,2})(?::(\d{1,2}))?\b/);
+    if (invalidClock && (Number(invalidClock[1]) > 23 || (invalidClock[2] && Number(invalidClock[2]) > 59))) {
+      return {
+        ok: false,
+        plausible: true,
+        hardReject: true,
+        normalized: original,
+        retry: 'O horário indicado não parece válido. Escreva, por exemplo: dia 28 às 17h.'
       };
     }
 
     const hasDay = /\b(hoje|amanha|segunda(?:-feira)?|terca(?:-feira)?|quarta(?:-feira)?|quinta(?:-feira)?|sexta(?:-feira)?|sabado)\b/.test(clean)
       || /\bdia\s+([1-9]|[12]\d|3[01])\b/.test(clean)
-      || /\b([1-9]|[12]\d|3[01])\s+(?:as|às)\b/.test(String(text).toLocaleLowerCase('pt-PT'))
+      || /\b([1-9]|[12]\d|3[01])\s+(?:as|pelas?)\b/.test(clean)
       || /\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(clean);
-    const hasTime = /\b\d{1,2}(?:[:h]\d{0,2})\b/.test(clean)
-      || /\b(meio[- ]dia|meia[- ]noite)\b/.test(clean);
+
+    const explicitTime = /\b([01]?\d|2[0-3])(?::[0-5]\d|h(?:[0-5]\d)?)\b/.test(clean);
+    const bareTime = /\b(?:as|pelas?|por volta (?:das|de))\s+([01]?\d|2[0-3])\b/.test(clean);
+    const writtenTime = /\b(meio[- ]dia|meia[- ]noite)\b/.test(clean);
+    const hasTime = explicitTime || bareTime || writtenTime;
+    const ok = Boolean(hasDay && hasTime);
+
+    let retry = 'Falta indicar o dia e o horário. Pode escrever, por exemplo: dia 28 às 17h.';
+    if (hasDay && !hasTime) retry = 'Percebi o dia, mas falta indicar a hora. Pode escrever, por exemplo: às 17h.';
+    if (!hasDay && hasTime) retry = 'Percebi o horário, mas falta indicar o dia pretendido.';
 
     return {
-      ok: Boolean(hasDay && hasTime),
-      retry: 'Falta indicar o dia e o horário. Pode escrever, por exemplo: dia 28 às 17h.'
+      ok,
+      plausible: ok || hasDay || hasTime || /visita|marcar|agendar/.test(clean),
+      hardReject: false,
+      normalized: ok ? normalizeVisit(original) : original,
+      retry
     };
   }
 
@@ -154,11 +210,12 @@ globalThis.AutoValorValidation = (() => {
     if (intent === 'retoma') return validateTradeIn(text);
     if (intent === 'financiamento') return validateFinancing(text);
     if (intent === 'visita') return validateVisit(text);
-    return { ok: true, retry: '' };
+    return { ok: true, plausible: true, hardReject: false, normalized: String(text), retry: '' };
   }
 
   return {
     normalizeText,
+    normalizeVisit,
     extractFlexibleContact,
     validateFinancing,
     validateTradeIn,
