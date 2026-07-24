@@ -150,9 +150,9 @@ globalThis.AutoValorValidation = (() => {
 
   function normalizeVisit(text = '') {
     let output = String(text).replace(/\s+/g, ' ').trim();
-    output = output.replace(/\b(as|às|pelas?)\s+([01]?\d|2[0-3])\b(?!\s*[:h])/giu, (match, prefix, hour) => {
+    output = output.replace(/(^|\s)(as|às|pelas?)\s+([01]?\d|2[0-3])(?!\d)(?!\s*[:h])/giu, (match, spacing, prefix, hour) => {
       const connector = normalizeText(prefix) === 'as' ? 'às' : prefix.toLocaleLowerCase('pt-PT');
-      return `${connector} ${Number(hour)}h`;
+      return `${spacing}${connector} ${Number(hour)}h`;
     });
     output = output.replace(/^dia\b/i, 'Dia');
     return output;
