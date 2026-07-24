@@ -201,6 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (currentIntent) {
+      if (currentIntent !== 'contacto' && validation?.ok && validation.normalized) {
+        saveValidatedIntent(currentIntent, text, validation.normalized);
+      }
       if (currentIntent !== 'contacto' && intentComplete(currentIntent)) {
         completedIntents.add(currentIntent);
         restoreCompletedIntents();
