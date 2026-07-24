@@ -65,24 +65,35 @@ test('exige marca, modelo, ano válido e quilometragem na retoma', () => {
   for (const [input, expected] of tradeInCases) {
     assert.equal(validateTradeIn(input).ok, expected, input);
   }
+  assert.equal(validateTradeIn('Fiat Uno 3015 50000km').hardReject, true);
 });
 
 const visitCases = [
   ['dia 28 às 17h', true],
+  ['Dia 23 às 17', true],
   ['terça-feira 12h', true],
   ['28 às 17h', true],
+  ['23 pelas 9', true],
+  ['sexta às 17', true],
   ['amanhã às 9:30', true],
   ['28/07 10h', true],
   ['sábado meio-dia', true],
   ['dia 28', false],
   ['às 17h', false],
+  ['amanhã 17', false],
   ['sexta de manhã', false],
-  ['domingo 10h', false]
+  ['domingo 10h', false],
+  ['dia 23 às 25', false]
 ];
 
-test('exige dia e hora e rejeita domingo', () => {
+test('compreende formatos naturais, exige dia e hora e rejeita erros objetivos', () => {
   for (const [input, expected] of visitCases) {
     assert.equal(validateVisit(input).ok, expected, input);
   }
+  assert.equal(validateVisit('Dia 23 às 17').normalized, 'Dia 23 às 17h');
+  assert.equal(validateVisit('amanhã 17').plausible, true);
+  assert.equal(validateVisit('amanhã 17').hardReject, false);
   assert.match(validateVisit('domingo 10h').retry, /domingo/i);
+  assert.equal(validateVisit('domingo 10h').hardReject, true);
+  assert.equal(validateVisit('dia 23 às 25').hardReject, true);
 });
