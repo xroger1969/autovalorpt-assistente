@@ -78,8 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
   quickSend.innerHTML = '<strong>Enviar o que já foi reunido ao Carlos</strong><span>Pode enviar agora e continuar a conversa depois.</span>';
   if (composer) composer.appendChild(quickSend);
 
-  let messageInteraction = false;
-
   function updateFreeQuestionPrompt() {
     if (!freeQuestionTitle || !freeQuestionHint) return;
     if (!state.vehicle) {
@@ -93,34 +91,64 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (state.pendingIntent) {
-      freeQuestionTitle.textContent = '💬 Responda aqui ou escreva outra necessidade';
-      freeQuestionHint.textContent = 'Não precisa de completar tudo agora. Pode enviar ao Carlos quando entender.';
+      const prompts = {
+        financiamento: ['💬 Indique os dados do financiamento', 'Escreva a entrada e o prazo ou mensalidade aproximada.'],
+        retoma: ['💬 Descreva a sua retoma', 'Escreva a marca, o modelo, o ano e os quilómetros da sua viatura.'],
+        visita: ['💬 Indique quando pretende visitar', 'Escreva o dia e o horário preferidos para a visita.'],
+        contacto: ['💬 Indique o seu contacto', 'Escreva o seu nome e número de telemóvel ou WhatsApp.']
+      };
+      const [title, hint] = prompts[state.pendingIntent] || [
+        '💬 Acrescente informação sobre o pedido',
+        'O envio fica disponível quando existir informação concreta para o Carlos.'
+      ];
+      freeQuestionTitle.textContent = title;
+      freeQuestionHint.textContent = `${hint} O envio só aparece depois de existir conteúdo útil.`;
+      return;
+    }
+    if (state.selectedIntents?.length) {
+      freeQuestionTitle.textContent = '💬 Acrescente informação antes de enviar';
+      freeQuestionHint.textContent = 'Toque em “Continuar” para responder às perguntas ou escreva diretamente o que pretende sobre esta viatura.';
       return;
     }
     freeQuestionTitle.textContent = '💬 Prefere escrever diretamente?';
     freeQuestionHint.textContent = 'Ex.: “Tem garantia?”, “Aceitam retoma?” ou “Quanto poderá ficar por mês?”';
   }
 
+  function normalizedRequest(value = '') {
+    return String(value)
+      .toLocaleLowerCase('pt-PT')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9?]+/g, ' ')
+      .trim();
+  }
+
+  function hasMeaningfulDraft(value = '') {
+    const clean = String(value).trim();
+    const normalized = normalizedRequest(clean);
+    const genericOnly = new Set([
+      'financiamento', 'quero financiamento', 'pretendo financiamento',
+      'retoma', 'tenho retoma', 'quero retoma', 'pretendo retoma',
+      'visita', 'marcar visita', 'quero marcar visita', 'pretendo visita',
+      'disponibilidade', 'confirmar disponibilidade'
+    ]);
+    if (!normalized || genericOnly.has(normalized)) return false;
+    if (/\d/.test(clean)) return clean.length >= 2;
+    if (clean.length < 5) return false;
+    const words = normalized.replace(/\?/g, '').split(/\s+/).filter(Boolean);
+    return words.length >= 2 || clean.includes('?');
+  }
+
   function hasCollectedInformation() {
     const lead = state.lead || {};
-    return Boolean(
-      messageInteraction
-      || messageInput?.value.trim()
-      || state.selectedIntents?.length
-      || state.pendingIntent
-      || state.finished
-      || lead.nome
-      || lead.telefone
-      || lead.financiamento
-      || lead.retoma
-      || lead.visita
-      || lead.observacoes
-    );
+    const storedRequest = [lead.financiamento, lead.retoma, lead.visita, lead.observacoes]
+      .some((value) => String(value || '').trim().length >= 3);
+    return storedRequest || hasMeaningfulDraft(messageInput?.value);
   }
 
   function quickSendUrl() {
     const draft = String(messageInput?.value || '').trim();
-    if (!draft) return whatsappUrl();
+    if (!hasMeaningfulDraft(draft)) return whatsappUrl();
     return `https://wa.me/${PHONE}?text=${encodeURIComponent(`${whatsappText()}\nMensagem: ${draft}`)}`;
   }
 
@@ -174,14 +202,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const previousSelectVehicle = selectVehicle;
   selectVehicle = function selectVehicleWithoutPrematureSend(item) {
-    messageInteraction = false;
     previousSelectVehicle(item);
     syncQuickSend();
   };
 
   const previousResetState = resetState;
   resetState = function resetStateWithPartialSend() {
-    messageInteraction = false;
     previousResetState();
     syncQuickSend();
   };
@@ -241,10 +267,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = String(message || '').trim();
     if (!text || state.busy) return;
 
-    messageInteraction = true;
     syncQuickSend();
 
-    if (!state.finished) return previousSendMessage(text);
+    if (!state.finished) {
+      const result = await previousSendMessage(text);
+      syncQuickSend();
+      return result;
+    }
 
     if (/^(ok|okay|obrigad[oa]|certo|perfeito|sim|entendido)[.!?]*$/i.test(text)) {
       document.getElementById('messageInput').value = '';
