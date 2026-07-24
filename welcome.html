@@ -1,30 +1,300 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-PT">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#f7faff">
 <title>Assistente pessoal do Carlos Vasconcelos</title>
 <style>
-:root{--blue:#0868e8;--blue-dark:#034ab9;--ink:#10233f;--muted:#243752;--glow:rgba(21,121,255,.24)}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink)}body{overflow:hidden}button{font:inherit}.entry{min-height:100svh;display:flex;align-items:center;justify-content:center;padding:max(18px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 24%,#eef6ff 0,#fff 49%,#fff 100%)}.entry-card{width:min(650px,100%);display:flex;flex-direction:column;align-items:center;text-align:center}.avatar-wrap{position:relative;width:min(470px,82vw);aspect-ratio:1;margin:0 auto 14px;display:grid;place-items:center}.avatar-halo,.avatar-halo::before,.avatar-halo::after{position:absolute;inset:7%;border-radius:50%;content:""}.avatar-halo{background:linear-gradient(145deg,#4ba4ff,#0755d2);box-shadow:0 22px 60px var(--glow)}.avatar-halo::before{inset:-5%;border:5px solid rgba(255,255,255,.92);box-shadow:0 0 0 2px rgba(20,107,229,.1)}.avatar-halo::after{inset:-10%;border:2px solid rgba(255,255,255,.82)}.avatar{position:relative;z-index:2;width:92%;height:92%;object-fit:contain;filter:drop-shadow(0 18px 26px rgba(6,66,154,.2))}.chat-bubble{position:absolute;z-index:3;right:3%;top:24%;width:24%;aspect-ratio:1.16;border-radius:30%;background:#fff;box-shadow:0 14px 34px rgba(15,82,170,.18);display:flex;align-items:center;justify-content:center;gap:8%;padding:0 16%}.chat-bubble::after{content:"";position:absolute;left:15%;bottom:-16%;border:14px solid transparent;border-top-color:#fff;transform:rotate(18deg)}.chat-bubble i{display:block;width:11px;height:11px;border-radius:50%;background:var(--blue)}.mini-icon{width:44px;height:44px;margin:4px auto 3px;color:var(--blue)}.mini-icon svg{display:block;width:100%;height:100%}h1{margin:0;font-size:clamp(52px,11vw,76px);line-height:1;font-weight:950;letter-spacing:-.055em}.wave{display:inline-block;margin-left:5px;font-size:.72em;transform-origin:70% 70%;animation:wave 2.2s ease-in-out infinite}@keyframes wave{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(18deg)}20%{transform:rotate(-8deg)}30%{transform:rotate(16deg)}40%{transform:rotate(-4deg)}}.intro{max-width:570px;margin:22px auto 0;font-size:clamp(20px,4.8vw,29px);line-height:1.52;color:var(--muted)}.intro strong{color:var(--blue);font-weight:950}.start{width:100%;min-height:94px;margin-top:36px;padding:18px 28px;border:0;border-radius:26px;background:linear-gradient(135deg,#1684ff 0,#0868e8 48%,#0447bd 100%);color:#fff;box-shadow:0 18px 38px rgba(4,76,190,.3),inset 0 1px 0 rgba(255,255,255,.24);font-size:clamp(24px,5.4vw,34px);font-weight:950;display:flex;align-items:center;justify-content:center;gap:20px;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}.start:hover{transform:translateY(-2px);box-shadow:0 22px 44px rgba(4,76,190,.34),inset 0 1px 0 rgba(255,255,255,.24)}.start:active{transform:translateY(1px)}.start:focus-visible{outline:4px solid rgba(8,104,232,.24);outline-offset:5px}.start:disabled{opacity:.72;cursor:wait}.start-icon{width:54px;height:54px;flex:0 0 auto;border-radius:17px;background:#fff;color:var(--blue);display:grid;place-items:center;box-shadow:0 7px 16px rgba(0,44,132,.2)}.start-icon svg{width:34px;height:34px}@media(max-height:820px){.entry{align-items:flex-start;padding-top:12px}.avatar-wrap{width:min(360px,66vw);margin-bottom:0}.mini-icon{width:34px;height:34px}h1{font-size:clamp(44px,8vw,60px)}.intro{margin-top:12px;font-size:clamp(18px,3.8vw,24px)}.start{min-height:74px;margin-top:20px;border-radius:21px}}@media(max-width:480px){.entry{padding-left:18px;padding-right:18px}.avatar-wrap{width:min(390px,88vw)}.chat-bubble{border-radius:26%}.start{gap:14px}.start-icon{width:48px;height:48px;border-radius:15px}}
+:root{
+  --blue:#0b6ff5;
+  --blue-dark:#0755c7;
+  --navy:#0b1f3a;
+  --muted:#52647b;
+  --line:#dbe7f6;
+  --surface:rgba(255,255,255,.82);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--navy);background:#f7faff}
+body{min-height:100svh}
+button{font:inherit}
+.entry{
+  position:relative;
+  isolation:isolate;
+  min-height:100svh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  padding:max(22px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 12% 8%,rgba(85,162,255,.18),transparent 30%),
+    radial-gradient(circle at 88% 38%,rgba(7,85,199,.10),transparent 34%),
+    linear-gradient(180deg,#f9fbff 0%,#f4f8fe 100%);
+}
+.entry::before,.entry::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  border-radius:50%;
+  filter:blur(2px);
+  pointer-events:none;
+}
+.entry::before{width:320px;height:320px;left:-190px;bottom:-110px;background:rgba(64,145,255,.09)}
+.entry::after{width:230px;height:230px;right:-150px;top:15%;border:1px solid rgba(11,111,245,.12)}
+.entry-card{
+  width:min(590px,100%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+.identity{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:18px;
+  padding:9px 14px 9px 10px;
+  border:1px solid rgba(11,111,245,.14);
+  border-radius:999px;
+  background:var(--surface);
+  color:#3e536d;
+  box-shadow:0 8px 26px rgba(22,70,131,.07);
+  font-size:14px;
+  font-weight:650;
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+.identity-icon{
+  width:30px;
+  height:30px;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  color:#fff;
+  background:linear-gradient(145deg,#2589ff,#0755c7);
+  box-shadow:0 6px 14px rgba(11,111,245,.25);
+}
+.identity-icon svg{width:18px;height:18px}
+.identity strong{color:var(--navy)}
+.hero-visual{
+  width:min(430px,92vw);
+  aspect-ratio:1.62;
+  margin:0 auto 24px;
+  filter:drop-shadow(0 24px 34px rgba(18,70,139,.17));
+}
+.hero-visual svg{display:block;width:100%;height:100%}
+h1{
+  max-width:560px;
+  margin:0;
+  color:var(--navy);
+  font-size:clamp(42px,9.3vw,66px);
+  line-height:.98;
+  letter-spacing:-.055em;
+  font-weight:900;
+}
+h1 span{color:var(--blue)}
+.intro{
+  max-width:560px;
+  margin:20px auto 0;
+  color:var(--muted);
+  font-size:clamp(17px,4.1vw,22px);
+  line-height:1.48;
+}
+.quick-list{
+  width:100%;
+  margin:24px 0 0;
+  padding:0;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
+  list-style:none;
+}
+.quick-list li{
+  min-width:0;
+  padding:12px 7px 11px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:rgba(255,255,255,.72);
+  color:#36506f;
+  font-size:12px;
+  font-weight:750;
+  line-height:1.15;
+  box-shadow:0 8px 20px rgba(27,74,132,.05);
+}
+.quick-list svg{
+  display:block;
+  width:24px;
+  height:24px;
+  margin:0 auto 7px;
+  color:var(--blue);
+}
+.start{
+  width:100%;
+  min-height:78px;
+  margin-top:24px;
+  padding:15px 16px 15px 26px;
+  border:0;
+  border-radius:23px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  color:#fff;
+  background:linear-gradient(135deg,#1685ff 0%,#0b6ff5 50%,#0755c7 100%);
+  box-shadow:0 18px 34px rgba(8,91,205,.26),inset 0 1px 0 rgba(255,255,255,.24);
+  font-size:clamp(20px,4.8vw,26px);
+  font-weight:850;
+  cursor:pointer;
+  transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease;
+}
+.start-arrow{
+  flex:0 0 auto;
+  width:48px;
+  height:48px;
+  border-radius:16px;
+  display:grid;
+  place-items:center;
+  color:var(--blue-dark);
+  background:#fff;
+  box-shadow:0 6px 14px rgba(0,45,118,.20);
+}
+.start-arrow svg{width:24px;height:24px}
+.start:hover{transform:translateY(-2px);box-shadow:0 22px 40px rgba(8,91,205,.31),inset 0 1px 0 rgba(255,255,255,.24)}
+.start:active{transform:translateY(1px)}
+.start:focus-visible{outline:4px solid rgba(11,111,245,.2);outline-offset:5px}
+.start:disabled{opacity:.72;cursor:wait;transform:none}
+.privacy{
+  margin:13px 0 0;
+  color:#8190a3;
+  font-size:12px;
+  line-height:1.35;
+}
+@media(max-height:780px){
+  .entry{align-items:flex-start;padding-top:14px}
+  .identity{margin-bottom:10px}
+  .hero-visual{width:min(330px,70vw);margin-bottom:13px}
+  h1{font-size:clamp(38px,7.4vw,52px)}
+  .intro{margin-top:12px;font-size:clamp(15px,3.2vw,19px)}
+  .quick-list{margin-top:14px}
+  .quick-list li{padding-top:9px;padding-bottom:8px}
+  .quick-list svg{width:21px;height:21px;margin-bottom:5px}
+  .start{min-height:67px;margin-top:15px;border-radius:20px}
+  .start-arrow{width:42px;height:42px;border-radius:14px}
+}
+@media(max-width:410px){
+  .entry{padding-left:16px;padding-right:16px}
+  .identity{font-size:13px}
+  .hero-visual{width:min(395px,96vw)}
+  .quick-list{gap:7px}
+  .quick-list li{border-radius:15px;font-size:11px;padding-left:3px;padding-right:3px}
+  .start{padding-left:21px}
+}
+@media(prefers-reduced-motion:reduce){.start{transition:none}}
 </style>
 </head>
 <body>
 <main class="entry">
 <section class="entry-card" aria-labelledby="welcomeTitle">
-<div class="avatar-wrap" aria-hidden="true"><div class="avatar-halo"></div><img class="avatar" src="/assistant-avatar.svg" alt=""><div class="chat-bubble"><i></i><i></i><i></i></div></div>
-<div class="mini-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M12 8h24a7 7 0 0 1 7 7v13a7 7 0 0 1-7 7H24l-9 7v-7h-3a7 7 0 0 1-7-7V15a7 7 0 0 1 7-7Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M16 19h16M16 26h11" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></div>
-<h1 id="welcomeTitle">Olá! <span class="wave">👋</span></h1>
-<p class="intro">Eu sou o assistente pessoal do <strong>Carlos Vasconcelos</strong> para obter informações mais rapidamente.</p>
-<button class="start" id="startAssistant" type="button"><span class="start-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M10 9h28a6 6 0 0 1 6 6v15a6 6 0 0 1-6 6H24l-10 8v-8h-4a6 6 0 0 1-6-6V15a6 6 0 0 1 6-6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M15 20h18M15 28h13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></span><span>Iniciar assistente</span></button>
+  <div class="identity">
+    <span class="identity-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5h14a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 19 17.5h-6l-4.5 3v-3H5A2.5 2.5 0 0 1 2.5 15V8A2.5 2.5 0 0 1 5 5.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 10h10M7 13.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </span>
+    Assistente pessoal de <strong>Carlos Vasconcelos</strong>
+  </div>
+
+  <div class="hero-visual" aria-hidden="true">
+    <svg viewBox="0 0 430 266" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="card" x1="36" y1="22" x2="389" y2="247" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#112C52"/>
+          <stop offset=".56" stop-color="#0A3C86"/>
+          <stop offset="1" stop-color="#0769E8"/>
+        </linearGradient>
+        <linearGradient id="car" x1="88" y1="111" x2="347" y2="209" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#FFFFFF"/>
+          <stop offset=".62" stop-color="#DDEEFF"/>
+          <stop offset="1" stop-color="#95C8FF"/>
+        </linearGradient>
+        <linearGradient id="glass" x1="173" y1="99" x2="270" y2="148" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#8DD0FF"/>
+          <stop offset="1" stop-color="#163E71"/>
+        </linearGradient>
+        <filter id="soft" x="34" y="123" width="358" height="112" filterUnits="userSpaceOnUse">
+          <feGaussianBlur stdDeviation="9"/>
+        </filter>
+      </defs>
+      <rect x="12" y="10" width="406" height="246" rx="55" fill="url(#card)"/>
+      <circle cx="330" cy="62" r="102" fill="#3C9BFF" fill-opacity=".17"/>
+      <circle cx="77" cy="218" r="94" fill="#042B68" fill-opacity=".36"/>
+      <path d="M44 212C130 180 306 180 388 214" stroke="#66B2FF" stroke-opacity=".38" stroke-width="2" stroke-linecap="round"/>
+      <path d="M92 213C155 195 280 194 346 214" stroke="#B9DFFF" stroke-opacity=".28" stroke-width="2" stroke-linecap="round" stroke-dasharray="10 11"/>
+      <ellipse cx="221" cy="205" rx="163" ry="22" fill="#021A3D" fill-opacity=".4" filter="url(#soft)"/>
+
+      <path d="M71 172C76 155 89 145 112 140L147 134L179 98C187 89 199 84 213 84H273C288 84 300 90 310 102L336 135L358 143C371 148 379 159 381 173L383 188C384 197 377 204 368 204H82C73 204 67 195 69 186L71 172Z" fill="url(#car)"/>
+      <path d="M154 132L184 100C191 93 199 90 211 90H231V132H154Z" fill="url(#glass)"/>
+      <path d="M239 90H271C283 90 291 94 299 104L322 133H239V90Z" fill="url(#glass)"/>
+      <path d="M231 92V132M239 92V132" stroke="#E9F6FF" stroke-opacity=".68" stroke-width="3"/>
+      <path d="M88 151C132 143 171 140 221 140H338" stroke="#FFFFFF" stroke-opacity=".65" stroke-width="4" stroke-linecap="round"/>
+      <path d="M72 175H122M326 175H379" stroke="#3B8EF0" stroke-width="5" stroke-linecap="round"/>
+      <path d="M88 188H351" stroke="#74B6FB" stroke-opacity=".55" stroke-width="2"/>
+      <path d="M339 151L364 159C369 161 373 165 375 171H345C339 171 335 166 336 160L339 151Z" fill="#E7F5FF"/>
+      <path d="M79 169C83 158 91 153 105 150L116 148L111 161C109 166 104 169 98 169H79Z" fill="#0F77EB"/>
+      <circle cx="133" cy="194" r="28" fill="#071A35"/>
+      <circle cx="133" cy="194" r="15" fill="#6F849E"/>
+      <circle cx="133" cy="194" r="7" fill="#DDEEFF"/>
+      <circle cx="326" cy="194" r="28" fill="#071A35"/>
+      <circle cx="326" cy="194" r="15" fill="#6F849E"/>
+      <circle cx="326" cy="194" r="7" fill="#DDEEFF"/>
+      <path d="M98 201H78C72 201 68 196 69 190L72 178M161 201H298M354 201H369C377 201 383 194 382 186L380 176" stroke="#C7E5FF" stroke-width="5" stroke-linecap="round"/>
+
+      <g transform="translate(292 29)">
+        <rect width="100" height="70" rx="22" fill="white"/>
+        <path d="M25 69L35 58H50" fill="white"/>
+        <circle cx="28" cy="34" r="5" fill="#0B6FF5"/>
+        <circle cx="50" cy="34" r="5" fill="#0B6FF5"/>
+        <circle cx="72" cy="34" r="5" fill="#0B6FF5"/>
+      </g>
+      <path d="M62 71V89M53 80H71M101 42V53M95.5 47.5H106.5" stroke="#87C8FF" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <h1 id="welcomeTitle">Em que posso <span>ajudar?</span></h1>
+  <p class="intro">Consulte as viaturas disponíveis, peça uma simulação de financiamento, avalie a sua retoma ou marque uma visita.</p>
+
+  <ul class="quick-list" aria-label="Serviços disponíveis">
+    <li>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 14.5l1.7-4.7A3 3 0 0 1 7.5 8h9a3 3 0 0 1 2.8 1.8l1.7 4.7M5 14.5h14a2 2 0 0 1 2 2V19H3v-2.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6.5 19v2M17.5 19v2M6.5 16.8h2M15.5 16.8h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Viaturas
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Financiamento
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h11l-2.5-2.5M17 17H6l2.5 2.5M18 7l-2.5 2.5M6 17l2.5-2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Retoma
+    </li>
+    <li>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5.5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 3.5v4M16 3.5v4M4 10h16M8 14h3M8 17h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Marcar visita
+    </li>
+  </ul>
+
+  <button class="start" id="startAssistant" type="button">
+    <span>Começar conversa</span>
+    <span class="start-arrow" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M14 7l5 5-5 5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
+  </button>
+  <p class="privacy">Resposta rápida, simples e personalizada.</p>
 </section>
 </main>
 <script>
 const button=document.getElementById('startAssistant');
 button.addEventListener('click',()=>{
   button.disabled=true;
-  button.querySelector('span:last-child').textContent='A abrir…';
+  button.querySelector('span:first-child').textContent='A abrir…';
   window.location.assign('/assistant.html');
 });
 </script>
