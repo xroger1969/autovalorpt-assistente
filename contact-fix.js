@@ -38,6 +38,47 @@ document.addEventListener('DOMContentLoaded', () => {
     advanceIntent();
   };
 
+  const composer = document.getElementById('composer');
+  const inputRow = composer?.querySelector('.input-row');
+  const quickSend = document.createElement('a');
+  quickSend.id = 'quickSendPartial';
+  quickSend.target = '_blank';
+  quickSend.rel = 'noopener';
+  quickSend.hidden = true;
+  quickSend.innerHTML = '<strong>Enviar o que já foi reunido ao Carlos</strong><span>Pode enviar agora e continuar a conversa depois.</span>';
+  quickSend.style.cssText = 'display:none;margin:0 0 10px;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)';
+  quickSend.querySelector('strong').style.cssText = 'display:block;font-size:13px;font-weight:950';
+  quickSend.querySelector('span').style.cssText = 'display:block;margin-top:3px;font-size:11px;color:#39735c';
+  if (composer && inputRow) composer.insertBefore(quickSend, inputRow);
+
+  function syncQuickSend() {
+    if (!quickSend) return;
+    const available = Boolean(state.vehicle || state.lead.viatura);
+    quickSend.hidden = !available;
+    quickSend.style.display = available ? 'block' : 'none';
+    if (available) quickSend.href = whatsappUrl();
+  }
+
+  const previousRenderSummary = renderSummary;
+  renderSummary = function renderSummaryWithPartialSend() {
+    previousRenderSummary();
+    syncQuickSend();
+  };
+
+  const previousRenderSelected = renderSelected;
+  renderSelected = function renderSelectedWithPartialSend() {
+    previousRenderSelected();
+    syncQuickSend();
+  };
+
+  const previousResetState = resetState;
+  resetState = function resetStateWithPartialSend() {
+    previousResetState();
+    syncQuickSend();
+  };
+
+  syncQuickSend();
+
   const previousSendMessage = sendMessage;
 
   function questionKey(value = '') {
@@ -95,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('messageInput').value = '';
       addBubble(text, 'user');
       renderFollowupActions();
+      syncQuickSend();
       return;
     }
 
@@ -131,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('chatTitle').textContent = 'Pedido preparado';
       setComposer('Pode fazer outra pergunta…');
       renderFollowupActions();
+      syncQuickSend();
     } catch (error) {
       const timedOut = error?.name === 'AbortError';
       addBubble(
@@ -141,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       state.finished = true;
       renderFollowupActions();
+      syncQuickSend();
     } finally {
       hideTyping();
       setBusy(false);
