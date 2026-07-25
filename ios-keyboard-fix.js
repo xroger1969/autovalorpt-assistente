@@ -63,3 +63,189 @@ document.addEventListener('DOMContentLoaded', () => {
   window.visualViewport?.addEventListener('resize', syncKeyboardState);
   window.visualViewport?.addEventListener('scroll', syncKeyboardState);
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+  const emptyTradeIn = () => ({ description: '', year: '', mileage: '' });
+  let tradeInDraft = emptyTradeIn();
+
+  function cleanSpaces(value = '') {
+    return String(value).replace(/\s+/g, ' ').trim();
+  }
+
+  function titleCaseVehicle(value = '') {
+    return cleanSpaces(value)
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => {
+        if (/^\d+$/.test(word)) return word;
+        if (/^[A-Za-zÀ-ÿ]{1,2}$/u.test(word)) return word.toLocaleUpperCase('pt-PT');
+        return word.charAt(0).toLocaleUpperCase('pt-PT') + word.slice(1).toLocaleLowerCase('pt-PT');
+      })
+      .join(' ');
+  }
+
+  function formatMileage(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) return '';
+    return `${new Intl.NumberFormat('pt-PT').format(Math.round(number))} km`;
+  }
+
+  function parseTradeInPart(value = '') {
+    const original = cleanSpaces(value);
+    let working = original;
+    let year = '';
+    let mileage = '';
+
+    const yearMatch = working.match(/\b(19[8-9]\d|20[0-2]\d)\b/);
+    if (yearMatch) {
+      year = yearMatch[1];
+      working = working.replace(yearMatch[0], ' ');
+    }
+
+    const thousandMatch = working.match(/\b(\d{1,3})\s*mil(?:\s*(?:km|kms|quil[oó]metros?))?\b/i);
+    if (thousandMatch) {
+      mileage = String(Number(thousandMatch[1]) * 1000);
+      working = working.replace(thousandMatch[0], ' ');
+    }
+
+    if (!mileage) {
+      const explicitMileage = working.match(/\b(\d{1,3}(?:[ .]\d{3})+|\d{4,6})\s*(?:km|kms|quil[oó]metros?)\b/i);
+      if (explicitMileage) {
+        mileage = explicitMileage[1].replace(/\D/g, '');
+        working = working.replace(explicitMileage[0], ' ');
+      }
+    }
+
+    if (!mileage && tradeInDraft.description && tradeInDraft.year) {
+      const numberOnly = working.match(/^\s*(\d{1,3}(?:[ .]\d{3})+|\d{4,6})\s*$/);
+      if (numberOnly) {
+        mileage = numberOnly[1].replace(/\D/g, '');
+        working = '';
+      }
+    }
+
+    const description = titleCaseVehicle(
+      working
+        .replace(/\b(?:marca|modelo|ano|quil[oó]metros?|kms?|viatura|carro)\b\s*[:=-]?/gi, ' ')
+        .replace(/[,;|/\\]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
+
+    return { description, year, mileage };
+  }
+
+  function mergeTradeIn(part) {
+    if (part.description) tradeInDraft.description = part.description;
+    if (part.year) tradeInDraft.year = part.year;
+    if (part.mileage) tradeInDraft.mileage = part.mileage;
+  }
+
+  function formattedTradeIn() {
+    return [
+      tradeInDraft.description,
+      tradeInDraft.year,
+      formatMileage(tradeInDraft.mileage)
+    ].filter(Boolean).join(', ');
+  }
+
+  function setFocusedTradeInPrompt(title, hint, placeholder) {
+    setComposer(placeholder);
+    const promptTitle = document.querySelector('.free-question-title');
+    const promptHint = document.querySelector('.free-question-hint');
+    if (promptTitle) promptTitle.textContent = title;
+    if (promptHint) promptHint.textContent = hint;
+  }
+
+  function askOnlyMissingTradeInData() {
+    const missingDescription = !tradeInDraft.description;
+    const missingYear = !tradeInDraft.year;
+    const missingMileage = !tradeInDraft.mileage;
+    const vehicle = tradeInDraft.description ? `o ${tradeInDraft.description}` : 'a sua viatura';
+
+    if (!missingDescription && !missingYear && missingMileage) {
+      addBubble(`Perfeito. Registei ${vehicle}, de ${tradeInDraft.year}. Falta só indicar quantos quilómetros tem atualmente.`, 'bot');
+      setFocusedTradeInPrompt('💬 Só faltam os quilómetros', 'Indique apenas a quilometragem atual da viatura.', 'Ex.: 85 000 km');
+      return;
+    }
+
+    if (!missingDescription && missingYear && !missingMileage) {
+      addBubble(`Perfeito. Registei ${vehicle}, com ${formatMileage(tradeInDraft.mileage)}. De que ano é?`, 'bot');
+      setFocusedTradeInPrompt('💬 Só falta o ano', 'Indique apenas o ano da viatura.', 'Ex.: 2019');
+      return;
+    }
+
+    if (missingDescription && !missingYear && !missingMileage) {
+      addBubble(`Obrigado. Registei o ano ${tradeInDraft.year} e ${formatMileage(tradeInDraft.mileage)}. Qual é a marca e o modelo da viatura?`, 'bot');
+      setFocusedTradeInPrompt('💬 Só falta a viatura', 'Indique apenas a marca e o modelo.', 'Ex.: Renault Clio');
+      return;
+    }
+
+    if (!missingDescription && missingYear && missingMileage) {
+      addBubble(`Perfeito. Registei ${vehicle}. Falta indicar o ano e quantos quilómetros tem atualmente.`, 'bot');
+      setFocusedTradeInPrompt('💬 Complete a retoma', 'Indique o ano e os quilómetros da viatura.', 'Ex.: 2019, 85 000 km');
+      return;
+    }
+
+    if (missingDescription && !missingYear && missingMileage) {
+      addBubble(`Obrigado. Registei o ano ${tradeInDraft.year}. Falta indicar a marca, o modelo e os quilómetros.`, 'bot');
+      setFocusedTradeInPrompt('💬 Complete a retoma', 'Indique a marca, o modelo e os quilómetros.', 'Ex.: Renault Clio, 85 000 km');
+      return;
+    }
+
+    if (missingDescription && missingYear && !missingMileage) {
+      addBubble(`Obrigado. Registei ${formatMileage(tradeInDraft.mileage)}. Falta indicar a marca, o modelo e o ano da viatura.`, 'bot');
+      setFocusedTradeInPrompt('💬 Complete a retoma', 'Indique a marca, o modelo e o ano.', 'Ex.: Renault Clio, 2019');
+      return;
+    }
+
+    addBubble('Indique a marca, o modelo, o ano e os quilómetros da sua viatura.', 'bot');
+    setFocusedTradeInPrompt('💬 Descreva a sua retoma', 'Pode responder numa única mensagem.', 'Ex.: Renault Clio, 2019, 85 000 km');
+  }
+
+  const previousSendMessage = sendMessage;
+  sendMessage = async function sendMessageWithProgressiveTradeIn(message) {
+    const text = cleanSpaces(message);
+    if (!text || state.busy || state.pendingIntent !== 'retoma') {
+      return previousSendMessage(message);
+    }
+
+    document.getElementById('messageInput').value = '';
+    addBubble(text, 'user');
+    mergeTradeIn(parseTradeInPart(text));
+
+    const collected = formattedTradeIn();
+    if (collected) {
+      state.lead.retoma = collected;
+      renderSummary();
+      renderSelected();
+    }
+
+    const complete = Boolean(tradeInDraft.description && tradeInDraft.year && tradeInDraft.mileage);
+    if (!complete) {
+      state.pendingIntent = 'retoma';
+      askOnlyMissingTradeInData();
+      return;
+    }
+
+    state.lead.retoma = formattedTradeIn();
+    state.pendingIntent = '';
+    renderSummary();
+    renderSelected();
+    addConfirmation('retoma');
+    tradeInDraft = emptyTradeIn();
+    advanceIntent();
+  };
+
+  const previousResetState = resetState;
+  resetState = function resetStateWithTradeInDraft() {
+    tradeInDraft = emptyTradeIn();
+    return previousResetState();
+  };
+
+  const previousSelectVehicle = selectVehicle;
+  selectVehicle = function selectVehicleWithCleanTradeInDraft(item) {
+    tradeInDraft = emptyTradeIn();
+    return previousSelectVehicle(item);
+  };
+});
