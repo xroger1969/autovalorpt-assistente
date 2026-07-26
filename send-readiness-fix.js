@@ -5,7 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const style = document.createElement('style');
   style.textContent = `
     @media(max-width:820px){
-      #composer.choosing-options{position:static!important;bottom:auto!important;box-shadow:none!important}
+      #composer.choosing-options{display:none!important}
+      #purposeActions{margin-bottom:calc(22px + env(safe-area-inset-bottom))!important}
+      #purposeActions .selection-footer{position:sticky;bottom:0;z-index:12;margin:14px -14px -14px;padding:14px;background:rgba(248,251,255,.97);border-top:1px solid #dce6f2;box-shadow:0 -10px 24px rgba(18,32,51,.10);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+      #purposeActions .continue-selection{min-height:58px;font-size:18px;border-radius:16px}
     }
   `;
   document.head.appendChild(style);
@@ -13,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function syncOptionChoosingState() {
     const choosing = Boolean(document.getElementById('purposeActions'));
     composer?.classList.toggle('choosing-options', choosing);
+    if (choosing) composer?.setAttribute('aria-hidden', 'true');
+    else composer?.removeAttribute('aria-hidden');
+    setTimeout(() => {
+      if (typeof fitMobileViewport === 'function') fitMobileViewport();
+    }, 0);
   }
 
   function scrollToWritingArea() {
@@ -21,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         const target = document.getElementById('freeQuestionBox') || composer;
         target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-      }, 140);
+      }, 160);
     });
   }
 
@@ -31,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       syncOptionChoosingState();
       scrollToWritingArea();
-    }, 0);
+    }, 40);
   }, true);
 
   function hasValidatedRequest() {
