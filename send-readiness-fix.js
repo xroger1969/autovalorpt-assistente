@@ -2,27 +2,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const composer = document.getElementById('composer');
   const input = document.getElementById('messageInput');
 
+  const style = document.createElement('style');
+  style.textContent = `
+    @media(max-width:820px){
+      #composer.choosing-options{position:static!important;bottom:auto!important;box-shadow:none!important}
+    }
+  `;
+  document.head.appendChild(style);
+
+  function syncOptionChoosingState() {
+    const choosing = Boolean(document.getElementById('purposeActions'));
+    composer?.classList.toggle('choosing-options', choosing);
+  }
+
   function scrollToWritingArea() {
     if (window.innerWidth > 820 || !composer || composer.hidden) return;
     requestAnimationFrame(() => {
       setTimeout(() => {
         const target = document.getElementById('freeQuestionBox') || composer;
-        target.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
-        setTimeout(() => {
-          const rect = target.getBoundingClientRect();
-          const viewportHeight = window.visualViewport?.height || window.innerHeight;
-          if (rect.bottom > viewportHeight - 12) {
-            window.scrollBy({ top: rect.bottom - viewportHeight + 18, behavior: 'smooth' });
-          }
-        }, 260);
-      }, 80);
+        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      }, 140);
     });
   }
 
   document.addEventListener('click', (event) => {
-    const option = event.target.closest('#purposeActions .quick');
     const continueButton = event.target.closest('#purposeActions .continue-selection');
-    if (option || continueButton) scrollToWritingArea();
+    if (!continueButton) return;
+    setTimeout(() => {
+      syncOptionChoosingState();
+      scrollToWritingArea();
+    }, 0);
   }, true);
 
   function hasValidatedRequest() {
@@ -63,12 +72,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const observer = new MutationObserver(() => enforceReadiness());
+  function syncUiGuards() {
+    syncOptionChoosingState();
+    enforceReadiness();
+  }
+
+  const observer = new MutationObserver(syncUiGuards);
   observer.observe(document.body, { childList: true, subtree: true });
 
   input?.addEventListener('input', enforceReadiness);
-  document.addEventListener('click', () => setTimeout(enforceReadiness, 0), true);
-  window.addEventListener('pageshow', enforceReadiness);
+  document.addEventListener('click', () => setTimeout(syncUiGuards, 0), true);
+  window.addEventListener('pageshow', syncUiGuards);
 
   const previousRenderSummary = renderSummary;
   renderSummary = function renderSummaryWithStrictSendReadiness() {
@@ -79,8 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const previousFinishFlow = finishFlow;
   finishFlow = function finishFlowWithStrictSendReadiness() {
     previousFinishFlow();
-    enforceReadiness();
+    syncUiGuards();
   };
 
-  enforceReadiness();
+  syncUiGuards();
 });
