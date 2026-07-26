@@ -2,8 +2,7 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "routes": [
-    { "src": "/", "dest": "/welcome.html" },
-    { "src": "/assistant.html", "dest": "/assistant-v2.html" }
+    { "src": "/", "dest": "/welcome.html" }
   ],
   "headers": [
     {
