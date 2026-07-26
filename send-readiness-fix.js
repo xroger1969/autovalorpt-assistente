@@ -54,8 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     for (const element of [partial, side]) {
       if (!element) continue;
-      element.hidden = !ready;
-      element.style.setProperty('display', ready ? (element === side ? 'grid' : 'block') : 'none', 'important');
+      const display = ready ? (element === side ? 'grid' : 'block') : 'none';
+      if (element.hidden === ready) element.hidden = !ready;
+      if (element.style.display !== display) element.style.setProperty('display', display, 'important');
       element.setAttribute('aria-hidden', String(!ready));
       if (ready) element.href = whatsappUrl();
       else element.removeAttribute('href');
@@ -63,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const observer = new MutationObserver(() => enforceReadiness());
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+  observer.observe(document.body, { childList: true, subtree: true });
 
   input?.addEventListener('input', enforceReadiness);
   document.addEventListener('click', () => setTimeout(enforceReadiness, 0), true);
