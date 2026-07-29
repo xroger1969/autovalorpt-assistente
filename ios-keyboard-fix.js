@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Mantém o campo na estrutura original do composer. No iOS, envolver o
   // input noutra caixa altera a altura calculada quando o teclado abre.
   if (freeBox) {
-    composer.insertBefore(freeBox, inputRow);
+    composer.insertBefore(freeBox, privacy || null);
     composer.insertBefore(inputRow, privacy || null);
   }
 
