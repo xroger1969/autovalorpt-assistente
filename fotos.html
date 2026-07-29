@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f9ff">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Fotografias da retoma — AutoValorPT</title>
+<style>
+:root{--blue:#0b5ed7;--blue-dark:#0847a6;--ink:#122033;--muted:#64748b;--line:#dce5f0;--green:#168257;--page:#f4f8fd}
+*{box-sizing:border-box}
+html{background:var(--page)}
+body{margin:0;min-height:100vh;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:linear-gradient(180deg,#fbfdff,var(--page))}
+button,a{font:inherit;-webkit-tap-highlight-color:transparent}
+.shell{width:min(1120px,100%);margin:0 auto;padding:20px 16px calc(34px + env(safe-area-inset-bottom))}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:11px;font-size:20px;font-weight:950}.brand-mark{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#1372ff,#073e9a);color:#fff;font-size:18px}
+.refresh{min-height:44px;padding:0 15px;border:1px solid #c7d9ef;border-radius:13px;background:#fff;color:#174b8e;font-weight:850;cursor:pointer}
+.hero{padding:24px;border:1px solid #cfe0f5;border-radius:24px;background:#fff;box-shadow:0 16px 40px rgba(20,45,80,.09)}
+.eyebrow{margin:0 0 7px;color:var(--blue);font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+h1{margin:0;font-size:clamp(27px,5vw,42px);line-height:1.12;letter-spacing:-.025em}
+.trade-in{margin:11px 0 0;color:#4e617b;font-size:17px;line-height:1.5}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:17px}.pill{padding:8px 11px;border-radius:999px;background:#edf5ff;color:#174b8e;font-size:13px;font-weight:850}
+.notice{margin:15px 0 0;color:#718095;font-size:13px;line-height:1.45}
+.status{margin:18px 0;padding:18px;border:1px solid #d5e3f3;border-radius:18px;background:#fff;color:#536176;text-align:center;font-weight:800}
+.status.error{border-color:#f0caca;background:#fff7f7;color:#9d3030}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin-top:18px}
+.photo{overflow:hidden;border:1px solid var(--line);border-radius:20px;background:#fff;box-shadow:0 9px 25px rgba(20,45,80,.08)}
+.photo-view{position:relative;display:block;aspect-ratio:4/3;overflow:hidden;background:#e8f0f9}.photo-view img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .18s ease}.photo-view:hover img{transform:scale(1.015)}
+.photo-fallback{position:absolute;inset:0;display:none;place-items:center;padding:18px;color:#536176;font-weight:850;text-align:center}.photo-view.unavailable .photo-fallback{display:grid}
+.photo-info{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px}.photo-name{font-weight:900}.download{min-height:38px;padding:0 12px;border-radius:11px;background:#effaf5;color:#087348;text-decoration:none;display:grid;place-items:center;font-size:13px;font-weight:900}
+@media(max-width:780px){.shell{padding:14px 12px calc(28px + env(safe-area-inset-bottom))}.brand{font-size:18px}.brand-mark{width:44px;height:44px}.hero{padding:20px;border-radius:21px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.photo{border-radius:16px}}
+@media(max-width:440px){.grid{grid-template-columns:1fr}.photo-view{aspect-ratio:4/3}.refresh{padding:0 12px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">AV</span><span>AutoValorPT</span></div>
+    <button class="refresh" id="refreshBtn" type="button">Atualizar</button>
+  </header>
+
+  <section class="hero" id="summary" hidden>
+    <p class="eyebrow">Fotografias da retoma</p>
+    <h1 id="vehicle">Viatura</h1>
+    <p class="trade-in" id="tradeIn"></p>
+    <div class="meta">
+      <span class="pill" id="count"></span>
+      <span class="pill" id="created"></span>
+    </div>
+    <p class="notice">Ligação privada destinada à análise desta retoma. Não partilhe este endereço.</p>
+  </section>
+
+  <div class="status" id="status">A abrir as fotografias…</div>
+  <section class="grid" id="grid" aria-live="polite"></section>
+</main>
+<script>
+const params=new URLSearchParams(location.search);
+const batch=params.get('batch')||'';
+const token=params.get('token')||'';
+const statusNode=document.getElementById('status');
+const grid=document.getElementById('grid');
+const refreshBtn=document.getElementById('refreshBtn');
+
+function formatDate(value){
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?'Data não disponível':date.toLocaleString('pt-PT',{dateStyle:'medium',timeStyle:'short'});
+}
+
+function setStatus(message,error=false){
+  statusNode.textContent=message;
+  statusNode.classList.toggle('error',error);
+  statusNode.hidden=!message;
+}
+
+function render(data){
+  document.getElementById('summary').hidden=false;
+  document.getElementById('vehicle').textContent=data.vehicle||'Viatura para retoma';
+  document.getElementById('tradeIn').textContent=data.tradeIn||'';
+  document.getElementById('count').textContent=`${data.photos.length} ${data.photos.length===1?'fotografia':'fotografias'}`;
+  document.getElementById('created').textContent=formatDate(data.createdAt);
+  grid.textContent='';
+
+  if(!data.photos.length){
+    setStatus('Ainda não existem fotografias neste envio.');
+    return;
+  }
+
+  setStatus('');
+  data.photos.forEach((photo,index)=>{
+    const card=document.createElement('article');
+    card.className='photo';
+    const view=document.createElement('a');
+    view.className='photo-view';
+    view.href=photo.url;
+    view.target='_blank';
+    view.rel='noopener';
+    const image=document.createElement('img');
+    image.src=photo.url;
+    image.alt=`Fotografia ${index+1} da retoma`;
+    image.loading='lazy';
+    const fallback=document.createElement('span');
+    fallback.className='photo-fallback';
+    fallback.textContent='Pré-visualização indisponível. Toque para abrir ou descarregar.';
+    image.onerror=()=>{image.remove();view.classList.add('unavailable')};
+    view.append(image,fallback);
+    const info=document.createElement('div');
+    info.className='photo-info';
+    const name=document.createElement('span');
+    name.className='photo-name';
+    name.textContent=`Fotografia ${index+1}`;
+    const download=document.createElement('a');
+    download.className='download';
+    download.href=photo.url;
+    download.target='_blank';
+    download.rel='noopener';
+    download.textContent='Abrir';
+    info.append(name,download);
+    card.append(view,info);
+    grid.appendChild(card);
+  });
+}
+
+async function loadGallery(){
+  if(!batch||!token){
+    setStatus('Esta ligação para as fotografias está incompleta.',true);
+    refreshBtn.disabled=true;
+    return;
+  }
+  refreshBtn.disabled=true;
+  setStatus('A abrir as fotografias…');
+  try{
+    const query=new URLSearchParams({batch,token});
+    const response=await fetch(`/api/photo-gallery?${query.toString()}`,{cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'Não foi possível abrir as fotografias.');
+    render(data);
+  }catch(error){
+    setStatus(error.message||'Não foi possível abrir as fotografias.',true);
+  }finally{
+    refreshBtn.disabled=false;
+  }
+}
+
+refreshBtn.addEventListener('click',loadGallery);
+loadGallery();
+</script>
+</body>
+</html>
