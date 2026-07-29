@@ -10,12 +10,12 @@ import {
   setAdminCookie
 } from '../lib/admin-security.js';
 
-const ACCESS_CODE = 'a1'.repeat(24);
+const ACCESS_CODE = 'farol-cedro-lagoa-4827';
 const ACCESS_HASH = hashAdminToken(ACCESS_CODE);
 
 test('aceita apenas o código administrativo correto', () => {
   assert.equal(adminTokenMatches(ACCESS_CODE, ACCESS_HASH), true);
-  assert.equal(adminTokenMatches('b2'.repeat(24), ACCESS_HASH), false);
+  assert.equal(adminTokenMatches('ponte-lima-campo-9153', ACCESS_HASH), false);
   assert.equal(adminTokenMatches('curto', ACCESS_HASH), false);
   assert.equal(adminTokenMatches(ACCESS_CODE, 'hash-invalida'), false);
 });
