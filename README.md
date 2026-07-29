@@ -13,5 +13,7 @@ Assistente comercial automóvel da AutoValorPT, com consulta visual do stock e e
 1. Importar este repositório na Vercel.
 2. Adicionar `OPENAI_API_KEY` às variáveis de ambiente.
 3. Opcionalmente configurar `OPENAI_MODEL` e `STOCK_URL`.
+4. Criar e ligar ao projeto um Vercel Blob privado. A ligação disponibiliza
+   `BLOB_READ_WRITE_TOKEN` e permite receber fotografias de retomas.
 
 O projeto não necessita de comando de build.
