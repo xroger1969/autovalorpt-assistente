@@ -19,3 +19,14 @@ Assistente comercial automóvel da AutoValorPT, com consulta visual do stock e e
    receber fotografias de retomas.
 
 O projeto não necessita de comando de build.
+
+## Área privada de retomas
+
+A página `/retomas.html` permite ao proprietário consultar as retomas recebidas
+e abrir as fotografias guardadas no Blob privado. O acesso inicial usa um código
+privado; depois da validação, é criado um cookie `HttpOnly`, `Secure` e
+`SameSite=Strict` com duração de 30 dias.
+
+O repositório contém apenas o resumo SHA-256 do código de acesso, nunca o código
+original. A página não está ligada ao percurso público e está marcada para não
+ser indexada por motores de pesquisa.

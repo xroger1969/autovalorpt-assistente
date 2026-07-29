@@ -21,14 +21,18 @@ jobs:
       - name: Check server JavaScript
         run: |
           node --check api/chat.js
+          node --check api/admin-retomas.js
+          node --check api/admin-session.js
           node --check api/photo-gallery.js
           node --check api/photo-session.js
           node --check api/photo-upload-url.js
           node --check api/stock.js
+          node --check lib/admin-security.js
           node --check lib/photo-manifest.js
           node --check lib/photo-security.js
       - name: Check browser JavaScript
         run: |
+          node --check retomas.js
           node --check vehicle-photos.js
           node --input-type=module - <<'NODE'
           import { readFileSync } from 'node:fs';
