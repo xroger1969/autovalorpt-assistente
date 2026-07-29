@@ -40,15 +40,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const style = document.createElement('style');
   style.textContent = `
-    .free-question-box{margin:0;padding:12px;border:2px solid #9fc5f4;border-radius:18px;background:#f5f9ff;box-shadow:0 5px 18px rgba(11,94,215,.08)}
-    .free-question-title{display:flex;align-items:center;gap:7px;color:#124b92;font-size:13px;font-weight:950;line-height:1.3}
-    .free-question-hint{margin:4px 0 10px;color:#526783;font-size:11px;line-height:1.35}
-    .free-question-box .input-row input{border:2px solid #c5d9f2;background:#fff}
+    .free-question-box{margin:0;padding:14px;border:2px solid #9fc5f4;border-radius:18px;background:#f5f9ff;box-shadow:0 5px 18px rgba(11,94,215,.08)}
+    .free-question-title{display:flex;align-items:center;gap:7px;color:#124b92;font-size:18px;font-weight:950;line-height:1.3}
+    .free-question-hint{margin:7px 0 12px;color:#526783;font-size:15.5px;line-height:1.45}
+    .free-question-box .input-row input{min-height:58px;border:2px solid #c5d9f2;background:#fff;font-size:18px;line-height:1.35}
     .free-question-box .input-row input:focus{outline:3px solid rgba(11,94,215,.12);border-color:#0b5ed7}
     #quickSendPartial{margin:12px 0 0;padding:11px 13px;border:2px solid #9bd8bd;border-radius:14px;background:#f0fbf5;color:#087348;text-decoration:none;line-height:1.25;box-shadow:0 4px 14px rgba(21,144,95,.08)}
-    #quickSendPartial strong{display:block;font-size:13px;font-weight:950}
-    #quickSendPartial span{display:block;margin-top:3px;font-size:11px;color:#39735c}
-    @media(max-width:820px){.free-question-box{padding:11px}.free-question-title{font-size:12.5px}.free-question-hint{font-size:10.5px}}
+    #quickSendPartial strong{display:block;font-size:16px;font-weight:950}
+    #quickSendPartial span{display:block;margin-top:4px;font-size:14px;color:#39735c}
+    @media(max-width:820px){.free-question-box{padding:14px}.free-question-title{font-size:18px}.free-question-hint{font-size:15.5px}}
   `;
   document.head.appendChild(style);
 
