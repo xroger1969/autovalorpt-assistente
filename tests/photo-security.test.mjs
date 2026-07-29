@@ -19,7 +19,8 @@ test('cria identificadores fortes e valida o token da galeria', () => {
   assert.equal(isValidBatchId(batchId), true);
   assert.equal(isValidViewerToken(viewerToken), true);
   assert.equal(viewerTokenMatches(viewerToken, hash), true);
-  assert.equal(viewerTokenMatches(`${viewerToken.slice(0, -1)}A`, hash), false);
+  const differentLastCharacter = viewerToken.endsWith('A') ? 'B' : 'A';
+  assert.equal(viewerTokenMatches(`${viewerToken.slice(0, -1)}${differentLastCharacter}`, hash), false);
 });
 
 test('limita formatos e constrói caminhos isolados por retoma', () => {
