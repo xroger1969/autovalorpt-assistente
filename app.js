@@ -337,14 +337,12 @@ function advanceIntent() {
     const intent = state.intentQueue.shift();
     state.pendingIntent = intent;
     $('chatTitle').textContent = INTENTS[intent].short;
-    addBubble(INTENTS[intent].prompt, 'bot');
     setComposer(INTENTS[intent].placeholder);
     return;
   }
   if (!state.lead.nome || !state.lead.telefone) {
     state.pendingIntent = 'contacto';
     $('chatTitle').textContent = INTENTS.contacto.short;
-    addBubble(INTENTS.contacto.prompt, 'bot');
     setComposer(INTENTS.contacto.placeholder);
     return;
   }

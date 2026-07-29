@@ -105,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (state.pendingIntent && INTENTS[state.pendingIntent]) {
       document.getElementById('chatTitle').textContent = INTENTS[state.pendingIntent].short;
-      addBubble(INTENTS[state.pendingIntent].prompt, 'bot');
       setComposer(INTENTS[state.pendingIntent].placeholder);
       return;
     }
@@ -242,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     removeActionPanels();
     state.pendingIntent = 'contacto';
     document.getElementById('chatTitle').textContent = 'Contacto';
-    addBubble('Para enviar este pedido ao Carlos, indique o seu nome e número de telemóvel ou WhatsApp.', 'bot');
     setComposer(INTENTS.contacto.placeholder);
     saveDraft();
   };
