@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_PHOTO_BYTES,
+  blobStorageConfigured,
   createPhotoSessionIds,
   hashViewerToken,
   isValidBatchId,
@@ -11,6 +12,12 @@ import {
   sessionHasExpired,
   viewerTokenMatches
 } from '../lib/photo-security.js';
+
+test('reconhece ligações Blob com token estático ou OIDC da Vercel', () => {
+  assert.equal(blobStorageConfigured({ BLOB_READ_WRITE_TOKEN: 'rw-token' }), true);
+  assert.equal(blobStorageConfigured({ BLOB_STORE_ID: 'store_123' }), true);
+  assert.equal(blobStorageConfigured({}), false);
+});
 
 test('cria identificadores fortes e valida o token da galeria', () => {
   const { batchId, viewerToken } = createPhotoSessionIds();
