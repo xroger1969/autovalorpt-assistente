@@ -49,8 +49,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function keyboardOpen() {
     if (window.innerWidth > 820) return false;
+    // Em algumas fases do Safari no iOS, innerHeight e visualViewport.height
+    // encolhem em conjunto. Nesses casos a diferença abaixo é zero apesar de
+    // o teclado estar aberto; o foco é o sinal fiável nos dispositivos Apple.
+    if (appleMobile) return true;
     const viewport = window.visualViewport;
     return Boolean(viewport && window.innerHeight - viewport.height > 150);
+  }
+
+  function keyboardTranslation(viewport) {
+    const viewportHeight = Math.round(viewport?.height || window.innerHeight);
+    const viewportOffsetTop = Math.round(viewport?.offsetTop || 0);
+
+    // Remove primeiro qualquer correção anterior para medir a posição que o
+    // próprio browser atribuiu ao compositor neste evento do teclado.
+    composer.style.setProperty('--keyboard-translate-y', '0px');
+    const measuredBottom = Number(composer.getBoundingClientRect().bottom);
+    const composerBottom = Number.isFinite(measuredBottom) ? measuredBottom : window.innerHeight;
+
+    // Safari já devolveu estas coordenadas relativamente ao visual viewport e
+    // ao layout viewport em diferentes estados. Escolher a menor correção
+    // ancora a caixa sem voltar a aplicar o deslocamento que o iOS já fez.
+    const safeVisualBottom = viewportHeight - keyboardAccessoryClearance;
+    const safeLayoutBottom = viewportOffsetTop + safeVisualBottom;
+    const corrections = [
+      Math.round(safeVisualBottom - composerBottom),
+      Math.round(safeLayoutBottom - composerBottom)
+    ];
+    return corrections.reduce((closest, current) => (
+      Math.abs(current) < Math.abs(closest) ? current : closest
+    ));
   }
 
   function syncKeyboardState() {
@@ -58,11 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     composer.classList.toggle('keyboard-open', open);
     if (open) {
       const viewport = window.visualViewport;
-      const visibleBottom = (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight);
-      const translateY = Math.min(
-        0,
-        Math.round(visibleBottom - window.innerHeight - keyboardAccessoryClearance)
-      );
+      const translateY = keyboardTranslation(viewport);
       composer.style.setProperty('--keyboard-translate-y', `${translateY}px`);
       composer.style.setProperty('--visual-viewport-height', `${Math.round(viewport?.height || window.innerHeight)}px`);
       composer.style.setProperty('--keyboard-accessory-clearance', `${keyboardAccessoryClearance}px`);
