@@ -19,11 +19,23 @@ document.addEventListener('DOMContentLoaded', () => {
     #freeQuestionBox .free-question-hint{margin-bottom:0}
     #composer .input-row{position:relative;z-index:2}
     #composer .input-row input{min-height:58px;border:2px solid #c5d9f2;background:#fff;font-size:18px;line-height:1.35}
-    #composer.keyboard-open #freeQuestionBox,
+    #composer.keyboard-open #freeQuestionBox{display:block!important}
     #composer.keyboard-open #quickSendPartial{display:none!important}
     @media(max-width:820px){
       #composer{padding-top:9px;background:#fff}
-      #composer.keyboard-open{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:9px 12px calc(9px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(18,32,51,.10)}
+      #composer.keyboard-open{
+        position:fixed;
+        left:0;
+        right:0;
+        bottom:0;
+        z-index:30;
+        max-height:calc(var(--visual-viewport-height, 100dvh) - 8px);
+        padding:9px 12px calc(9px + env(safe-area-inset-bottom));
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        transform:translate3d(0,var(--keyboard-translate-y, 0px),0);
+        box-shadow:0 -8px 24px rgba(18,32,51,.10)
+      }
       #composer.keyboard-open .privacy{display:none}
       #composer.keyboard-open .input-row input{font-size:18px}
     }
@@ -40,10 +52,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const open = document.activeElement === input && keyboardOpen();
     composer.classList.toggle('keyboard-open', open);
     if (open) {
+      const viewport = window.visualViewport;
+      const visibleBottom = (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight);
+      const translateY = Math.min(0, Math.round(visibleBottom - window.innerHeight));
+      composer.style.setProperty('--keyboard-translate-y', `${translateY}px`);
+      composer.style.setProperty('--visual-viewport-height', `${Math.round(viewport?.height || window.innerHeight)}px`);
       requestAnimationFrame(() => {
-        inputRow.scrollIntoView({ block: 'end', behavior: 'auto' });
+        const messages = document.getElementById('messages');
+        if (messages) messages.scrollTop = messages.scrollHeight;
         input.focus({ preventScroll: true });
       });
+    } else {
+      composer.style.removeProperty('--keyboard-translate-y');
+      composer.style.removeProperty('--visual-viewport-height');
     }
     setTimeout(() => {
       if (typeof fitMobileViewport === 'function') fitMobileViewport();
@@ -56,6 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   input.addEventListener('blur', () => {
     composer.classList.remove('keyboard-open');
+    composer.style.removeProperty('--keyboard-translate-y');
+    composer.style.removeProperty('--visual-viewport-height');
     setTimeout(() => {
       if (typeof fitMobileViewport === 'function') fitMobileViewport();
     }, 80);
