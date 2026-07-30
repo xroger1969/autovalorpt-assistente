@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       composer.style.removeProperty('--keyboard-translate-y');
       composer.style.removeProperty('--visual-viewport-height');
-    composer.style.removeProperty('--keyboard-accessory-clearance');
+      composer.style.removeProperty('--keyboard-accessory-clearance');
     }
     setTimeout(() => {
       if (typeof fitMobileViewport === 'function') fitMobileViewport();
