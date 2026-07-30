@@ -141,6 +141,15 @@ test('keeps the instruction box visible while the iPhone keyboard is open', () =
   assert.doesNotMatch(styles[0].textContent, /#composer\.keyboard-open #freeQuestionBox,\s*#composer\.keyboard-open #quickSendPartial\{display:none/);
 });
 
+test('reserves the iPhone accessory-bar height below the input row', () => {
+  const { styles } = setupKeyboardFix();
+
+  assert.match(
+    styles[0].textContent,
+    /padding:9px 12px calc\(9px \+ env\(safe-area-inset-bottom\) \+ var\(--keyboard-accessory-clearance, 0px\)\)/
+  );
+});
+
 test('keeps the composer above the iPhone keyboard accessory bar without scrolling the page', () => {
   const { composer, input, inputListeners, messages } = setupKeyboardFix();
 

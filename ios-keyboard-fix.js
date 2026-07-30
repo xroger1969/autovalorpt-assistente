@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bottom:0;
         z-index:30;
         max-height:calc(var(--visual-viewport-height, 100dvh) - var(--keyboard-accessory-clearance, 0px) - 8px);
-        padding:9px 12px calc(9px + env(safe-area-inset-bottom));
+        padding:9px 12px calc(9px + env(safe-area-inset-bottom) + var(--keyboard-accessory-clearance, 0px));
         overflow-y:auto;
         overscroll-behavior:contain;
         -webkit-overflow-scrolling:touch;
