@@ -130,6 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(value).replace(/\s+/g, ' ').trim();
   }
 
+  function isTradeInQuestion(value = '') {
+    const normalized = cleanSpaces(value)
+      .toLocaleLowerCase('pt-PT')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    return /\b(retoma|retomas)\b/.test(normalized);
+  }
+
   function titleCaseVehicle(value = '') {
     return cleanSpaces(value)
       .split(' ')
@@ -287,7 +295,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const previousSendMessage = sendMessage;
   sendMessage = async function sendMessageWithProgressiveTradeIn(message) {
     const text = cleanSpaces(message);
-    if (!text || state.busy || state.pendingIntent !== 'retoma') {
+    if (!text || state.busy) return;
+
+    if (
+      !state.pendingIntent &&
+      !String(state.lead?.retoma || '').trim() &&
+      isTradeInQuestion(text)
+    ) {
+      document.getElementById('messageInput').value = '';
+      removeActionPanels();
+      state.finished = false;
+      state.pendingIntent = 'retoma';
+      document.getElementById('chatTitle').textContent = INTENTS.retoma.short;
+      addBubble(text, 'user');
+      addBubble(
+        'Sim, aceitamos retomas. Para analisarmos a sua viatura, indique a marca, o modelo, o ano e a quilometragem.',
+        'bot'
+      );
+      setFocusedTradeInPrompt(
+        '💬 Descreva a sua retoma',
+        'Pode responder numa única mensagem.',
+        'Ex.: Renault Clio, 2019, 85 000 km'
+      );
+      return;
+    }
+
+    if (state.pendingIntent !== 'retoma') {
       return previousSendMessage(message);
     }
 
