@@ -6,6 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const privacy = composer?.querySelector('.privacy');
   if (!composer || !inputRow || !input) return;
 
+  const appleMobile = /iPhone|iPad|iPod/i.test(window.navigator?.userAgent || '')
+    || (window.navigator?.platform === 'MacIntel' && window.navigator?.maxTouchPoints > 1);
+  const keyboardAccessoryClearance = appleMobile ? 64 : 0;
+
   // Mantém o campo na estrutura original do composer. No iOS, envolver o
   // input noutra caixa altera a altura calculada quando o teclado abre.
   if (freeBox) {
@@ -29,10 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
         right:0;
         bottom:0;
         z-index:30;
-        max-height:calc(var(--visual-viewport-height, 100dvh) - 8px);
+        max-height:calc(var(--visual-viewport-height, 100dvh) - var(--keyboard-accessory-clearance, 0px) - 8px);
         padding:9px 12px calc(9px + env(safe-area-inset-bottom));
         overflow-y:auto;
         overscroll-behavior:contain;
+        -webkit-overflow-scrolling:touch;
         transform:translate3d(0,var(--keyboard-translate-y, 0px),0);
         box-shadow:0 -8px 24px rgba(18,32,51,.10)
       }
@@ -54,9 +59,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (open) {
       const viewport = window.visualViewport;
       const visibleBottom = (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight);
-      const translateY = Math.min(0, Math.round(visibleBottom - window.innerHeight));
+      const translateY = Math.min(
+        0,
+        Math.round(visibleBottom - window.innerHeight - keyboardAccessoryClearance)
+      );
       composer.style.setProperty('--keyboard-translate-y', `${translateY}px`);
       composer.style.setProperty('--visual-viewport-height', `${Math.round(viewport?.height || window.innerHeight)}px`);
+      composer.style.setProperty('--keyboard-accessory-clearance', `${keyboardAccessoryClearance}px`);
       requestAnimationFrame(() => {
         const messages = document.getElementById('messages');
         if (messages) messages.scrollTop = messages.scrollHeight;
@@ -65,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       composer.style.removeProperty('--keyboard-translate-y');
       composer.style.removeProperty('--visual-viewport-height');
+      composer.style.removeProperty('--keyboard-accessory-clearance');
     }
     setTimeout(() => {
       if (typeof fitMobileViewport === 'function') fitMobileViewport();
@@ -79,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     composer.classList.remove('keyboard-open');
     composer.style.removeProperty('--keyboard-translate-y');
     composer.style.removeProperty('--visual-viewport-height');
+    composer.style.removeProperty('--keyboard-accessory-clearance');
     setTimeout(() => {
       if (typeof fitMobileViewport === 'function') fitMobileViewport();
     }, 80);
