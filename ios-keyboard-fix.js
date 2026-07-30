@@ -154,10 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let year = '';
     let mileage = '';
 
-    const yearMatch = working.match(/\b(19[8-9]\d|20[0-2]\d)\b/);
+    const yearMatch = [...working.matchAll(/\b(19[8-9]\d|20[0-2]\d)\b/g)]
+      .reduce((best, current) => {
+        if (!best) return current;
+        return Number(current[1]) >= Number(best[1]) ? current : best;
+      }, null);
     if (yearMatch) {
       year = yearMatch[1];
-      working = working.replace(yearMatch[0], ' ');
+      const start = yearMatch.index;
+      working = `${working.slice(0, start)} ${working.slice(start + yearMatch[0].length)}`;
     }
 
     const thousandMatch = working.match(/\b(\d{1,3})\s*mil(?:\s*(?:km|kms|quil[oó]metros?))?\b/i);
@@ -171,6 +176,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (explicitMileage) {
         mileage = explicitMileage[1].replace(/\D/g, '');
         working = working.replace(explicitMileage[0], ' ');
+      }
+    }
+
+    if (!mileage && year) {
+      const implicitMileage = working.match(/\b(\d{1,3}(?:[ .]\d{3})+|\d{5,6})\b/);
+      const remainingDescription = implicitMileage
+        ? working.replace(implicitMileage[0], ' ')
+        : '';
+      const mileageNumber = Number(implicitMileage?.[1].replace(/\D/g, ''));
+      if (
+        implicitMileage &&
+        /[A-Za-zÀ-ÿ]/u.test(remainingDescription) &&
+        Number.isFinite(mileageNumber) &&
+        mileageNumber >= 1000 &&
+        mileageNumber <= 999999
+      ) {
+        mileage = String(mileageNumber);
+        working = remainingDescription;
       }
     }
 
