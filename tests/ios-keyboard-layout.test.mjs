@@ -36,7 +36,13 @@ function createStyle() {
   };
 }
 
-function setupKeyboardFix({ appleMobile = true } = {}) {
+function setupKeyboardFix({
+  appleMobile = true,
+  innerHeight = 800,
+  viewportHeight = 500,
+  viewportOffsetTop = 50,
+  composerBottom = 800
+} = {}) {
   const documentListeners = new Map();
   const inputListeners = new Map();
   const viewportListeners = new Map();
@@ -62,6 +68,9 @@ function setupKeyboardFix({ appleMobile = true } = {}) {
       if (selector === '.input-row') return inputRow;
       if (selector === '.privacy') return privacy;
       return null;
+    },
+    getBoundingClientRect() {
+      return { bottom: composerBottom };
     },
     insertBefore() {}
   };
@@ -89,8 +98,8 @@ function setupKeyboardFix({ appleMobile = true } = {}) {
   };
 
   const visualViewport = {
-    height: 500,
-    offsetTop: 50,
+    height: viewportHeight,
+    offsetTop: viewportOffsetTop,
     addEventListener(name, listener) {
       viewportListeners.set(name, listener);
     }
@@ -109,7 +118,7 @@ function setupKeyboardFix({ appleMobile = true } = {}) {
       };
   const context = {
     document,
-    window: { innerWidth: 390, innerHeight: 800, visualViewport, navigator },
+    window: { innerWidth: 390, innerHeight, visualViewport, navigator },
     requestAnimationFrame(callback) {
       callback();
     },
@@ -152,6 +161,37 @@ test('does not add iOS keyboard clearance on other mobile platforms', () => {
 
   assert.equal(composer.style.getPropertyValue('--keyboard-translate-y'), '-250px');
   assert.equal(composer.style.getPropertyValue('--keyboard-accessory-clearance'), '0px');
+});
+
+test('does not duplicate the shift when Safari already moved the composer', () => {
+  const { composer, inputListeners } = setupKeyboardFix({ composerBottom: 550 });
+
+  inputListeners.get('focus')();
+
+  assert.equal(composer.classList.contains('keyboard-open'), true);
+  assert.equal(composer.style.getPropertyValue('--keyboard-translate-y'), '-64px');
+});
+
+test('recognizes the iPhone keyboard even when both viewport heights are equal', () => {
+  const { composer, inputListeners } = setupKeyboardFix({
+    innerHeight: 500,
+    viewportHeight: 500,
+    viewportOffsetTop: 0,
+    composerBottom: 500
+  });
+
+  inputListeners.get('focus')();
+
+  assert.equal(composer.classList.contains('keyboard-open'), true);
+  assert.equal(composer.style.getPropertyValue('--keyboard-translate-y'), '-64px');
+});
+
+test('can move the composer down when Safari has already shifted it too far', () => {
+  const { composer, inputListeners } = setupKeyboardFix({ composerBottom: 420 });
+
+  inputListeners.get('focus')();
+
+  assert.equal(composer.style.getPropertyValue('--keyboard-translate-y'), '16px');
 });
 
 test('clears temporary viewport positioning when the keyboard closes', () => {
