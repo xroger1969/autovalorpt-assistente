@@ -343,7 +343,13 @@
   function renderPhotoCard() {
     const existing = document.getElementById('photoUploadCard');
     if (existing) existing.remove();
-    if (!state?.vehicle || !String(state?.lead?.retoma || '').trim() || (photoState.dismissed && !photoState.count)) return;
+    const tradeIn = String(state?.lead?.retoma || '').trim();
+    const validateTradeIn = globalThis.AutoValorValidation?.validateTradeIn;
+    const completeTradeIn = tradeIn && (
+      typeof validateTradeIn !== 'function' ||
+      validateTradeIn(tradeIn).ok
+    );
+    if (!state?.vehicle || !completeTradeIn || (photoState.dismissed && !photoState.count)) return;
 
     const card = document.createElement('section');
     card.id = 'photoUploadCard';
@@ -431,7 +437,13 @@
     }
 
     card.appendChild(actions);
-    document.getElementById('messages')?.appendChild(card);
+    const messages = document.getElementById('messages');
+    const followupActions = document.getElementById('followupActions');
+    if (messages && followupActions?.parentNode === messages) {
+      messages.insertBefore(card, followupActions);
+    } else {
+      messages?.appendChild(card);
+    }
     if (typeof scrollEnd === 'function') scrollEnd();
   }
 
