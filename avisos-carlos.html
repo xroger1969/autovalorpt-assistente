@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5ed7">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AutoValorPT">
+<link rel="manifest" href="/manifest.json">
+<title>AutoValorPT — Avisos do Carlos</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#10243d;background:#f5f9ff}
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 0,#e7f1ff,transparent 42%),#f7faff}.card{width:min(520px,100%);padding:28px;border:1px solid #dbe7f5;border-radius:26px;background:#fff;box-shadow:0 20px 60px rgba(18,55,95,.12)}.brand{font-size:14px;font-weight:900;color:#0b5ed7}.brand strong{color:#10243d}h1{margin:12px 0 10px;font-size:34px;line-height:1.08;letter-spacing:-.035em}.intro{margin:0 0 22px;color:#607088;line-height:1.55}.status{margin:18px 0;padding:15px 16px;border-radius:15px;background:#f2f6fb;color:#42536b;line-height:1.45;font-weight:700}.status.ok{background:#ecf9f2;color:#087348}.status.warn{background:#fff6df;color:#77520a}.steps{margin:18px 0;padding:16px;border:1px solid #e4ebf4;border-radius:15px;background:#fbfdff;color:#4d5c71;line-height:1.55}.steps b{color:#1a2d47}button{width:100%;min-height:58px;border:0;border-radius:15px;background:#0b5ed7;color:#fff;font:inherit;font-size:18px;font-weight:900;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.small{margin:16px 0 0;color:#7a8798;font-size:12px;line-height:1.45}
+</style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+</script>
+</head>
+<body>
+<main class="card">
+  <div class="brand">AutoValorPT · <strong>Assistente do Carlos</strong></div>
+  <h1>Avisos de novas leads</h1>
+  <p class="intro">Esta página serve apenas para ativar, nos dispositivos do Carlos, os avisos do assistente AutoValorPT.</p>
+  <div id="iosSteps" class="steps" hidden><b>No iPhone/iPad:</b> toque em Partilhar → <b>Adicionar ao ecrã principal</b>. Depois abra o AutoValorPT pelo novo ícone e volte a tocar em “Ativar avisos”.</div>
+  <div id="status" class="status">A preparar o sistema de avisos…</div>
+  <button id="enablePush" type="button" disabled>Ativar avisos neste dispositivo</button>
+  <p class="small">Os clientes que usam o assistente normal não são inscritos automaticamente nestes avisos.</p>
+</main>
+<script>
+(() => {
+  const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
+  const EXTERNAL_ID = 'autovalorpt-carlos';
+  const status = document.getElementById('status');
+  const button = document.getElementById('enablePush');
+  const iosSteps = document.getElementById('iosSteps');
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+  function setStatus(text, kind = '') {
+    status.textContent = text;
+    status.className = `status${kind ? ` ${kind}` : ''}`;
+  }
+
+  if (isIOS && !isStandalone) iosSteps.hidden = false;
+
+  OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      await OneSignal.init({ appId: APP_ID });
+      await OneSignal.login(EXTERNAL_ID);
+      OneSignal.User.addTags({ role: 'carlos', channel: 'lead_alerts' });
+
+      const refresh = () => {
+        const optedIn = Boolean(OneSignal.User.PushSubscription.optedIn);
+        if (optedIn) {
+          setStatus('Avisos ativos neste dispositivo. ✅', 'ok');
+          button.textContent = 'Avisos ativos';
+          button.disabled = true;
+          return;
+        }
+        if (isIOS && !isStandalone) {
+          setStatus('No iPhone, adicione primeiro esta página ao ecrã principal.', 'warn');
+          button.disabled = false;
+          return;
+        }
+        setStatus('Pronto para ativar. Toque no botão e permita as notificações.', '');
+        button.disabled = false;
+      };
+
+      OneSignal.User.PushSubscription.addEventListener('change', refresh);
+      refresh();
+
+      button.addEventListener('click', async () => {
+        if (isIOS && !isStandalone) {
+          iosSteps.hidden = false;
+          setStatus('Adicione ao ecrã principal e abra pelo ícone antes de ativar.', 'warn');
+          return;
+        }
+        button.disabled = true;
+        setStatus('A pedir autorização para notificações…');
+        try {
+          await OneSignal.User.PushSubscription.optIn();
+          await OneSignal.login(EXTERNAL_ID);
+          OneSignal.User.addTags({ role: 'carlos', channel: 'lead_alerts' });
+          setTimeout(refresh, 600);
+        } catch {
+          setStatus('Não foi possível ativar. Confirme que as notificações não estão bloqueadas no navegador.', 'warn');
+          button.disabled = false;
+        }
+      });
+    } catch {
+      setStatus('Não foi possível iniciar o OneSignal neste dispositivo.', 'warn');
+    }
+  });
+})();
+</script>
+</body>
+</html>
