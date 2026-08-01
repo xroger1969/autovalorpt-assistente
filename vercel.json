@@ -2,6 +2,7 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "routes": [
+    { "src": "/api/chat", "dest": "/api/chat-smart" },
     { "src": "/", "dest": "/welcome.html" }
   ],
   "headers": [
