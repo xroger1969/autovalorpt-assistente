@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f8ff" />
+  <title>Resumo do pedido · AutoValorPT</title>
+  <style>
+    :root{font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#102542;background:#f4f8ff}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#edf5ff 0%,#f8fbff 48%,#eef5ff 100%);padding:calc(28px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom))}
+    main{width:min(680px,100%);margin:0 auto}
+    .brand{display:flex;align-items:center;gap:12px;margin:6px 4px 24px;font-weight:800;font-size:18px}
+    .logo{width:48px;height:48px;border-radius:15px;background:linear-gradient(145deg,#1688ff,#0b4ec9);color:#fff;display:grid;place-items:center;font-size:21px;box-shadow:0 12px 30px rgba(24,105,222,.22)}
+    .card{background:rgba(255,255,255,.96);border:1px solid #dbe8f8;border-radius:28px;padding:26px;box-shadow:0 18px 55px rgba(32,70,120,.12)}
+    .eyebrow{color:#1671df;font-weight:800;font-size:15px;letter-spacing:.02em;margin-bottom:8px}
+    h1{font-size:clamp(32px,8vw,46px);line-height:1.02;margin:0 0 12px;letter-spacing:-.035em}
+    .sub{font-size:17px;line-height:1.45;color:#65758b;margin:0 0 24px}
+    .summary{display:grid;gap:12px}
+    .row{padding:16px 17px;border-radius:18px;background:#f6f9fd;border:1px solid #e1eaf5}
+    .label{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.055em;color:#708198;margin-bottom:5px}
+    .value{font-size:18px;line-height:1.35;font-weight:700;overflow-wrap:anywhere}
+    .row.visit{background:#eefaf4;border-color:#ccebdc}
+    .row.visit .label{color:#24815a}
+    .empty{display:none;color:#6d7b8d;padding:18px;text-align:center;background:#f7f9fc;border-radius:18px}
+    .actions{display:grid;gap:11px;margin-top:22px}
+    .button{display:block;text-align:center;text-decoration:none;border-radius:18px;padding:17px 18px;font-size:17px;font-weight:850}
+    .primary{background:linear-gradient(135deg,#1688ff,#0b57d7);color:#fff;box-shadow:0 12px 24px rgba(22,112,226,.22)}
+    .secondary{background:#eef4fb;color:#174778;border:1px solid #d9e5f3}
+    .privacy{text-align:center;color:#8794a5;font-size:12px;line-height:1.4;margin:17px 8px 0}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><div class="logo">AV</div><div>AutoValorPT · Assistente do Carlos</div></div>
+    <section class="card">
+      <div class="eyebrow">🔔 NOVA LEAD</div>
+      <h1>Resumo do pedido</h1>
+      <p class="sub">Informação essencial recebida pelo assistente AutoValorPT.</p>
+      <div id="summary" class="summary"></div>
+      <div id="empty" class="empty">Este aviso já não contém detalhes do pedido.</div>
+      <div class="actions">
+        <a class="button primary" href="/">Abrir o assistente</a>
+        <a class="button secondary" href="/avisos-carlos.html">Gerir avisos</a>
+      </div>
+      <p class="privacy">O número de telefone do cliente não é colocado neste ecrã nem no link da notificação.</p>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const fields = [
+        ['Viatura', 'viatura', false],
+        ['Cliente', 'cliente', false],
+        ['Assunto', 'assuntos', false],
+        ['Visita', 'visita', true],
+        ['Financiamento', 'financiamento', false],
+        ['Retoma', 'retoma', false]
+      ];
+      const root = document.getElementById('summary');
+      let count = 0;
+      for (const [label, key, isVisit] of fields) {
+        const value = (params.get(key) || '').trim();
+        if (!value) continue;
+        count += 1;
+        const row = document.createElement('div');
+        row.className = `row${isVisit ? ' visit' : ''}`;
+        const labelEl = document.createElement('div');
+        labelEl.className = 'label';
+        labelEl.textContent = label;
+        const valueEl = document.createElement('div');
+        valueEl.className = 'value';
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        root.append(row);
+      }
+      if (!count) document.getElementById('empty').style.display = 'block';
+    })();
+  </script>
+</body>
+</html>

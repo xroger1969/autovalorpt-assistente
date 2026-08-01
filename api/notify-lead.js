@@ -60,6 +60,23 @@ function idempotencyKey(text = '') {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
+function summaryUrl(lead = {}) {
+  const url = new URL('https://autovalorpt-assistente.vercel.app/aviso-lead.html');
+  const fields = [
+    ['viatura', lead.vehicle],
+    ['cliente', lead.name],
+    ['assuntos', lead.subjects],
+    ['visita', lead.visit],
+    ['financiamento', lead.financing],
+    ['retoma', lead.tradeIn]
+  ];
+  for (const [key, value] of fields) {
+    const safe = clean(value, 320);
+    if (safe) url.searchParams.set(key, safe);
+  }
+  return url.toString();
+}
+
 export function buildNotification(text = '') {
   const lead = parseLead(text);
   const isVisit = Boolean(lead.visit || /visita/i.test(lead.subjects));
@@ -73,6 +90,8 @@ export function buildNotification(text = '') {
   else if (lead.subjects) details.push(lead.subjects);
   if (lead.financing) details.push(`Financiamento: ${lead.financing}`);
   if (lead.tradeIn) details.push(`Retoma: ${lead.tradeIn}`);
+
+  const openUrl = summaryUrl(lead);
 
   return {
     lead,
@@ -88,7 +107,7 @@ export function buildNotification(text = '') {
         vehicle: lead.vehicle,
         visit: lead.visit
       },
-      url: 'https://autovalorpt-assistente.vercel.app/',
+      url: openUrl,
       idempotency_key: idempotencyKey(text)
     }
   };
