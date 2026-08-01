@@ -10,7 +10,13 @@
   "lang": "pt-PT",
   "icons": [
     {
-      "src": "/app-icon.svg?v=20260801",
+      "src": "/apple-touch-icon.png?v=20260801b",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon.svg?v=20260801b",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
