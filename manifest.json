@@ -7,13 +7,5 @@
   "display": "standalone",
   "background_color": "#f7faff",
   "theme_color": "#0b5ed7",
-  "lang": "pt-PT",
-  "icons": [
-    {
-      "src": "/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ]
+  "lang": "pt-PT"
 }
