@@ -1,0 +1,11 @@
+{
+  "name": "AutoValorPT Assistente",
+  "short_name": "AutoValorPT",
+  "id": "/avisos-carlos.html",
+  "start_url": "/avisos-carlos.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7faff",
+  "theme_color": "#0b5ed7",
+  "lang": "pt-PT"
+}
