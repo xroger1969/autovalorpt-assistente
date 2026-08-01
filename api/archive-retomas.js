@@ -133,7 +133,8 @@ export default async function handler(req, res) {
       const body = await readJsonBody(req);
       const access = String(body?.access || '');
       if (!verifyArchiveAccessToken(access)) return res.status(403).json({ error: 'Acesso privado inválido ou expirado.' });
-      if (String(body?.action || '') === 'delete') return deleteArchiveRetoma(res, String(body?.batchId || ''));
+      const action = String(body?.action || req.query?.action || '');
+      if (action === 'delete') return deleteArchiveRetoma(res, String(body?.batchId || ''));
       return res.status(400).json({ error: 'Operação inválida.' });
     }
 
