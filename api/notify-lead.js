@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+// A credencial OneSignal é lida apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
 const EXTERNAL_ID = 'autovalorpt-carlos';
 const MAX_TEXT = 4000;
