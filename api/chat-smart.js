@@ -26,11 +26,6 @@ export function normalizeContactOrder(value = '', lead = {}) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === 'GET' && req.query?.diagnostic === '1') {
-    const samples = ['Rita 919776554', '919776554 Rita', '+351 919 776 554 Rita Ana'];
-    return res.status(200).json({ samples: samples.map((message) => ({ message, normalized: normalizeContactOrder(message, {}) })) });
-  }
-
   if (req.method === 'POST' && req.body?.message) {
     req.body = {
       ...req.body,
