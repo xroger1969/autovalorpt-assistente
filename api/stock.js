@@ -176,7 +176,7 @@ function extractInventory(html = '') {
 
   const unique = new Map();
   for (const item of found) unique.set(item.url, unique.has(item.url) ? merge(unique.get(item.url), item) : item);
-  return [...unique.values()].slice(0, 18);
+  return [...unique.values()];
 }
 
 async function fetchText(url, timeout = 7000) {
@@ -217,7 +217,7 @@ async function loadStock() {
   if (Date.now() - memoryCache.at < CACHE_MS && memoryCache.items.length) return memoryCache.items;
   const html = await fetchText(STOCK_URL);
   if (!html) return [];
-  const base = extractInventory(html).slice(0, 12);
+  const base = extractInventory(html);
   const enriched = [];
   for (let index = 0; index < base.length; index += 4) {
     enriched.push(...await Promise.all(base.slice(index, index + 4).map(enrich)));
