@@ -101,7 +101,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.ONESIGNAL_AUTOVALORPT_API_KEY || process.env.ONESIGNAL_API_KEY;
   if (!apiKey) return res.status(503).json({ ok: false, error: 'onesignal_not_configured' });
 
-  const text = clean(req.body?.text, MAX_TEXT);
+  const text = String(req.body?.text || '').replace(/[<>]/g, '').trim().slice(0, MAX_TEXT);
   if (!text.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) {
     return res.status(400).json({ ok: false, error: 'invalid_lead' });
   }
