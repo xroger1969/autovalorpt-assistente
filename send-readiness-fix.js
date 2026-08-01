@@ -104,5 +104,23 @@ document.addEventListener('DOMContentLoaded', () => {
     syncUiGuards();
   };
 
+  const sentAlerts = new Set();
+  document.addEventListener('click', (event) => {
+    const anchor = event.target.closest?.('a[href*="wa.me/"]');
+    if (!anchor || !isReadyToSend()) return;
+    let text = '';
+    try { text = new URL(anchor.href, location.href).searchParams.get('text') || ''; } catch {}
+    if (!text.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) return;
+    const key = `${state.lead.telefone}|${state.lead.viatura}|${state.lead.visita}|${state.lead.financiamento}|${state.lead.retoma}`;
+    if (sentAlerts.has(key)) return;
+    sentAlerts.add(key);
+    fetch('/api/notify-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ text })
+    }).catch(() => sentAlerts.delete(key));
+  }, true);
+
   syncUiGuards();
 });
