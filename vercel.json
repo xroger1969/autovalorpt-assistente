@@ -3,11 +3,21 @@
   "trailingSlash": false,
   "routes": [
     { "src": "/api/chat", "dest": "/api/chat-smart" },
+    { "src": "/api/archive-retoma", "dest": "/api/archive-retomas?action=open" },
+    { "src": "/api/archive-retoma-delete", "dest": "/api/archive-retomas?action=delete" },
     { "src": "/", "dest": "/welcome.html" }
   ],
   "headers": [
     {
       "source": "/fotos.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/arquivo-retomas.html",
       "headers": [
         { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
