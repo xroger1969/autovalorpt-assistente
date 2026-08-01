@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5ed7">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Arquivo de Retomas — AutoValorPT</title>
+<style>
+:root{--blue:#0b5ed7;--blue-dark:#0847a6;--ink:#132238;--muted:#627188;--line:#d9e4f1;--page:#f3f7fc;--card:#fff;--green:#157a52;--red:#b42318;--amber:#a65f00}
+*{box-sizing:border-box}html{background:var(--page)}body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:linear-gradient(180deg,#eef5ff 0,#f8fbff 34%,var(--page) 100%)}
+button,input,a{font:inherit}.shell{width:min(1180px,100%);margin:0 auto;padding:18px 14px calc(38px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:10px;font-weight:950;font-size:20px}.mark{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#1675ff,#073c96);color:#fff;box-shadow:0 8px 24px rgba(11,94,215,.22)}.ghost{border:1px solid #cbdcf0;background:#fff;color:#174b8e;border-radius:13px;min-height:44px;padding:0 14px;font-weight:850;cursor:pointer}
+.hero{background:#fff;border:1px solid #cfdef0;border-radius:24px;padding:24px;box-shadow:0 18px 45px rgba(34,63,99,.09)}.eyebrow{margin:0 0 7px;color:var(--blue);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.09em}h1{margin:0;font-size:clamp(29px,5vw,43px);line-height:1.08;letter-spacing:-.03em}.intro{margin:10px 0 0;color:var(--muted);font-size:16px;line-height:1.5}.toolbar{display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}.search{flex:1;min-width:220px;min-height:47px;border:1px solid #cbdcf0;border-radius:14px;padding:0 14px;background:#fafeff;color:var(--ink);outline:none}.search:focus{border-color:#7eb2f4;box-shadow:0 0 0 4px rgba(11,94,215,.09)}.stats{display:flex;gap:8px;flex-wrap:wrap}.pill{padding:8px 11px;border-radius:999px;background:#edf5ff;color:#174b8e;font-size:13px;font-weight:900}
+.lock{margin-top:18px;background:#fff;border:1px solid #d5e2f1;border-radius:22px;padding:24px;text-align:center;box-shadow:0 12px 32px rgba(34,63,99,.07)}.lock-icon{width:62px;height:62px;border-radius:20px;margin:0 auto 14px;display:grid;place-items:center;background:#edf5ff;font-size:30px}.lock h2{margin:0 0 8px}.lock p{margin:0 auto 18px;max-width:620px;color:var(--muted);line-height:1.5}.primary{border:0;border-radius:14px;min-height:48px;padding:0 17px;background:linear-gradient(145deg,#1472ff,#0a4fb7);color:#fff;font-weight:950;cursor:pointer;box-shadow:0 8px 18px rgba(11,94,215,.2)}.primary:disabled,.ghost:disabled{opacity:.55;cursor:default}
+.status{margin:18px 0;padding:17px;border:1px solid #d5e2f1;border-radius:17px;background:#fff;text-align:center;color:#596a80;font-weight:800}.status.error{border-color:#efc8c5;background:#fff7f6;color:#9a2a23}.list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}.item{background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 9px 26px rgba(34,63,99,.07);display:flex;flex-direction:column;gap:12px}.item-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.item h3{margin:0;font-size:19px;line-height:1.3}.date{font-size:13px;color:var(--muted);font-weight:750;white-space:nowrap}.trade{margin:0;color:#506179;line-height:1.45}.meta{display:flex;gap:7px;flex-wrap:wrap}.tag{padding:7px 9px;border-radius:999px;background:#f0f5fb;color:#425672;font-size:12px;font-weight:850}.tag.expired{background:#fff1e7;color:var(--amber)}.actions{display:flex;gap:9px;margin-top:auto}.open{flex:1;border:0;border-radius:13px;min-height:44px;background:#edf5ff;color:#124f9c;font-weight:950;cursor:pointer}.danger{border:1px solid #f0c8c5;border-radius:13px;min-height:44px;padding:0 13px;background:#fff7f6;color:var(--red);font-weight:900;cursor:pointer}
+.empty{grid-column:1/-1;background:#fff;border:1px dashed #cbd9e8;border-radius:20px;padding:28px;text-align:center;color:var(--muted)}
+.overlay{position:fixed;inset:0;background:rgba(13,27,45,.48);backdrop-filter:blur(3px);z-index:20;display:none;align-items:flex-end;justify-content:center}.overlay.show{display:flex}.drawer{width:min(1080px,100%);max-height:92vh;overflow:auto;background:#f7faff;border-radius:25px 25px 0 0;padding:18px 16px calc(26px + env(safe-area-inset-bottom));box-shadow:0 -14px 42px rgba(11,32,61,.22)}.drawer-head{position:sticky;top:0;z-index:2;background:rgba(247,250,255,.95);backdrop-filter:blur(8px);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:4px 0 14px}.drawer h2{margin:0;font-size:25px}.drawer-sub{margin:5px 0 0;color:var(--muted);line-height:1.4}.close{width:44px;height:44px;border-radius:14px;border:1px solid #cfdeee;background:#fff;font-size:23px;cursor:pointer}.drawer-actions{display:flex;gap:9px;flex-wrap:wrap;margin:2px 0 15px}.photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.photo{overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:17px}.photo a.preview{display:block;aspect-ratio:4/3;background:#e7eef7}.photo img{width:100%;height:100%;object-fit:cover;display:block}.photo-info{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;font-size:13px;font-weight:850}.photo-info button{border:0;background:#edf7f2;color:var(--green);border-radius:10px;min-height:34px;padding:0 10px;font-weight:900;cursor:pointer}.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;max-width:min(92vw,560px);background:#17263a;color:#fff;border-radius:14px;padding:12px 15px;font-weight:800;box-shadow:0 12px 32px rgba(0,0,0,.25);display:none}.toast.show{display:block}
+@media(max-width:760px){.shell{padding:13px 11px calc(30px + env(safe-area-inset-bottom))}.hero{padding:20px;border-radius:21px}.list{grid-template-columns:1fr}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.item-top{display:block}.date{display:block;margin-top:5px}.drawer{max-height:94vh}}
+@media(max-width:430px){.photo-grid{grid-template-columns:1fr}.actions{flex-wrap:wrap}.danger{flex:1}.toolbar{display:block}.stats{margin-top:10px}.search{width:100%;min-width:0}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="top"><div class="brand"><span class="mark">AV</span><span>AutoValorPT</span></div><button class="ghost" id="refreshBtn" type="button" hidden>Atualizar</button></header>
+  <section class="hero">
+    <p class="eyebrow">Área privada</p>
+    <h1>Arquivo de Retomas</h1>
+    <p class="intro">Consulta os envios de fotografias, abre cada retoma, descarrega as imagens e elimina lotes que já não precisas.</p>
+    <div class="toolbar" id="toolbar" hidden>
+      <input class="search" id="search" type="search" placeholder="Pesquisar por viatura ou dados da retoma…" autocomplete="off">
+      <div class="stats"><span class="pill" id="totalPill"></span><span class="pill" id="photosPill"></span></div>
+    </div>
+  </section>
+
+  <section class="lock" id="lock">
+    <div class="lock-icon">🔐</div>
+    <h2>Acesso protegido</h2>
+    <p>Por segurança, o arquivo não abre apenas com este endereço. Envia uma autorização privada para o teu dispositivo através do OneSignal.</p>
+    <button class="primary" id="accessBtn" type="button">Enviar acesso privado</button>
+  </section>
+
+  <div class="status" id="status" hidden></div>
+  <section class="list" id="list"></section>
+</main>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+  <section class="drawer">
+    <header class="drawer-head"><div><h2 id="drawerTitle">Retoma</h2><p class="drawer-sub" id="drawerSub"></p></div><button class="close" id="closeBtn" type="button" aria-label="Fechar">×</button></header>
+    <div class="drawer-actions"><button class="primary" id="downloadAllBtn" type="button">Descarregar todas</button><button class="danger" id="deleteDetailBtn" type="button">Eliminar retoma</button></div>
+    <div class="photo-grid" id="photoGrid"></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const params=new URLSearchParams(location.search);
+const suppliedAccess=params.get('access')||'';
+const STORAGE_KEY='autovalorpt_archive_access';
+if(suppliedAccess){sessionStorage.setItem(STORAGE_KEY,suppliedAccess);history.replaceState({},'',location.pathname)}
+let access=sessionStorage.getItem(STORAGE_KEY)||'';
+let items=[];
+let current=null;
+const lock=document.getElementById('lock');
+const statusNode=document.getElementById('status');
+const listNode=document.getElementById('list');
+const toolbar=document.getElementById('toolbar');
+const refreshBtn=document.getElementById('refreshBtn');
+const search=document.getElementById('search');
+const overlay=document.getElementById('overlay');
+const photoGrid=document.getElementById('photoGrid');
+const accessBtn=document.getElementById('accessBtn');
+
+function setStatus(message,error=false){statusNode.textContent=message;statusNode.classList.toggle('error',error);statusNode.hidden=!message}
+function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2600)}
+function formatDate(value){const d=new Date(value);return Number.isNaN(d.getTime())?'Data indisponível':d.toLocaleString('pt-PT',{dateStyle:'medium',timeStyle:'short'})}
+function formatBytes(value){const n=Number(value||0);if(n<1024)return `${n} B`;if(n<1048576)return `${(n/1024).toFixed(1)} KB`;return `${(n/1048576).toFixed(1)} MB`}
+function fileExtension(type=''){return type.includes('png')?'png':type.includes('webp')?'webp':type.includes('heic')?'heic':type.includes('heif')?'heif':'jpg'}
+function escapeText(value=''){return String(value||'')}
+function requireAccess(){access='';sessionStorage.removeItem(STORAGE_KEY);items=[];listNode.textContent='';toolbar.hidden=true;refreshBtn.hidden=true;lock.hidden=false;setStatus('O acesso terminou. Pede uma nova autorização privada.',true)}
+async function api(url,options){const response=await fetch(url,{cache:'no-store',...options});const data=await response.json().catch(()=>({}));if(response.status===403){requireAccess();throw new Error('Acesso expirado.')}if(!response.ok)throw new Error(data.error||'Ocorreu um erro.');return data}
+
+async function requestAccess(){accessBtn.disabled=true;accessBtn.textContent='A enviar…';setStatus('');try{const response=await fetch('/api/archive-access',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error==='rate_limited'?'Foram pedidos demasiados acessos. Tenta novamente dentro de alguns minutos.':'Não foi possível enviar a autorização.');setStatus('Autorização enviada. Abre a notificação “Arquivo de Retomas AutoValorPT” no teu dispositivo.');toast('Acesso privado enviado por notificação.')}catch(error){setStatus(error.message||'Não foi possível enviar a autorização.',true)}finally{accessBtn.disabled=false;accessBtn.textContent='Enviar acesso privado'}}
+
+function render(){const q=search.value.trim().toLocaleLowerCase('pt-PT');const filtered=items.filter(item=>`${item.vehicle} ${item.tradeIn} ${item.batchId}`.toLocaleLowerCase('pt-PT').includes(q));listNode.textContent='';if(!filtered.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=q?'Nenhuma retoma corresponde à pesquisa.':'Ainda não existem retomas guardadas.';listNode.appendChild(empty);return}for(const item of filtered){const card=document.createElement('article');card.className='item';const top=document.createElement('div');top.className='item-top';const title=document.createElement('h3');title.textContent=item.vehicle||'Viatura para retoma';const date=document.createElement('span');date.className='date';date.textContent=formatDate(item.createdAt);top.append(title,date);const trade=document.createElement('p');trade.className='trade';trade.textContent=item.tradeIn||'Sem descrição da retoma.';const meta=document.createElement('div');meta.className='meta';for(const text of [`${item.photoCount} foto${item.photoCount===1?'':'s'}`,formatBytes(item.totalBytes),item.expired?'Ligação original expirada':'Ligação original ativa']){const tag=document.createElement('span');tag.className=`tag${item.expired&&text.startsWith('Ligação')?' expired':''}`;tag.textContent=text;meta.appendChild(tag)}const actions=document.createElement('div');actions.className='actions';const open=document.createElement('button');open.className='open';open.type='button';open.textContent='Abrir fotografias';open.onclick=()=>openRetoma(item.batchId);const del=document.createElement('button');del.className='danger';del.type='button';del.textContent='Eliminar';del.onclick=()=>deleteRetoma(item.batchId,item.vehicle);actions.append(open,del);card.append(top,trade,meta,actions);listNode.appendChild(card)}}
+
+async function loadArchive(){if(!access){lock.hidden=false;return}lock.hidden=true;toolbar.hidden=false;refreshBtn.hidden=false;setStatus('A carregar o arquivo…');try{const data=await api(`/api/archive-retomas?access=${encodeURIComponent(access)}`);items=data.items||[];const totalPhotos=items.reduce((sum,item)=>sum+Number(item.photoCount||0),0);document.getElementById('totalPill').textContent=`${items.length} retoma${items.length===1?'':'s'}`;document.getElementById('photosPill').textContent=`${totalPhotos} fotografia${totalPhotos===1?'':'s'}`;setStatus('');render()}catch(error){if(access)setStatus(error.message||'Não foi possível carregar o arquivo.',true)}}
+
+async function openRetoma(batchId){setStatus('A abrir as fotografias…');try{const data=await api(`/api/archive-retoma?batch=${encodeURIComponent(batchId)}&access=${encodeURIComponent(access)}`);current=data;document.getElementById('drawerTitle').textContent=data.vehicle||'Viatura para retoma';document.getElementById('drawerSub').textContent=`${data.tradeIn||''}${data.tradeIn?' · ':''}${data.photos.length} fotografia${data.photos.length===1?'':'s'} · ${formatDate(data.createdAt)}`;photoGrid.textContent='';for(const photo of data.photos){const card=document.createElement('article');card.className='photo';const preview=document.createElement('a');preview.className='preview';preview.href=photo.url;preview.target='_blank';preview.rel='noopener';const img=document.createElement('img');img.src=photo.url;img.alt=`Fotografia ${photo.position}`;img.loading='lazy';preview.appendChild(img);const info=document.createElement('div');info.className='photo-info';const label=document.createElement('span');label.textContent=`Foto ${photo.position} · ${formatBytes(photo.size)}`;const down=document.createElement('button');down.type='button';down.textContent='Descarregar';down.onclick=()=>downloadPhoto(photo,data.batchId);info.append(label,down);card.append(preview,info);photoGrid.appendChild(card)}overlay.classList.add('show');setStatus('')}catch(error){if(access)setStatus(error.message||'Não foi possível abrir esta retoma.',true)}}
+
+async function downloadPhoto(photo,batchId){try{const response=await fetch(photo.url);if(!response.ok)throw new Error();const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`retoma-${batchId.slice(0,8)}-${String(photo.position).padStart(2,'0')}.${fileExtension(photo.contentType)}`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000)}catch{window.open(photo.url,'_blank','noopener')}}
+
+async function downloadAll(){if(!current?.photos?.length)return;const btn=document.getElementById('downloadAllBtn');btn.disabled=true;const original=btn.textContent;try{for(let i=0;i<current.photos.length;i++){btn.textContent=`A descarregar ${i+1}/${current.photos.length}…`;await downloadPhoto(current.photos[i],current.batchId);await new Promise(resolve=>setTimeout(resolve,180))}toast('Transferência das fotografias iniciada.')}finally{btn.disabled=false;btn.textContent=original}}
+
+async function deleteRetoma(batchId,vehicle=''){const label=vehicle||'esta retoma';if(!confirm(`Eliminar permanentemente ${label} e todas as fotografias?\n\nEsta ação não pode ser anulada.`))return;setStatus('A eliminar a retoma…');try{await api('/api/archive-retoma-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({access,batchId})});overlay.classList.remove('show');current=null;toast('Retoma eliminada do arquivo.');await loadArchive()}catch(error){if(access)setStatus(error.message||'Não foi possível eliminar a retoma.',true)}}
+
+accessBtn.addEventListener('click',requestAccess);refreshBtn.addEventListener('click',loadArchive);search.addEventListener('input',render);document.getElementById('closeBtn').addEventListener('click',()=>overlay.classList.remove('show'));overlay.addEventListener('click',event=>{if(event.target===overlay)overlay.classList.remove('show')});document.getElementById('downloadAllBtn').addEventListener('click',downloadAll);document.getElementById('deleteDetailBtn').addEventListener('click',()=>current&&deleteRetoma(current.batchId,current.vehicle));
+loadArchive();
+</script>
+</body>
+</html>
