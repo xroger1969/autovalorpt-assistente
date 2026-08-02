@@ -126,12 +126,28 @@ globalThis.AutoValorValidation = (() => {
     }
 
     const normalized = normalizeText(withoutYear);
-    const labelledMileage = /\b\d{1,6}(?:[ .]\d{3})*\s*(?:mil\s*)?(?:km|kms|quilometros?)\b/.test(normalized);
+    const labelledMileageMatch = normalized.match(/\b\d{1,7}(?:[ .]\d{3})*\s*(?:mil\s*)?(?:km|kms|quilometros?)\b/);
+    const labelledMileage = Boolean(labelledMileageMatch);
     const numericValues = [...withoutYear.matchAll(/\b\d[\d .]{2,}\b/g)]
       .map((match) => Number(match[0].replace(/\D/g, '')))
       .filter(Number.isFinite);
-    const unlabelledMileage = numericValues.some((value) => value >= 5000);
+    const mileageValues = [
+      ...(labelledMileageMatch ? [Number(labelledMileageMatch[0].replace(/\D/g, ''))] : []),
+      ...numericValues.filter((value) => value >= 5000)
+    ].filter(Number.isFinite);
+    const mileage = mileageValues.at(-1) || 0;
 
+    if (mileage > 500000) {
+      return {
+        ok: false,
+        plausible: true,
+        hardReject: true,
+        normalized: clean.replace(/\s+/g, ' '),
+        retry: `Percebi ${mileage.toLocaleString('pt-PT')} km. É uma quilometragem muito elevada. Confirma esse valor ou queria escrever, por exemplo, ${Math.round(mileage / 10).toLocaleString('pt-PT')} km?`
+      };
+    }
+
+    const unlabelledMileage = numericValues.some((value) => value >= 5000);
     const tokens = withoutYear.match(/\b[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9'’\-]*\b/gu) || [];
     const meaningfulTokens = tokens.filter((token) => !TRADE_IN_BLOCKED_WORDS.has(normalizeText(token)));
     const numericModelTokens = [...withoutYear.matchAll(/\b\d{3,4}\b/g)]
