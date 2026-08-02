@@ -1,4 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const previousWhatsappText = whatsappText;
+  whatsappText = function whatsappTextWithVehicleLink() {
+    const text = previousWhatsappText();
+    const vehicleUrl = String(state.vehicle?.url || '').trim();
+    if (!vehicleUrl || text.includes(vehicleUrl)) return text;
+
+    const lines = text.split('\n');
+    const vehicleIndex = lines.findIndex((line) => line.startsWith('Viatura:'));
+    if (vehicleIndex >= 0) lines.splice(vehicleIndex + 1, 0, `Anúncio: ${vehicleUrl}`);
+    else lines.push(`Anúncio: ${vehicleUrl}`);
+    return lines.join('\n');
+  };
+
   handleContact = function stableHandleContact(text) {
     const clean = String(text || '').trim();
     document.getElementById('messageInput').value = '';
