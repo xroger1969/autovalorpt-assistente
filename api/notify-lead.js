@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-// A credencial OneSignal é lida apenas do ambiente seguro da Vercel.
+// As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
 const EXTERNAL_ID = 'autovalorpt-carlos';
 const MAX_TEXT = 4000;
@@ -22,12 +22,14 @@ function parseLead(text = '') {
   }
   return {
     vehicle: fields.viatura || '',
+    vehicleUrl: fields['anúncio'] || fields.anuncio || '',
     subjects: fields.assuntos || '',
     name: fields.nome || '',
     phone: fields.contacto || '',
     visit: fields.visita || '',
     financing: fields.financiamento || '',
-    tradeIn: fields.retoma || ''
+    tradeIn: fields.retoma || '',
+    observations: fields['observações'] || fields.observacoes || ''
   };
 }
 
@@ -75,6 +77,45 @@ function summaryUrl(lead = {}) {
     if (safe) url.searchParams.set(key, safe);
   }
   return url.toString();
+}
+
+function slackMessage(lead = {}) {
+  const lines = [
+    '🚗 *NOVO LEAD — AutoValorPT*',
+    '',
+    `👤 *Nome:* ${lead.name || 'Não indicado'}`,
+    `📱 *Contacto:* ${lead.phone || 'Não indicado'}`,
+    `🚘 *Viatura:* ${lead.vehicle || 'Não indicada'}`
+  ];
+  if (lead.vehicleUrl) lines.push(`🔗 *Anúncio:* ${lead.vehicleUrl}`);
+  if (lead.subjects) lines.push(`🎯 *Interesse:* ${lead.subjects}`);
+  if (lead.financing) lines.push(`💳 *Financiamento:* ${lead.financing}`);
+  if (lead.tradeIn) lines.push(`🔄 *Retoma:* ${lead.tradeIn}`);
+  if (lead.visit) lines.push(`📅 *Visita:* ${lead.visit}`);
+  if (lead.observations) lines.push(`📝 *Observações:* ${lead.observations}`);
+  lines.push('', '✅ Pedido enviado pelo Assistente AI CV.');
+  return lines.join('\n');
+}
+
+async function sendSlack(lead = {}) {
+  const webhook = String(process.env.SLACK_WEBHOOK_URL || '').trim();
+  if (!webhook) return { ok: false, skipped: true, error: 'slack_not_configured' };
+  try {
+    const response = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: slackMessage(lead) })
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      console.error('slack_notify_lead_failed', response.status, detail.slice(0, 200));
+      return { ok: false, error: 'slack_failed' };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error('slack_notify_lead_error', error?.message || error);
+    return { ok: false, error: 'slack_unreachable' };
+  }
 }
 
 export function buildNotification(text = '') {
@@ -132,22 +173,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://api.onesignal.com/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Key ${apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      console.error('onesignal_notify_lead_failed', response.status, data?.errors || data?.error || 'unknown');
-      return res.status(502).json({ ok: false, error: 'onesignal_failed' });
+    const [oneSignalResponse, slack] = await Promise.all([
+      fetch('https://api.onesignal.com/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Key ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+      }),
+      sendSlack(lead)
+    ]);
+
+    const data = await oneSignalResponse.json().catch(() => ({}));
+    if (!oneSignalResponse.ok) {
+      console.error('onesignal_notify_lead_failed', oneSignalResponse.status, data?.errors || data?.error || 'unknown');
+      return res.status(502).json({ ok: false, error: 'onesignal_failed', slack });
     }
-    return res.status(200).json({ ok: true, id: data.id || null });
+
+    return res.status(200).json({
+      ok: true,
+      id: data.id || null,
+      onesignal: true,
+      slack: Boolean(slack.ok)
+    });
   } catch (error) {
-    console.error('onesignal_notify_lead_error', error?.message || error);
-    return res.status(502).json({ ok: false, error: 'onesignal_unreachable' });
+    console.error('notify_lead_error', error?.message || error);
+    return res.status(502).json({ ok: false, error: 'notification_unreachable' });
   }
 }
