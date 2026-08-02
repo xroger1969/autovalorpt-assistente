@@ -64,6 +64,39 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
+  const sentAlerts = new Set();
+
+  function alertKey() {
+    const lead = state?.lead || {};
+    return [
+      String(lead.telefone || '').replace(/\D/g, ''),
+      String(lead.viatura || ''),
+      String(lead.visita || ''),
+      String(lead.financiamento || ''),
+      String(lead.retoma || ''),
+      String(lead.observacoes || '')
+    ].join('|');
+  }
+
+  function notifyReadyLead() {
+    if (!isReadyToSend()) return;
+    const key = alertKey();
+    if (!key || sentAlerts.has(key)) return;
+
+    const text = typeof whatsappText === 'function' ? whatsappText() : '';
+    if (!text.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) return;
+
+    sentAlerts.add(key);
+    fetch('/api/notify-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ text })
+    }).then((response) => {
+      if (!response.ok) sentAlerts.delete(key);
+    }).catch(() => sentAlerts.delete(key));
+  }
+
   function enforceReadiness() {
     const ready = isReadyToSend();
     const partial = document.getElementById('quickSendPartial');
@@ -78,6 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (ready) element.href = whatsappUrl();
       else element.removeAttribute('href');
     }
+
+    if (ready) notifyReadyLead();
   }
 
   function syncUiGuards() {
@@ -104,24 +139,12 @@ document.addEventListener('DOMContentLoaded', () => {
     syncUiGuards();
   };
 
-  const sentAlerts = new Set();
+  // Fallback: se o browser adiar a chamada automática, o clique no WhatsApp volta a tentar.
+  // A chave acima impede notificações duplicadas.
   document.addEventListener('click', (event) => {
     const anchor = event.target.closest?.('a[href*="wa.me/"]');
     if (!anchor || !isReadyToSend()) return;
-    let text = '';
-    try { text = new URL(anchor.href, location.href).searchParams.get('text') || ''; } catch {}
-    if (!text.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) return;
-    const key = `${state.lead.telefone}|${state.lead.viatura}|${state.lead.visita}|${state.lead.financiamento}|${state.lead.retoma}`;
-    if (sentAlerts.has(key)) return;
-    sentAlerts.add(key);
-    fetch('/api/notify-lead', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
-      body: JSON.stringify({ text })
-    }).then((response) => {
-      if (!response.ok) sentAlerts.delete(key);
-    }).catch(() => sentAlerts.delete(key));
+    notifyReadyLead();
   }, true);
 
   syncUiGuards();
