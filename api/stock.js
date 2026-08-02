@@ -1,5 +1,8 @@
 const STOCK_URL = process.env.STOCK_URL || 'https://spremium.standvirtual.com/inventory';
 const CACHE_MS = 5 * 60 * 1000;
+const SOURCE_TIMEOUT_MS = 8500;
+const ENRICH_TIMEOUT_MS = 2200;
+const ENRICH_BUDGET_MS = 4800;
 let memoryCache = { at: 0, items: [] };
 
 function decodeHtml(value = '') {
@@ -152,7 +155,7 @@ function merge(base, next) {
   };
 }
 
-function extractInventory(html = '') {
+export function extractInventory(html = '') {
   const found = [];
   const anchorRegex = /<a\b([^>]*?)href=["']([^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
   let match;
@@ -179,7 +182,7 @@ function extractInventory(html = '') {
   return [...unique.values()];
 }
 
-async function fetchText(url, timeout = 7000) {
+async function fetchText(url, timeout = SOURCE_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
@@ -196,10 +199,10 @@ async function fetchText(url, timeout = 7000) {
   }
 }
 
-async function enrich(item) {
+async function enrich(item, timeout = ENRICH_TIMEOUT_MS) {
   if (item.image && item.price && item.year) return item;
   try {
-    const html = await fetchText(item.url, 4500);
+    const html = await fetchText(item.url, timeout);
     if (!html) return item;
     const titleMeta = (html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) || [])[1] || '';
     return merge(item, {
@@ -213,27 +216,63 @@ async function enrich(item) {
   }
 }
 
-async function loadStock() {
-  if (Date.now() - memoryCache.at < CACHE_MS && memoryCache.items.length) return memoryCache.items;
-  const html = await fetchText(STOCK_URL);
-  if (!html) return [];
-  const base = extractInventory(html);
-  const enriched = [];
-  for (let index = 0; index < base.length; index += 4) {
-    enriched.push(...await Promise.all(base.slice(index, index + 4).map(enrich)));
+async function enrichWithinBudget(base = [], budgetMs = ENRICH_BUDGET_MS) {
+  const results = [];
+  const deadline = Date.now() + budgetMs;
+  const chunkSize = 6;
+
+  for (let index = 0; index < base.length; index += chunkSize) {
+    const remaining = deadline - Date.now();
+    if (remaining < 350) {
+      results.push(...base.slice(index));
+      break;
+    }
+    const timeout = Math.max(350, Math.min(ENRICH_TIMEOUT_MS, remaining));
+    const chunk = base.slice(index, index + chunkSize);
+    results.push(...await Promise.all(chunk.map((item) => enrich(item, timeout))));
   }
+
+  return results.length === base.length ? results : [...results, ...base.slice(results.length)];
+}
+
+async function loadStock() {
+  const cachedItems = memoryCache.items;
+  if (Date.now() - memoryCache.at < CACHE_MS && cachedItems.length) return { items: cachedItems, stale: false };
+
+  let html = '';
+  try {
+    html = await fetchText(STOCK_URL, SOURCE_TIMEOUT_MS);
+  } catch (error) {
+    console.warn('stock_source_unreachable', error?.message || error);
+  }
+
+  if (!html) return { items: cachedItems, stale: Boolean(cachedItems.length) };
+  const base = extractInventory(html);
+  if (!base.length) return { items: cachedItems, stale: Boolean(cachedItems.length) };
+
+  const enriched = await enrichWithinBudget(base);
   memoryCache = { at: Date.now(), items: enriched };
-  return enriched;
+  return { items: enriched, stale: false };
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Use GET.' });
   try {
-    const items = await loadStock();
+    const { items, stale } = await loadStock();
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
-    return res.status(200).json({ source: STOCK_URL, results: items });
+    return res.status(200).json({
+      source: STOCK_URL,
+      results: items,
+      ...(stale ? { warning: 'Foi apresentada a última versão disponível do stock enquanto a origem é atualizada.' } : {})
+    });
   } catch (error) {
     console.error('Falha ao consultar stock', error?.message);
-    return res.status(200).json({ results: [], warning: 'Não foi possível consultar as viaturas neste momento.' });
+    const fallbackItems = memoryCache.items || [];
+    return res.status(200).json({
+      results: fallbackItems,
+      warning: fallbackItems.length
+        ? 'Foi apresentada a última versão disponível do stock enquanto a origem é atualizada.'
+        : 'Não foi possível consultar as viaturas neste momento.'
+    });
   }
 }

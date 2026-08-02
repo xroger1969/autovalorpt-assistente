@@ -119,6 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
       body: JSON.stringify({ text })
+    }).then((response) => {
+      if (!response.ok) sentAlerts.delete(key);
     }).catch(() => sentAlerts.delete(key));
   }, true);
 
