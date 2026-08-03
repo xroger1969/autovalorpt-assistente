@@ -1,1 +1,0 @@
-document.addEventListener('DOMContentLoaded',()=>{const button=document.querySelector('#cv-splash button');if(!button)return;button.addEventListener('click',()=>{window.location.assign('/assistant.html');},{once:true});});
