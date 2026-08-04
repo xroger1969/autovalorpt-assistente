@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { registerFollowUpLead } from '../lib/followup-registry.js';
 
 // As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
@@ -118,6 +119,21 @@ async function sendSlack(lead = {}) {
   }
 }
 
+async function registerLeadForDryRun(lead = {}) {
+  try {
+    return await registerFollowUpLead({
+      ...lead,
+      source: 'autovalorpt-assistente',
+      canContact: true,
+      status: 'open',
+      vehicleStatus: 'available'
+    });
+  } catch (error) {
+    console.error('followup_registry_failed', error?.message || error);
+    return { ok: false, skipped: true, reason: 'registry_failed' };
+  }
+}
+
 export function buildNotification(text = '') {
   const lead = parseLead(text);
   const isVisit = Boolean(lead.visit || /visita/i.test(lead.subjects));
@@ -173,7 +189,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [oneSignalResponse, slack] = await Promise.all([
+    const [oneSignalResponse, slack, followupRegistry] = await Promise.all([
       fetch('https://api.onesignal.com/notifications', {
         method: 'POST',
         headers: {
@@ -182,7 +198,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(payload)
       }),
-      sendSlack(lead)
+      sendSlack(lead),
+      registerLeadForDryRun(lead)
     ]);
 
     const data = await oneSignalResponse.json().catch(() => ({}));
@@ -195,7 +212,9 @@ export default async function handler(req, res) {
       ok: true,
       id: data.id || null,
       onesignal: true,
-      slack: Boolean(slack.ok)
+      slack: Boolean(slack.ok),
+      followupRegistry: Boolean(followupRegistry?.ok),
+      followupMode: 'dry-run'
     });
   } catch (error) {
     console.error('notify_lead_error', error?.message || error);
