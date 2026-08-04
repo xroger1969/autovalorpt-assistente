@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { runFollowUpDryRun } from '../lib/followup-dry-run.js';
 import { registerFollowUpLead } from '../lib/followup-registry.js';
 
 // As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
@@ -61,6 +62,43 @@ function idempotencyKey(text = '') {
   const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
   const hex = crypto.createHash('sha256').update(`${bucket}:${text}`).digest('hex').slice(0, 32);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function safeTokenMatch(received = '', expected = '') {
+  if (!received || !expected) return false;
+  const actual = Buffer.from(String(received));
+  const wanted = Buffer.from(String(expected));
+  return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
+}
+
+function bearerToken(req) {
+  const header = String(req?.headers?.authorization || '').trim();
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+async function handleFollowUpDryRun(req, res) {
+  const expected = String(process.env.FOLLOWUP_DRY_RUN_TOKEN || '').trim();
+  if (!expected) return res.status(503).json({ ok: false, error: 'dry_run_not_configured' });
+  if (!safeTokenMatch(bearerToken(req), expected)) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
+
+  const requestedNow = req.body?.now ? new Date(req.body.now) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    return res.status(400).json({ ok: false, error: 'invalid_now' });
+  }
+
+  try {
+    const report = await runFollowUpDryRun(requestedNow, {
+      timeZone: 'Europe/Lisbon',
+      limit: Math.min(500, Math.max(1, Number(req.body?.limit || 200)))
+    });
+    return res.status(200).json({ ok: true, ...report });
+  } catch (error) {
+    console.error('followup_dry_run_failed', error?.message || error);
+    return res.status(500).json({ ok: false, error: 'dry_run_failed' });
+  }
 }
 
 function summaryUrl(lead = {}) {
@@ -174,6 +212,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'use_post' });
   if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: 'invalid_origin' });
   if (rateLimited(req)) return res.status(429).json({ ok: false, error: 'rate_limited' });
+
+  if (String(req.body?.action || '') === 'followup-dry-run') {
+    return handleFollowUpDryRun(req, res);
+  }
 
   const apiKey = process.env.ONESIGNAL_AUTOVALORPT_API_KEY || process.env.ONESIGNAL_API_KEY;
   if (!apiKey) return res.status(503).json({ ok: false, error: 'onesignal_not_configured' });
