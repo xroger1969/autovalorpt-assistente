@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
-import { runFollowUpDryRun } from '../lib/followup-dry-run.js';
-import { registerFollowUpLead } from '../lib/followup-registry.js';
+import { runFollowUpDryRun, scanFollowUps } from '../lib/followup-dry-run.js';
+import { normalizeFollowUpLead, registerFollowUpLead } from '../lib/followup-registry.js';
+import { applyFollowUpState, normalizeFollowUpState } from '../lib/followup-status.js';
 
 // As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
@@ -77,12 +78,21 @@ function bearerToken(req) {
   return match ? match[1].trim() : '';
 }
 
-async function handleFollowUpDryRun(req, res) {
+function authorizeDryRun(req, res) {
   const expected = String(process.env.FOLLOWUP_DRY_RUN_TOKEN || '').trim();
-  if (!expected) return res.status(503).json({ ok: false, error: 'dry_run_not_configured' });
-  if (!safeTokenMatch(bearerToken(req), expected)) {
-    return res.status(403).json({ ok: false, error: 'forbidden' });
+  if (!expected) {
+    res.status(503).json({ ok: false, error: 'dry_run_not_configured' });
+    return false;
   }
+  if (!safeTokenMatch(bearerToken(req), expected)) {
+    res.status(403).json({ ok: false, error: 'forbidden' });
+    return false;
+  }
+  return true;
+}
+
+async function handleFollowUpDryRun(req, res) {
+  if (!authorizeDryRun(req, res)) return;
 
   const requestedNow = req.body?.now ? new Date(req.body.now) : new Date();
   if (Number.isNaN(requestedNow.getTime())) {
@@ -99,6 +109,47 @@ async function handleFollowUpDryRun(req, res) {
     console.error('followup_dry_run_failed', error?.message || error);
     return res.status(500).json({ ok: false, error: 'dry_run_failed' });
   }
+}
+
+async function handleFollowUpSample(req, res) {
+  if (!authorizeDryRun(req, res)) return;
+  if (String(process.env.VERCEL_ENV || '').toLowerCase() === 'production') {
+    return res.status(404).json({ ok: false, error: 'preview_only' });
+  }
+
+  const requestedNow = req.body?.now ? new Date(req.body.now) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    return res.status(400).json({ ok: false, error: 'invalid_now' });
+  }
+
+  const requestedState = normalizeFollowUpState(req.body?.state || 'waiting');
+  if (!requestedState) return res.status(400).json({ ok: false, error: 'invalid_state' });
+
+  const startedAt = new Date(requestedNow.getTime() - 25 * 60 * 60 * 1000);
+  let lead = normalizeFollowUpLead({
+    name: 'Ana Teste',
+    phone: '910000000',
+    vehicle: 'Audi Q4 e-tron — TESTE',
+    source: 'preview-fictitious',
+    sequenceStartedAt: startedAt.toISOString(),
+    status: 'open',
+    vehicleStatus: 'available',
+    canContact: true
+  }, startedAt);
+
+  if (requestedState !== 'waiting') {
+    lead = applyFollowUpState(lead, requestedState, requestedNow);
+  }
+
+  const report = scanFollowUps([lead], requestedNow, { timeZone: 'Europe/Lisbon' });
+  return res.status(200).json({
+    ok: true,
+    sample: true,
+    state: requestedState,
+    persisted: false,
+    whatsappSent: false,
+    ...report
+  });
 }
 
 function summaryUrl(lead = {}) {
@@ -213,9 +264,9 @@ export default async function handler(req, res) {
   if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: 'invalid_origin' });
   if (rateLimited(req)) return res.status(429).json({ ok: false, error: 'rate_limited' });
 
-  if (String(req.body?.action || '') === 'followup-dry-run') {
-    return handleFollowUpDryRun(req, res);
-  }
+  const action = String(req.body?.action || '');
+  if (action === 'followup-dry-run') return handleFollowUpDryRun(req, res);
+  if (action === 'followup-dry-run-sample') return handleFollowUpSample(req, res);
 
   const apiKey = process.env.ONESIGNAL_AUTOVALORPT_API_KEY || process.env.ONESIGNAL_API_KEY;
   if (!apiKey) return res.status(503).json({ ok: false, error: 'onesignal_not_configured' });
