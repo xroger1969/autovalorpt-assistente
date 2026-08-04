@@ -43,7 +43,7 @@ O relatório inclui:
 
 O relatório fixa sempre `sendEnabled: false`. Não existe qualquer chamada à API de envio do WhatsApp nesta fase.
 
-Existe também um endpoint administrativo `POST /api/followup-dry-run`, mas permanece bloqueado enquanto `FOLLOWUP_DRY_RUN_TOKEN` não estiver configurado na Vercel.
+Para não ultrapassar o limite de funções Serverless do plano atual da Vercel, o dry-run reutiliza o endpoint existente `POST /api/notify-lead` com `action: "followup-dry-run"`. A operação administrativa permanece bloqueada enquanto `FOLLOWUP_DRY_RUN_TOKEN` não estiver configurado na Vercel.
 
 ## Templates propostos para aprovação futura na Meta
 
