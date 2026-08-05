@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Follow-up de Leads — AutoValorPT</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;background:#f3f6fb}
+    *{box-sizing:border-box} body{margin:0;min-height:100vh;background:linear-gradient(180deg,#eef5ff 0,#f8fafc 45%,#f3f4f6 100%)}
+    button,input,a{font:inherit}.shell{width:min(980px,calc(100% - 28px));margin:0 auto;padding:28px 0 56px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.brand small{display:block;color:#2563eb;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.brand h1{font-size:clamp(28px,5vw,42px);line-height:1.05;margin:6px 0 0}.actions{display:flex;gap:8px;flex-wrap:wrap}.panel,.card{background:#fff;border:1px solid #e2e8f0;border-radius:22px;box-shadow:0 14px 40px rgba(15,23,42,.07)}
+    .panel{padding:22px;margin-bottom:18px}.safe{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}.safe strong{display:block;margin-bottom:5px}.login{max-width:520px;margin:64px auto}.login h2{margin:0 0 8px}.login p{color:#64748b;margin:0 0 18px}.field{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:13px 14px;margin-bottom:10px}.btn,.wa{border:0;border-radius:13px;padding:11px 15px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:7px}.btn{background:#0f172a;color:#fff}.btn.secondary{background:#e2e8f0;color:#0f172a}.btn.soft{background:#eff6ff;color:#1d4ed8}.btn.warn{background:#fff7ed;color:#c2410c}.btn.danger{background:#fef2f2;color:#b91c1c}.btn:disabled{opacity:.5;cursor:not-allowed}.wa{background:#16a34a;color:#fff}.summary{display:flex;justify-content:space-between;gap:14px;align-items:center}.summary .count{font-size:28px;font-weight:900}.summary .muted,.muted{color:#64748b}.grid{display:grid;gap:16px}.card{padding:20px}.cardhead{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.stage{background:#dbeafe;color:#1e40af;border-radius:999px;padding:6px 10px;font-size:13px;font-weight:900;white-space:nowrap}.card h3{margin:0 0 5px;font-size:22px}.vehicle{font-weight:700;color:#334155}.phone{margin-top:8px;color:#475569}.message{margin:17px 0;padding:15px 16px;border-left:4px solid #0f172a;background:#f8fafc;border-radius:12px;white-space:pre-wrap;line-height:1.5}.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.row + .row{margin-top:11px;padding-top:11px;border-top:1px solid #e2e8f0}.empty{text-align:center;padding:45px 20px}.empty .ok{font-size:46px}.error{color:#b91c1c;font-weight:700;margin-top:10px}.hidden{display:none!important}.busy{opacity:.65;pointer-events:none}@media(max-width:640px){.top,.summary,.cardhead{align-items:stretch;flex-direction:column}.actions .btn{flex:1}.wa,.row .btn{flex:1 1 145px}.shell{width:min(100% - 18px,980px);padding-top:16px}.card,.panel{border-radius:18px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top">
+      <div class="brand"><small>Assistente do Carlos</small><h1>Follow-up de Leads</h1></div>
+      <div class="actions" id="sessionActions" hidden><button class="btn secondary" id="refreshBtn" type="button">Atualizar</button><button class="btn secondary" id="logoutBtn" type="button">Sair</button></div>
+    </div>
+
+    <section class="panel safe">
+      <strong>Modo manual e seguro</strong>
+      O sistema prepara a mensagem e abre a conversa correta. Nada é enviado automaticamente: o envio final é sempre feito por ti no WhatsApp.
+    </section>
+
+    <section class="panel login hidden" id="loginPanel">
+      <h2>Acesso privado</h2>
+      <p>Usa o mesmo código de acesso da área administrativa das retomas.</p>
+      <form id="loginForm">
+        <input class="field" id="accessInput" type="password" autocomplete="current-password" placeholder="Código de acesso" required>
+        <button class="btn" type="submit">Entrar</button>
+        <div class="error" id="loginError" role="alert"></div>
+      </form>
+    </section>
+
+    <div id="appPanel" class="hidden">
+      <section class="panel summary">
+        <div><div class="count" id="dueCount">0</div><div class="muted">follow-ups prontos para tratar</div></div>
+        <div class="muted" id="updatedAt"></div>
+      </section>
+      <section class="grid" id="leadGrid" aria-live="polite"></section>
+    </div>
+  </main>
+  <script src="/followups.js" defer></script>
+</body>
+</html>
