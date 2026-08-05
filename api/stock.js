@@ -1,5 +1,5 @@
 const STOCK_URL = process.env.STOCK_URL || 'https://spremium.standvirtual.com/inventory';
-const CACHE_MS = 5 * 60 * 1000;
+const CACHE_MS = 60 * 1000;
 const SOURCE_TIMEOUT_MS = 8500;
 const ENRICH_TIMEOUT_MS = 2200;
 const ENRICH_BUDGET_MS = 4800;
@@ -259,7 +259,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Use GET.' });
   try {
     const { items, stale } = await loadStock();
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
     return res.status(200).json({
       source: STOCK_URL,
       results: items,
