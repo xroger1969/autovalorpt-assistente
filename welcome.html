@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#12304f">
+<meta name="theme-color" content="#081a31">
 <title>Assistente do Carlos</title>
 <meta name="description" content="Dê seguimento ao seu pedido sobre a viatura que viu com o assistente do Carlos.">
 <link rel="canonical" href="https://autovalorpt-assistente.vercel.app/">
@@ -30,8 +30,6 @@
   --blue:#0b6ff5;
   --blue-bright:#2f91ff;
   --blue-dark:#0755c7;
-  --navy:#0b1f3a;
-  --muted:#5d6d82;
 }
 *{box-sizing:border-box}
 html,body{
@@ -44,8 +42,8 @@ body{
   position:relative;
   isolation:isolate;
   overflow-x:hidden;
-  color:var(--navy);
-  background:#0b1f3a;
+  color:#fff;
+  background:#081a31;
 }
 body::before,
 body::after{
@@ -56,62 +54,52 @@ body::after{
 }
 body::before{
   z-index:-2;
-  inset:-8px;
-  background:
-    linear-gradient(145deg,rgba(4,18,38,.25),rgba(5,42,85,.16)),
-    url("/assets/showroom-background-v1.svg") center/cover no-repeat;
-  filter:saturate(.92) contrast(.98) blur(1px);
-  transform:scale(1.012);
+  background:url("/assets/showroom-background-v1.svg") center/cover no-repeat;
+  filter:saturate(.88) contrast(1.02);
 }
 body::after{
   z-index:-1;
   background:
-    linear-gradient(180deg,rgba(5,20,41,.14),rgba(5,24,50,.28)),
-    radial-gradient(circle at 50% 50%,rgba(255,255,255,.04),rgba(3,20,43,.10) 74%);
+    linear-gradient(180deg,rgba(4,15,31,.38) 0%,rgba(5,22,45,.48) 58%,rgba(3,17,36,.66) 100%),
+    radial-gradient(circle at 50% 46%,rgba(11,52,96,.05),rgba(2,14,30,.18) 78%);
 }
 main{
   min-height:100svh;
   display:grid;
   place-items:center;
-  padding:max(18px,env(safe-area-inset-top)) 14px max(20px,env(safe-area-inset-bottom));
+  padding:max(28px,env(safe-area-inset-top)) 22px max(30px,env(safe-area-inset-bottom));
 }
 .entry{
-  width:min(430px,calc(100vw - 28px));
-  padding:23px 24px 20px;
+  width:min(520px,100%);
   text-align:center;
-  background:rgba(255,255,255,.86);
-  border:1px solid rgba(255,255,255,.78);
-  border-radius:28px;
-  box-shadow:0 24px 64px rgba(2,19,40,.30);
-  backdrop-filter:blur(17px);
-  -webkit-backdrop-filter:blur(17px);
 }
 .assistant-mark{
   position:relative;
-  width:76px;
-  height:76px;
-  margin:0 auto 13px;
+  width:82px;
+  height:82px;
+  margin:0 auto 17px;
   display:grid;
   place-items:center;
-  border-radius:23px;
+  border-radius:25px;
   color:#fff;
   background:linear-gradient(145deg,var(--blue-bright),var(--blue) 58%,var(--blue-dark));
-  box-shadow:0 13px 25px rgba(8,91,205,.25),inset 0 1px 1px rgba(255,255,255,.40);
+  border:1px solid rgba(255,255,255,.28);
+  box-shadow:0 16px 34px rgba(2,16,34,.34),inset 0 1px 1px rgba(255,255,255,.42);
 }
 .assistant-mark::before{
   content:"";
   position:absolute;
   inset:7px;
-  border:1px solid rgba(255,255,255,.24);
-  border-radius:18px;
+  border:1px solid rgba(255,255,255,.23);
+  border-radius:19px;
 }
-.assistant-mark svg{width:45px;height:45px}
+.assistant-mark svg{width:48px;height:48px}
 .status-dot{
   position:absolute;
   right:-3px;
-  bottom:5px;
-  width:20px;
-  height:20px;
+  bottom:6px;
+  width:21px;
+  height:21px;
   border:4px solid #fff;
   border-radius:50%;
   background:#1fc879;
@@ -119,104 +107,97 @@ main{
 .identity{
   width:max-content;
   max-width:100%;
-  margin:0 auto 13px;
-  padding:6px 11px;
-  color:var(--blue);
-  background:rgba(11,111,245,.08);
-  border:1px solid rgba(11,111,245,.12);
+  margin:0 auto 18px;
+  padding:7px 12px;
+  color:#fff;
+  background:rgba(4,22,45,.34);
+  border:1px solid rgba(255,255,255,.28);
   border-radius:999px;
-  font-size:13px;
-  font-weight:800;
-}
-.identity strong{color:var(--navy)}
-h1{
-  max-width:380px;
-  margin:0 auto;
-  font-size:clamp(32px,8.6vw,43px);
-  line-height:1.02;
-  letter-spacing:-.045em;
-  font-weight:900;
-  text-wrap:balance;
-}
-.intro{
-  max-width:340px;
-  margin:13px auto 0;
-  color:var(--muted);
-  font-size:15.5px;
-  line-height:1.42;
-  font-weight:550;
-  text-wrap:balance;
-}
-.services{
-  margin:14px 0 0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  flex-wrap:wrap;
-  gap:5px 9px;
-  color:#34506f;
-  font-size:12.5px;
-  line-height:1.3;
+  box-shadow:0 8px 24px rgba(2,14,30,.12);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  font-size:14px;
   font-weight:750;
 }
-.services i{
-  color:var(--blue);
-  font-style:normal;
+.identity strong{font-weight:900}
+h1{
+  max-width:500px;
+  margin:0 auto;
+  font-size:clamp(40px,10vw,58px);
+  line-height:1.01;
+  letter-spacing:-.05em;
+  font-weight:900;
+  text-wrap:balance;
+  text-shadow:0 4px 22px rgba(0,8,20,.55);
+}
+.intro{
+  max-width:390px;
+  margin:17px auto 0;
+  color:rgba(255,255,255,.88);
+  font-size:17px;
+  line-height:1.45;
+  font-weight:600;
+  text-wrap:balance;
+  text-shadow:0 3px 14px rgba(0,8,20,.62);
 }
 button{
-  width:100%;
-  min-height:58px;
-  margin-top:18px;
-  padding:13px 20px;
+  width:min(360px,100%);
+  min-height:64px;
+  margin-top:28px;
+  padding:15px 22px;
   display:flex;
   align-items:center;
   justify-content:center;
   gap:11px;
-  border:0;
-  border-radius:17px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:19px;
   color:#fff;
   background:linear-gradient(135deg,#208cff,var(--blue) 52%,var(--blue-dark));
-  box-shadow:0 13px 25px rgba(8,91,205,.25);
+  box-shadow:0 16px 34px rgba(2,22,55,.38);
   font:inherit;
-  font-size:19px;
+  font-size:21px;
   font-weight:900;
   cursor:pointer;
   transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease;
 }
-button svg{width:20px;height:20px;transition:transform .18s ease}
-button:hover{transform:translateY(-2px);box-shadow:0 17px 31px rgba(8,91,205,.31)}
+button svg{width:21px;height:21px;transition:transform .18s ease}
+button:hover{transform:translateY(-2px);box-shadow:0 20px 40px rgba(2,22,55,.46)}
 button:hover svg{transform:translateX(3px)}
 button:active{transform:translateY(1px)}
-button:focus-visible{outline:4px solid rgba(11,111,245,.25);outline-offset:4px}
+button:focus-visible{outline:4px solid rgba(255,255,255,.35);outline-offset:5px}
 button:disabled{opacity:.72;cursor:wait;transform:none}
 .helper{
-  margin:10px 0 0;
+  margin:13px 0 0;
   display:flex;
   align-items:center;
   justify-content:center;
   gap:6px;
-  color:#708096;
-  font-size:12px;
+  color:rgba(255,255,255,.76);
+  font-size:13px;
   font-weight:650;
+  text-shadow:0 2px 10px rgba(0,8,20,.58);
 }
-.helper svg{width:14px;height:14px}
+.helper svg{width:15px;height:15px}
 @media(max-width:430px){
-  body::before{background-position:31% center}
-  .entry{padding:20px 18px 18px;border-radius:25px}
-  h1{font-size:clamp(31px,9.2vw,39px)}
+  body::before{background-position:16% center}
+  main{padding-left:18px;padding-right:18px}
+  .assistant-mark{width:74px;height:74px;margin-bottom:15px;border-radius:23px}
+  .assistant-mark::before{border-radius:17px}
+  .assistant-mark svg{width:44px;height:44px}
+  .identity{margin-bottom:16px}
+  h1{font-size:clamp(38px,11vw,47px)}
+  .intro{font-size:16px}
+  button{min-height:61px;margin-top:25px;font-size:20px}
 }
 @media(max-height:700px){
-  main{padding-top:12px;padding-bottom:12px}
-  .entry{padding-top:16px;padding-bottom:15px}
-  .assistant-mark{width:64px;height:64px;margin-bottom:10px;border-radius:20px}
-  .assistant-mark::before{border-radius:15px}
+  main{padding-top:16px;padding-bottom:16px}
+  .assistant-mark{width:64px;height:64px;margin-bottom:11px}
   .assistant-mark svg{width:38px;height:38px}
-  .identity{margin-bottom:10px;padding:5px 10px}
-  h1{font-size:31px}
-  .intro{margin-top:10px;font-size:14.5px}
-  .services{margin-top:10px}
-  button{min-height:54px;margin-top:14px}
-  .helper{margin-top:8px}
+  .identity{margin-bottom:12px;padding-top:5px;padding-bottom:5px}
+  h1{font-size:36px}
+  .intro{margin-top:12px;font-size:15px}
+  button{min-height:56px;margin-top:19px}
+  .helper{margin-top:9px}
 }
 @media(prefers-reduced-motion:reduce){
   button,button svg{transition:none}
@@ -242,10 +223,6 @@ button:disabled{opacity:.72;cursor:wait;transform:none}
     <p class="identity">Assistente do <strong>Carlos</strong></p>
     <h1 id="welcomeTitle">Vamos dar seguimento ao seu pedido</h1>
     <p class="intro">Stock, financiamento e retoma — tudo em poucos passos.</p>
-
-    <p class="services">
-      <span>Stock atualizado</span><i>•</i><span>Retoma</span><i>•</i><span>Financiamento</span>
-    </p>
 
     <button id="startAssistant" type="button">
       <span>Continuar</span>
