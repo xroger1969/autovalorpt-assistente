@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#edf5ff">
+<meta name="theme-color" content="#12304f">
 <title>Assistente do Carlos</title>
 <meta name="description" content="Dê seguimento ao seu pedido sobre a viatura que viu com o assistente do Carlos.">
 <link rel="canonical" href="https://autovalorpt-assistente.vercel.app/">
@@ -33,7 +33,7 @@
   --navy:#0b1f3a;
   --muted:#5d6d82;
   --line:rgba(11,111,245,.14);
-  --surface:rgba(255,255,255,.88);
+  --surface:rgba(255,255,255,.93);
 }
 *{box-sizing:border-box}
 html,body{
@@ -43,36 +43,33 @@ html,body{
 }
 body{
   min-height:100svh;
+  position:relative;
+  isolation:isolate;
   overflow-x:hidden;
   color:var(--navy);
-  background:
-    radial-gradient(circle at 12% 6%,rgba(47,145,255,.20),transparent 30%),
-    radial-gradient(circle at 88% 92%,rgba(11,111,245,.13),transparent 32%),
-    linear-gradient(155deg,#fbfdff 0%,#f2f7ff 52%,#eaf3ff 100%);
+  background:#0b1f3a;
 }
 body::before,
 body::after{
   content:"";
   position:fixed;
-  z-index:-1;
-  border-radius:999px;
-  filter:blur(1px);
+  inset:0;
   pointer-events:none;
 }
 body::before{
-  width:190px;
-  height:190px;
-  top:-96px;
-  right:-70px;
-  border:1px solid rgba(11,111,245,.13);
-  box-shadow:0 0 0 30px rgba(11,111,245,.025),0 0 0 64px rgba(11,111,245,.018);
+  z-index:-2;
+  inset:-10px;
+  background:
+    linear-gradient(145deg,rgba(4,18,38,.30),rgba(5,42,85,.22)),
+    url("/assets/showroom-background-v1.svg") center/cover no-repeat;
+  filter:saturate(.88) contrast(.96) blur(1.6px);
+  transform:scale(1.015);
 }
 body::after{
-  width:120px;
-  height:120px;
-  left:-70px;
-  bottom:8%;
-  background:rgba(47,145,255,.08);
+  z-index:-1;
+  background:
+    linear-gradient(180deg,rgba(5,20,41,.20),rgba(5,24,50,.38)),
+    radial-gradient(circle at 50% 48%,rgba(255,255,255,.05),rgba(3,20,43,.16) 72%);
 }
 main{
   min-height:100svh;
@@ -88,7 +85,7 @@ main{
   border:1px solid rgba(255,255,255,.92);
   border-radius:32px;
   box-shadow:
-    0 28px 70px rgba(19,67,128,.13),
+    0 30px 80px rgba(2,19,40,.34),
     inset 0 0 0 1px var(--line);
   backdrop-filter:blur(16px);
   -webkit-backdrop-filter:blur(16px);
@@ -239,6 +236,7 @@ button:disabled{opacity:.72;cursor:wait;transform:none}
   50%{transform:translateY(-5px) rotate(-2deg)}
 }
 @media(max-width:430px){
+  body::before{background-position:31% center}
   main{padding-left:14px;padding-right:14px}
   .entry{padding:24px 18px 22px;border-radius:28px}
   .assistant-mark{width:94px;height:94px;border-radius:28px;margin-bottom:16px}
