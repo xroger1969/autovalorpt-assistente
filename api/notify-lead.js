@@ -1,4 +1,14 @@
 import crypto from 'node:crypto';
+import { runFollowUpDryRun, scanFollowUps } from '../lib/followup-dry-run.js';
+import {
+  listFollowUpLeads,
+  loadFollowUpLead,
+  normalizeFollowUpLead,
+  registerFollowUpLead,
+  saveFollowUpLead
+} from '../lib/followup-registry.js';
+import { applyFollowUpState, normalizeFollowUpState } from '../lib/followup-status.js';
+import { adminRequestAuthorized } from '../lib/admin-security.js';
 
 // As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
@@ -62,6 +72,197 @@ function idempotencyKey(text = '') {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
+function safeTokenMatch(received = '', expected = '') {
+  if (!received || !expected) return false;
+  const actual = Buffer.from(String(received));
+  const wanted = Buffer.from(String(expected));
+  return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
+}
+
+function bearerToken(req) {
+  const header = String(req?.headers?.authorization || '').trim();
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function authorizeDryRun(req, res) {
+  const expected = String(process.env.FOLLOWUP_DRY_RUN_TOKEN || '').trim();
+  if (!expected) {
+    res.status(503).json({ ok: false, error: 'dry_run_not_configured' });
+    return false;
+  }
+  if (!safeTokenMatch(bearerToken(req), expected)) {
+    res.status(403).json({ ok: false, error: 'forbidden' });
+    return false;
+  }
+  return true;
+}
+
+function authorizeManualFollowUp(req, res) {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  if (!adminRequestAuthorized(req)) {
+    res.status(401).json({ ok: false, error: 'Sessão expirada. Volta a iniciar sessão.' });
+    return false;
+  }
+  return true;
+}
+
+async function handleFollowUpDryRun(req, res) {
+  if (!authorizeDryRun(req, res)) return;
+
+  const requestedNow = req.body?.now ? new Date(req.body.now) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    return res.status(400).json({ ok: false, error: 'invalid_now' });
+  }
+
+  try {
+    const report = await runFollowUpDryRun(requestedNow, {
+      timeZone: 'Europe/Lisbon',
+      limit: Math.min(500, Math.max(1, Number(req.body?.limit || 200)))
+    });
+    return res.status(200).json({ ok: true, ...report });
+  } catch (error) {
+    console.error('followup_dry_run_failed', error?.message || error);
+    return res.status(500).json({ ok: false, error: 'dry_run_failed' });
+  }
+}
+
+async function handleFollowUpSample(req, res) {
+  if (!authorizeDryRun(req, res)) return;
+  if (String(process.env.VERCEL_ENV || '').toLowerCase() === 'production') {
+    return res.status(404).json({ ok: false, error: 'preview_only' });
+  }
+
+  const requestedNow = req.body?.now ? new Date(req.body.now) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    return res.status(400).json({ ok: false, error: 'invalid_now' });
+  }
+
+  const requestedState = normalizeFollowUpState(req.body?.state || 'waiting');
+  if (!requestedState) return res.status(400).json({ ok: false, error: 'invalid_state' });
+
+  const startedAt = new Date(requestedNow.getTime() - 25 * 60 * 60 * 1000);
+  let lead = normalizeFollowUpLead({
+    name: 'Ana Teste',
+    phone: '910000000',
+    vehicle: 'Audi Q4 e-tron — TESTE',
+    source: 'preview-fictitious',
+    sequenceStartedAt: startedAt.toISOString(),
+    status: 'open',
+    vehicleStatus: 'available',
+    canContact: true
+  }, startedAt);
+
+  if (requestedState !== 'waiting') {
+    lead = applyFollowUpState(lead, requestedState, requestedNow);
+  }
+
+  const report = scanFollowUps([lead], requestedNow, { timeZone: 'Europe/Lisbon' });
+  return res.status(200).json({
+    ok: true,
+    sample: true,
+    state: requestedState,
+    persisted: false,
+    whatsappSent: false,
+    ...report
+  });
+}
+
+async function handleManualFollowUpList(req, res) {
+  if (!authorizeManualFollowUp(req, res)) return;
+  const now = new Date();
+  try {
+    const leads = await listFollowUpLeads({ limit: 500 });
+    const report = scanFollowUps(leads, now, { timeZone: 'Europe/Lisbon' });
+    const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+    const due = report.due.map((item) => {
+      const lead = leadById.get(item.leadId);
+      return {
+        leadId: item.leadId,
+        name: item.name,
+        phone: lead?.phone || '',
+        vehicle: item.vehicle,
+        vehicleUrl: lead?.vehicleUrl || '',
+        stage: item.stage,
+        template: item.template,
+        dueAt: item.dueAt,
+        message: item.message
+      };
+    });
+    return res.status(200).json({
+      ok: true,
+      mode: 'manual-whatsapp',
+      sendEnabled: false,
+      evaluatedAt: report.evaluatedAt,
+      total: report.total,
+      dueCount: due.length,
+      due,
+      blockedCount: Object.values(report.blocked || {}).reduce((sum, value) => sum + Number(value || 0), 0)
+    });
+  } catch (error) {
+    console.error('followup_manual_list_failed', error?.message || error);
+    return res.status(500).json({ ok: false, error: 'Não foi possível carregar os follow-ups.' });
+  }
+}
+
+async function handleManualFollowUpMarkSent(req, res) {
+  if (!authorizeManualFollowUp(req, res)) return;
+  const leadId = String(req.body?.leadId || '');
+  const stage = Number(req.body?.stage || 0);
+  if (!/^[a-f0-9]{32}$/.test(leadId) || ![1, 2, 3].includes(stage)) {
+    return res.status(400).json({ ok: false, error: 'Follow-up inválido.' });
+  }
+
+  try {
+    const lead = await loadFollowUpLead(leadId);
+    if (!lead) return res.status(404).json({ ok: false, error: 'Lead não encontrado.' });
+    const sent = Array.isArray(lead.followupsSent) ? lead.followupsSent : [];
+    if (sent.some((entry) => Number(entry?.stage ?? entry) === stage)) {
+      return res.status(200).json({ ok: true, alreadyRecorded: true });
+    }
+
+    const now = new Date();
+    const report = scanFollowUps([lead], now, { timeZone: 'Europe/Lisbon' });
+    const due = report.due.find((item) => item.leadId === leadId && Number(item.stage) === stage);
+    if (!due) return res.status(409).json({ ok: false, error: 'Este follow-up já não está pendente.' });
+
+    const record = {
+      ...lead,
+      followupsSent: [...sent, { stage, sentAt: now.toISOString() }].sort((a, b) => Number(a.stage) - Number(b.stage)),
+      updatedAt: now.toISOString()
+    };
+    const saved = await saveFollowUpLead(record);
+    if (!saved?.ok) return res.status(503).json({ ok: false, error: 'Não foi possível guardar o envio.' });
+    return res.status(200).json({ ok: true, leadId, stage, sentAt: now.toISOString() });
+  } catch (error) {
+    console.error('followup_manual_mark_sent_failed', error?.message || error);
+    return res.status(500).json({ ok: false, error: 'Não foi possível registar o envio.' });
+  }
+}
+
+async function handleManualFollowUpState(req, res) {
+  if (!authorizeManualFollowUp(req, res)) return;
+  const leadId = String(req.body?.leadId || '');
+  const state = normalizeFollowUpState(req.body?.state || '');
+  const allowed = new Set(['replied', 'negotiation', 'closed', 'do_not_contact']);
+  if (!/^[a-f0-9]{32}$/.test(leadId) || !allowed.has(state)) {
+    return res.status(400).json({ ok: false, error: 'Estado inválido.' });
+  }
+
+  try {
+    const lead = await loadFollowUpLead(leadId);
+    if (!lead) return res.status(404).json({ ok: false, error: 'Lead não encontrado.' });
+    const record = applyFollowUpState(lead, state, new Date());
+    const saved = await saveFollowUpLead(record);
+    if (!saved?.ok) return res.status(503).json({ ok: false, error: 'Não foi possível guardar o estado.' });
+    return res.status(200).json({ ok: true, leadId, state });
+  } catch (error) {
+    console.error('followup_manual_state_failed', error?.message || error);
+    return res.status(500).json({ ok: false, error: 'Não foi possível alterar o estado.' });
+  }
+}
+
 function summaryUrl(lead = {}) {
   const url = new URL('https://autovalorpt-assistente.vercel.app/aviso-lead.html');
   const fields = [
@@ -118,6 +319,21 @@ async function sendSlack(lead = {}) {
   }
 }
 
+async function registerLeadForDryRun(lead = {}) {
+  try {
+    return await registerFollowUpLead({
+      ...lead,
+      source: 'autovalorpt-assistente',
+      canContact: true,
+      status: 'open',
+      vehicleStatus: 'available'
+    });
+  } catch (error) {
+    console.error('followup_registry_failed', error?.message || error);
+    return { ok: false, skipped: true, reason: 'registry_failed' };
+  }
+}
+
 export function buildNotification(text = '') {
   const lead = parseLead(text);
   const isVisit = Boolean(lead.visit || /visita/i.test(lead.subjects));
@@ -157,7 +373,15 @@ export function buildNotification(text = '') {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'use_post' });
   if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: 'invalid_origin' });
+
+  const action = String(req.body?.action || '');
+  if (action === 'followup-manual-list') return handleManualFollowUpList(req, res);
+  if (action === 'followup-manual-mark-sent') return handleManualFollowUpMarkSent(req, res);
+  if (action === 'followup-manual-state') return handleManualFollowUpState(req, res);
+
   if (rateLimited(req)) return res.status(429).json({ ok: false, error: 'rate_limited' });
+  if (action === 'followup-dry-run') return handleFollowUpDryRun(req, res);
+  if (action === 'followup-dry-run-sample') return handleFollowUpSample(req, res);
 
   const apiKey = process.env.ONESIGNAL_AUTOVALORPT_API_KEY || process.env.ONESIGNAL_API_KEY;
   if (!apiKey) return res.status(503).json({ ok: false, error: 'onesignal_not_configured' });
@@ -173,7 +397,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [oneSignalResponse, slack] = await Promise.all([
+    const [oneSignalResponse, slack, followupRegistry] = await Promise.all([
       fetch('https://api.onesignal.com/notifications', {
         method: 'POST',
         headers: {
@@ -182,7 +406,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(payload)
       }),
-      sendSlack(lead)
+      sendSlack(lead),
+      registerLeadForDryRun(lead)
     ]);
 
     const data = await oneSignalResponse.json().catch(() => ({}));
@@ -195,7 +420,9 @@ export default async function handler(req, res) {
       ok: true,
       id: data.id || null,
       onesignal: true,
-      slack: Boolean(slack.ok)
+      slack: Boolean(slack.ok),
+      followupRegistry: Boolean(followupRegistry?.ok),
+      followupMode: 'manual-whatsapp'
     });
   } catch (error) {
     console.error('notify_lead_error', error?.message || error);
