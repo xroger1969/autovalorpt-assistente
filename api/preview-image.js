@@ -37,6 +37,18 @@ function rect(x, y, width, height, color, radius = 0) {
   }
 }
 
+function circle(cx, cy, radius, color) {
+  const [r, g, b] = color;
+  const rr = radius * radius;
+  for (let y = cy - radius; y <= cy + radius; y++) {
+    for (let x = cx - radius; x <= cx + radius; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx * dx + dy * dy <= rr) setPixel(x, y, r, g, b);
+    }
+  }
+}
+
 const FONT = {
   A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
   C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
@@ -83,6 +95,21 @@ function centeredText(value, y, scale, color) {
   text(value, x, y, scale, color);
 }
 
+function carIcon(x, y) {
+  const blue = [19, 106, 232];
+  const navy = [17, 31, 52];
+  const pale = [231, 240, 255];
+
+  rect(x + 20, y + 46, 250, 68, blue, 25);
+  rect(x + 68, y + 10, 150, 62, blue, 24);
+  rect(x + 91, y + 22, 48, 35, pale, 9);
+  rect(x + 149, y + 22, 48, 35, pale, 9);
+  circle(x + 78, y + 112, 27, navy);
+  circle(x + 216, y + 112, 27, navy);
+  circle(x + 78, y + 112, 12, [255, 255, 255]);
+  circle(x + 216, y + 112, 12, [255, 255, 255]);
+}
+
 function crc32(buffer) {
   let crc = 0xffffffff;
   for (const byte of buffer) {
@@ -105,16 +132,27 @@ function chunk(type, data) {
 }
 
 function png() {
-  rect(0, 0, WIDTH, HEIGHT, [247, 250, 255]);
-  rect(70, 55, 1060, 520, [216, 229, 248], 32);
-  rect(72, 57, 1056, 516, [255, 255, 255], 30);
+  const navy = [17, 31, 52];
+  const blue = [19, 106, 232];
+  const muted = [92, 109, 132];
+  const pale = [245, 248, 253];
 
-  centeredText('ASSISTENTE DO CARLOS', 105, 6, [11, 111, 245]);
-  centeredText('VAMOS DAR SEGUIMENTO', 225, 8, [11, 31, 58]);
-  centeredText('AO SEU PEDIDO', 310, 8, [11, 31, 58]);
+  rect(0, 0, WIDTH, HEIGHT, pale);
+  rect(46, 42, 1108, 546, [255, 255, 255], 36);
+  rect(46, 42, 16, 546, blue, 8);
 
-  rect(345, 448, 510, 88, [11, 111, 245], 22);
-  centeredText('CONTINUAR', 471, 6, [255, 255, 255]);
+  rect(92, 83, 385, 58, [232, 241, 255], 29);
+  text('ASSISTENTE DO CARLOS', 126, 101, 4, blue);
+
+  text('AVALIACAO DA SUA', 95, 190, 8, navy);
+  text('VIATURA', 95, 277, 8, navy);
+  text('DEMORA MENOS DE UM MINUTO', 98, 390, 4, muted);
+  text('ENVIE OS DADOS E RESPONDO RAPIDAMENTE', 98, 440, 3, muted);
+
+  rect(96, 504, 420, 58, blue, 18);
+  centeredText('CONTINUAR', 520, 4, [255, 255, 255]);
+
+  carIcon(790, 214);
 
   const raw = Buffer.alloc((WIDTH * 4 + 1) * HEIGHT);
   for (let y = 0; y < HEIGHT; y++) {
