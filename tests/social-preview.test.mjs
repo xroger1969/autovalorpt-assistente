@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import previewHandler from '../api/preview-image.js';
 
-const expectedImageUrl = 'https://autovalorpt-assistente.vercel.app/api/preview-image?v=5';
+const expectedImageUrl = 'https://autovalorpt-assistente.vercel.app/api/preview-image?v=6';
 
 test('welcome page exposes the generic social metadata', async () => {
   const html = await readFile(new URL('../welcome.html', import.meta.url), 'utf8');
@@ -17,7 +17,7 @@ test('welcome page exposes the generic social metadata', async () => {
   assert.equal(html.includes('Avaliação da sua viatura'), false);
 });
 
-test('preview endpoint returns the 1200 by 630 PNG', () => {
+test('preview endpoint returns the square image selected for WhatsApp', () => {
   const headers = new Map();
   let body;
   let statusCode;
@@ -38,9 +38,7 @@ test('preview endpoint returns the 1200 by 630 PNG', () => {
   previewHandler({}, response);
 
   assert.equal(statusCode, 200);
-  assert.equal(headers.get('content-type'), 'image/png');
+  assert.equal(headers.get('content-type'), 'image/jpeg');
   assert.equal(Buffer.isBuffer(body), true);
-  assert.deepEqual([...body.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.equal(body.readUInt32BE(16), 1200);
-  assert.equal(body.readUInt32BE(20), 630);
+  assert.deepEqual([...body.subarray(0, 3)], [255, 216, 255]);
 });
