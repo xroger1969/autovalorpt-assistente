@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Assistente do Carlos</title>
+  <desc id="description">Vou dar seguimento ao seu pedido em 1 minuto.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071a32"/>
+      <stop offset="0.58" stop-color="#0a315f"/>
+      <stop offset="1" stop-color="#0c6dea"/>
+    </linearGradient>
+    <linearGradient id="icon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#46a8ff"/>
+      <stop offset="1" stop-color="#0b6ff5"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#52b4ff" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#52b4ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="1035" cy="92" r="250" fill="url(#glow)"/>
+  <circle cx="115" cy="620" r="220" fill="#146fdb" opacity="0.18"/>
+
+  <rect x="62" y="66" width="1076" height="522" rx="38" fill="#001124" opacity="0.22"/>
+  <g>
+    <rect x="54" y="48" width="1092" height="534" rx="38" fill="#ffffff" fill-opacity="0.97"/>
+    <rect x="54" y="48" width="12" height="534" rx="6" fill="#0b6ff5"/>
+  </g>
+
+  <g font-family="DejaVu Sans, Arial, sans-serif">
+    <rect x="105" y="91" width="390" height="58" rx="29" fill="#e9f2ff"/>
+    <circle cx="139" cy="120" r="9" fill="#18b874"/>
+    <text x="162" y="129" fill="#0b6ff5" font-size="27" font-weight="700">Assistente do Carlos</text>
+
+    <text x="103" y="225" fill="#10233d" font-size="57" font-weight="800" letter-spacing="-1.5">Vou dar seguimento</text>
+    <text x="103" y="298" fill="#10233d" font-size="57" font-weight="800" letter-spacing="-1.5">ao seu pedido</text>
+    <text x="103" y="383" fill="#0b6ff5" font-size="57" font-weight="800" letter-spacing="-1.5">em 1 minuto</text>
+
+    <rect x="106" y="442" width="160" height="8" rx="4" fill="#0b6ff5"/>
+    <rect x="278" y="442" width="82" height="8" rx="4" fill="#b9d7ff"/>
+  </g>
+
+  <rect x="877" y="195" width="212" height="212" rx="58" fill="#001124" opacity="0.18"/>
+  <g transform="translate(865 181)">
+    <rect width="212" height="212" rx="58" fill="url(#icon)"/>
+    <rect x="43" y="51" width="126" height="91" rx="28" fill="#ffffff"/>
+    <path d="M76 140 58 164 62 132Z" fill="#ffffff"/>
+    <circle cx="82" cy="96" r="8" fill="#0b6ff5"/>
+    <circle cx="106" cy="96" r="8" fill="#0b6ff5"/>
+    <circle cx="130" cy="96" r="8" fill="#0b6ff5"/>
+    <circle cx="180" cy="179" r="25" fill="#20c57a" stroke="#ffffff" stroke-width="8"/>
+  </g>
+</svg>
