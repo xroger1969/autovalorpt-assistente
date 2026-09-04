@@ -55,11 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function isReadyToSend() {
     const lead = state?.lead || {};
+    const tradeInComplete = !String(lead.retoma || '').trim()
+      || /^[A-Z]{2}-\d{2}-\d{2}$|^\d{2}-\d{2}-[A-Z]{2}$|^\d{2}-[A-Z]{2}-\d{2}$|^[A-Z]{2}-\d{2}-[A-Z]{2}$/.test(String(lead.matricula || '').trim());
     return Boolean(
       state?.finished === true &&
       state?.vehicle &&
       String(lead.nome || '').trim().length >= 2 &&
       /^9\d{8}$/.test(String(lead.telefone || '').replace(/\D/g, '')) &&
+      tradeInComplete &&
       hasValidatedRequest()
     );
   }
@@ -74,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
       String(lead.visita || ''),
       String(lead.financiamento || ''),
       String(lead.retoma || ''),
+      String(lead.matricula || ''),
       String(lead.observacoes || '')
     ].join('|');
   }

@@ -1,8 +1,8 @@
-const ALLOWED_FIELDS = ['nome', 'telefone', 'viatura', 'financiamento', 'retoma', 'visita', 'observacoes'];
+const ALLOWED_FIELDS = ['nome', 'telefone', 'viatura', 'financiamento', 'retoma', 'matricula', 'visita', 'observacoes'];
 const ALLOWED_INTENTS = new Set(['disponibilidade', 'financiamento', 'retoma', 'visita']);
 
 const EMPTY_LEAD = Object.freeze({
-  nome: '', telefone: '', viatura: '', financiamento: '', retoma: '', visita: '', observacoes: ''
+  nome: '', telefone: '', viatura: '', financiamento: '', retoma: '', matricula: '', visita: '', observacoes: ''
 });
 
 const SYSTEM_PROMPT = `És o assistente comercial da AutoValorPT e apoias Carlos Vasconcelos na venda de automóveis usados em Portugal.

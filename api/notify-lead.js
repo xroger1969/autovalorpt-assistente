@@ -29,6 +29,7 @@ function parseLead(text = '') {
     visit: fields.visita || '',
     financing: fields.financiamento || '',
     tradeIn: fields.retoma || '',
+    registration: fields['matrícula'] || fields.matricula || '',
     observations: fields['observações'] || fields.observacoes || ''
   };
 }
@@ -70,7 +71,8 @@ function summaryUrl(lead = {}) {
     ['assuntos', lead.subjects],
     ['visita', lead.visit],
     ['financiamento', lead.financing],
-    ['retoma', lead.tradeIn]
+    ['retoma', lead.tradeIn],
+    ['matricula', lead.registration]
   ];
   for (const [key, value] of fields) {
     const safe = clean(value, 320);
@@ -91,6 +93,7 @@ function slackMessage(lead = {}) {
   if (lead.subjects) lines.push(`🎯 *Interesse:* ${lead.subjects}`);
   if (lead.financing) lines.push(`💳 *Financiamento:* ${lead.financing}`);
   if (lead.tradeIn) lines.push(`🔄 *Retoma:* ${lead.tradeIn}`);
+  if (lead.registration) lines.push(`🔢 *Matrícula:* ${lead.registration}`);
   if (lead.visit) lines.push(`📅 *Visita:* ${lead.visit}`);
   if (lead.observations) lines.push(`📝 *Observações:* ${lead.observations}`);
   lines.push('', '✅ Pedido enviado pelo Assistente AI CV.');
@@ -131,6 +134,7 @@ export function buildNotification(text = '') {
   else if (lead.subjects) details.push(lead.subjects);
   if (lead.financing) details.push(`Financiamento: ${lead.financing}`);
   if (lead.tradeIn) details.push(`Retoma: ${lead.tradeIn}`);
+  if (lead.registration) details.push(`Matrícula: ${lead.registration}`);
 
   const openUrl = summaryUrl(lead);
 

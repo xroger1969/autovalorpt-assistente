@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const prompts = {
         financiamento: ['💬 Indique os dados do financiamento', 'Escreva a entrada e o prazo ou mensalidade aproximada.'],
         retoma: ['💬 Descreva a sua retoma', 'Escreva a marca, o modelo, o ano e os quilómetros da sua viatura.'],
+        matricula: ['💬 Indique a matrícula da retoma', 'Escreva a matrícula da sua viatura de retoma.'],
         visita: ['💬 Indique quando pretende visitar', 'Escreva o dia e o horário preferidos para a visita.'],
         contacto: ['💬 Indique o seu contacto', 'Escreva o seu nome e número de telemóvel ou WhatsApp.']
       };

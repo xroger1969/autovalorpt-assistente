@@ -32,9 +32,11 @@ export default async function handler(req, res) {
     const body = await readJsonBody(req);
     const vehicle = cleanText(body?.vehicle, 180);
     const tradeIn = cleanText(body?.tradeIn, 240);
+    const registration = cleanText(body?.registration, 20);
     if (tradeIn.length < 8) {
       return res.status(400).json({ error: 'Complete primeiro os dados da retoma.' });
     }
+    if (!registration) return res.status(400).json({ error: 'Indique primeiro a matrícula da retoma.' });
 
     const { batchId, viewerToken } = createPhotoSessionIds();
     const createdAt = new Date().toISOString();
@@ -45,6 +47,7 @@ export default async function handler(req, res) {
       createdAt,
       vehicle,
       tradeIn,
+      registration,
       maxPhotos: MAX_PHOTOS
     };
 

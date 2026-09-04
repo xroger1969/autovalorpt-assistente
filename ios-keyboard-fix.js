@@ -130,6 +130,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(value).replace(/\s+/g, ' ').trim();
   }
 
+  function normalizeRegistration(value = '') {
+    const compact = String(value)
+      .toLocaleUpperCase('pt-PT')
+      .replace(/\bMATR[IÍ]CULA\b\s*[:=-]?/giu, '')
+      .replace(/[^A-Z0-9]/g, '');
+    if (!/^[A-Z0-9]{6}$/.test(compact)) return '';
+    const portugueseFormats = [
+      /^[A-Z]{2}\d{4}$/,
+      /^\d{4}[A-Z]{2}$/,
+      /^\d{2}[A-Z]{2}\d{2}$/,
+      /^[A-Z]{2}\d{2}[A-Z]{2}$/
+    ];
+    if (!portugueseFormats.some((pattern) => pattern.test(compact))) return '';
+    return compact.match(/.{2}/g).join('-');
+  }
+
+  function askForRegistration() {
+    state.pendingIntent = 'matricula';
+    document.getElementById('chatTitle').textContent = INTENTS.matricula.short;
+    addBubble('Para concluir o pedido de avaliação, indique a matrícula da sua viatura de retoma.', 'bot');
+    setFocusedTradeInPrompt(
+      '💬 Indique a matrícula da retoma',
+      'Escreva a matrícula da sua viatura.',
+      INTENTS.matricula.placeholder
+    );
+  }
+
   function isTradeInQuestion(value = '') {
     const normalized = cleanSpaces(value)
       .toLocaleLowerCase('pt-PT')
@@ -320,6 +347,31 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (state.pendingIntent === 'matricula') {
+      document.getElementById('messageInput').value = '';
+      addBubble(text, 'user');
+      const registration = normalizeRegistration(text);
+      if (!registration) {
+        addBubble(INTENTS.matricula.retry, 'bot');
+        state.pendingIntent = 'matricula';
+        setFocusedTradeInPrompt(
+          '💬 Indique a matrícula da retoma',
+          'Use a matrícula portuguesa da sua viatura.',
+          INTENTS.matricula.placeholder
+        );
+        return;
+      }
+
+      state.lead.matricula = registration;
+      state.pendingIntent = '';
+      renderSummary();
+      renderSelected();
+      addConfirmation('matricula');
+      tradeInDraft = emptyTradeIn();
+      advanceIntent();
+      return;
+    }
+
     if (state.pendingIntent !== 'retoma') {
       return previousSendMessage(message);
     }
@@ -343,12 +395,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     state.lead.retoma = formattedTradeIn();
-    state.pendingIntent = '';
     renderSummary();
     renderSelected();
     addConfirmation('retoma');
-    tradeInDraft = emptyTradeIn();
-    advanceIntent();
+    askForRegistration();
   };
 
   const previousResetState = resetState;

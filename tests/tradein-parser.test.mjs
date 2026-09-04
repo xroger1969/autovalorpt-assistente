@@ -35,10 +35,15 @@ function setupTradeInFlow({ pendingIntent = 'retoma', finished = false } = {}) {
       busy: false,
       pendingIntent,
       finished,
-      lead: { retoma: '' }
+      lead: { retoma: '', matricula: '' }
     },
     INTENTS: {
-      retoma: { short: 'Retoma' }
+      retoma: { short: 'Retoma' },
+      matricula: {
+        short: 'Matrícula da retoma',
+        retry: 'Não consegui validar a matrícula. Escreva, por exemplo: AA-00-AA.',
+        placeholder: 'Ex.: AA-00-AA'
+      }
     },
     async sendMessage() {
       fallbackCalls += 1;
@@ -100,13 +105,20 @@ test('infers bare six-digit mileage in a complete trade-in answer', async () => 
     flow.context.state.lead.retoma,
     `Nissan Micra, 2022, ${formattedMileage(124000)}`
   );
-  assert.equal(flow.context.state.pendingIntent, '');
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
   assert.deepEqual(flow.confirmations, ['retoma']);
-  assert.equal(flow.advances, 1);
+  assert.equal(flow.advances, 0);
   assert.equal(
     flow.bubbles.some(({ text }) => /Falta só indicar quantos quilómetros/i.test(text)),
     false
   );
+
+  await flow.context.sendMessage('aa00bb');
+
+  assert.equal(flow.context.state.lead.matricula, 'AA-00-BB');
+  assert.equal(flow.context.state.pendingIntent, '');
+  assert.deepEqual(flow.confirmations, ['retoma', 'matricula']);
+  assert.equal(flow.advances, 1);
 });
 
 test('routes a free question about trade-in into the structured flow', async () => {
@@ -133,9 +145,9 @@ test('routes a free question about trade-in into the structured flow', async () 
     flow.context.state.lead.retoma,
     `Renault Clio Diesel, 2010, ${formattedMileage(234000)}`
   );
-  assert.equal(flow.context.state.pendingIntent, '');
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
   assert.deepEqual(flow.confirmations, ['retoma']);
-  assert.equal(flow.advances, 1);
+  assert.equal(flow.advances, 0);
 });
 
 test('infers mileage with a space or dot and accepts fields in different orders', async () => {
@@ -151,7 +163,7 @@ test('infers mileage with a space or dot and accepts fields in different orders'
       flow.context.state.lead.retoma,
       `Nissan Micra, 2022, ${formattedMileage(124000)}`
     );
-    assert.equal(flow.context.state.pendingIntent, '');
+    assert.equal(flow.context.state.pendingIntent, 'matricula');
   }
 });
 
@@ -170,5 +182,22 @@ test('does not confuse a numeric vehicle model with mileage', async () => {
     flow.context.state.lead.retoma,
     `Peugeot 2008, 2022, ${formattedMileage(24000)}`
   );
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
+});
+
+test('rejects an invalid registration and keeps asking for it', async () => {
+  const flow = setupTradeInFlow({ pendingIntent: 'matricula' });
+
+  await flow.context.sendMessage('123456');
+
+  assert.equal(flow.context.state.lead.matricula, '');
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
+  assert.match(flow.bubbles.at(-1).text, /Não consegui validar a matrícula/i);
+
+  await flow.context.sendMessage('12-ab-34');
+
+  assert.equal(flow.context.state.lead.matricula, '12-AB-34');
   assert.equal(flow.context.state.pendingIntent, '');
+  assert.deepEqual(flow.confirmations, ['matricula']);
+  assert.equal(flow.advances, 1);
 });

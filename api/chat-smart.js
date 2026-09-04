@@ -1,7 +1,7 @@
 import '../validation-core.js';
 import chatHandler from './chat.js';
 
-const ALLOWED_LEAD_FIELDS = ['nome', 'telefone', 'viatura', 'financiamento', 'retoma', 'visita', 'observacoes'];
+const ALLOWED_LEAD_FIELDS = ['nome', 'telefone', 'viatura', 'financiamento', 'retoma', 'matricula', 'visita', 'observacoes'];
 const STRUCTURED_INTENTS = new Set(['financiamento', 'retoma', 'visita']);
 
 function clean(value = '', max = 500) {

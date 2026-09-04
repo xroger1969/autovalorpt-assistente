@@ -113,6 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
     state.intentQueue = Array.isArray(draft.intentQueue) ? draft.intentQueue : [];
     state.pendingIntent = String(draft.pendingIntent || '');
     state.finished = Boolean(draft.finished);
+    if (state.lead.retoma && !state.lead.matricula) {
+      state.finished = false;
+      state.pendingIntent = 'matricula';
+    }
     for (const intent of state.selectedIntents) completedIntents.add(intent);
     document.getElementById('messages').textContent = '';
     document.getElementById('changeBtn').hidden = false;

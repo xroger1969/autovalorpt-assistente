@@ -28,7 +28,7 @@
   };
 
   function currentFingerprint() {
-    return [state?.vehicle?.title || state?.lead?.viatura || '', state?.lead?.retoma || '']
+    return [state?.vehicle?.title || state?.lead?.viatura || '', state?.lead?.retoma || '', state?.lead?.matricula || '']
       .map((value) => String(value || '').trim())
       .join('|');
   }
@@ -124,7 +124,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         vehicle: state?.vehicle?.title || state?.lead?.viatura || '',
-        tradeIn: state?.lead?.retoma || ''
+        tradeIn: state?.lead?.retoma || '',
+        registration: state?.lead?.matricula || ''
       })
     });
     photoState.batchId = data.batchId;
@@ -349,7 +350,7 @@
       typeof validateTradeIn !== 'function' ||
       validateTradeIn(tradeIn).ok
     );
-    if (!state?.vehicle || !completeTradeIn || (photoState.dismissed && !photoState.count)) return;
+    if (!state?.vehicle || !completeTradeIn || !state?.lead?.matricula || (photoState.dismissed && !photoState.count)) return;
 
     const card = document.createElement('section');
     card.id = 'photoUploadCard';

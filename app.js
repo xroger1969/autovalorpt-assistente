@@ -4,7 +4,7 @@ const STOCK_TIMEOUT_MS = 15000;
 const $ = (id) => document.getElementById(id);
 
 const EMPTY_LEAD = Object.freeze({
-  nome: '', telefone: '', viatura: '', financiamento: '', retoma: '', visita: '', observacoes: ''
+  nome: '', telefone: '', viatura: '', financiamento: '', retoma: '', matricula: '', visita: '', observacoes: ''
 });
 
 const state = {
@@ -32,6 +32,12 @@ const INTENTS = {
     prompt: 'Indique marca, modelo, ano e quilómetros da sua viatura.',
     retry: 'Faltam dados da retoma. Indique marca, modelo, ano e quilómetros.',
     placeholder: 'Ex.: Renault Clio, 2019, 85 000 km'
+  },
+  matricula: {
+    short: 'Matrícula da retoma',
+    prompt: 'Indique a matrícula da sua viatura de retoma.',
+    retry: 'Não consegui validar a matrícula. Escreva, por exemplo: AA-00-AA.',
+    placeholder: 'Ex.: AA-00-AA'
   },
   visita: {
     short: 'Visita',
@@ -184,6 +190,7 @@ function whatsappText() {
   if (state.lead.telefone) lines.push(`Contacto: ${state.lead.telefone}`);
   if (state.lead.financiamento) lines.push(`Financiamento: ${state.lead.financiamento}`);
   if (state.lead.retoma) lines.push(`Retoma: ${state.lead.retoma}`);
+  if (state.lead.matricula) lines.push(`Matrícula: ${state.lead.matricula}`);
   if (state.lead.visita) lines.push(`Visita: ${state.lead.visita}`);
   if (state.lead.observacoes) lines.push(`Observações: ${state.lead.observacoes}`);
   return lines.join('\n');
@@ -199,7 +206,8 @@ function renderSummary() {
   target.textContent = '';
   const rows = [
     ['Nome', state.lead.nome], ['Contacto', state.lead.telefone], ['Viatura', state.lead.viatura],
-    ['Financiamento', state.lead.financiamento], ['Retoma', state.lead.retoma], ['Visita', state.lead.visita]
+    ['Financiamento', state.lead.financiamento], ['Retoma', state.lead.retoma],
+    ['Matrícula', state.lead.matricula], ['Visita', state.lead.visita]
   ];
   for (const [label, value] of rows) {
     const row = el('div', 'summary-row');
@@ -237,6 +245,7 @@ function confirmationFor(intent) {
   if (intent === 'contacto') return `✓ Obrigado, ${state.lead.nome}. O nome e o contacto foram registados corretamente.`;
   if (intent === 'financiamento') return `✓ Informação de financiamento compreendida: ${state.lead.financiamento}.`;
   if (intent === 'retoma') return `✓ Informação da retoma compreendida: ${state.lead.retoma}.`;
+  if (intent === 'matricula') return `✓ Matrícula da retoma registada: ${state.lead.matricula}.`;
   return '✓ Resposta compreendida e registada corretamente.';
 }
 
@@ -352,6 +361,7 @@ function advanceIntent() {
 function intentComplete(intent) {
   if (intent === 'financiamento') return Boolean(state.lead.financiamento);
   if (intent === 'retoma') return Boolean(state.lead.retoma);
+  if (intent === 'matricula') return Boolean(state.lead.matricula);
   if (intent === 'visita') return Boolean(state.lead.visita);
   return true;
 }

@@ -98,7 +98,8 @@ function setupPhotoCard({ complete = true } = {}) {
       vehicle: { title: 'Fiat 500e' },
       lead: {
         viatura: 'Fiat 500e',
-        retoma: 'Renault Clio Diesel, 2010, 234 000 km'
+        retoma: 'Renault Clio Diesel, 2010, 234 000 km',
+        matricula: '12-AB-34'
       }
     },
     AutoValorValidation: {

@@ -59,6 +59,7 @@ export default async function handler(req, res) {
       createdAt: manifest.createdAt,
       vehicle: manifest.vehicle,
       tradeIn: manifest.tradeIn,
+      registration: manifest.registration || '',
       maxPhotos: manifest.maxPhotos || MAX_PHOTOS,
       photos,
       urlsValidUntil: validUntil
