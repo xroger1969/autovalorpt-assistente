@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Follow-up Lab — Preview</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#111827; background:#f3f4f6; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:24px; }
+    main { max-width:760px; margin:0 auto; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:18px; padding:22px; box-shadow:0 12px 28px rgba(17,24,39,.08); margin-bottom:16px; }
+    h1 { margin:0 0 8px; font-size:28px; }
+    p { line-height:1.5; color:#4b5563; }
+    label { display:block; font-weight:700; margin:16px 0 7px; }
+    select, button { width:100%; min-height:46px; border-radius:12px; border:1px solid #d1d5db; padding:10px 12px; font:inherit; }
+    button { margin-top:16px; cursor:pointer; border:0; background:#111827; color:#fff; font-weight:800; }
+    .pill { display:inline-block; padding:6px 10px; border-radius:999px; background:#ecfdf5; color:#065f46; font-weight:800; font-size:13px; }
+    .safe { background:#ecfdf5; border-color:#a7f3d0; }
+    .message { border-left:4px solid #111827; padding:12px 14px; background:#f9fafb; border-radius:10px; line-height:1.5; }
+    .status { font-weight:800; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#111827; color:#f9fafb; border-radius:14px; padding:16px; overflow:auto; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <span class="pill">PREVIEW · SIMULAÇÃO LOCAL</span>
+    <h1>Laboratório de follow-up</h1>
+    <p>Este teste é totalmente local no teu browser. Não usa token, não chama nenhuma API, não grava qualquer lead e não envia WhatsApp, OneSignal ou Slack.</p>
+
+    <label for="state">Estado a simular</label>
+    <select id="state">
+      <option value="waiting">Aguardar</option>
+      <option value="replied">Respondeu</option>
+      <option value="negotiation">Negociação</option>
+      <option value="closed">Fechado</option>
+      <option value="do_not_contact">Não contactar</option>
+    </select>
+
+    <button id="run">Testar lead fictício</button>
+  </section>
+
+  <section class="card safe">
+    <strong>Seguro para testar</strong>
+    <p>O lead é fictício: Ana Teste · Audi Q4 e-tron — TESTE · ********0000. Nada sai desta página.</p>
+  </section>
+
+  <section id="result" class="card" hidden>
+    <h2>Resultado</h2>
+    <div id="summary"></div>
+    <pre id="raw"></pre>
+  </section>
+</main>
+<script>
+  const button = document.getElementById('run');
+  const result = document.getElementById('result');
+  const summary = document.getElementById('summary');
+  const raw = document.getElementById('raw');
+
+  const sample = Object.freeze({
+    name: 'Ana Teste',
+    vehicle: 'Audi Q4 e-tron — TESTE',
+    phoneMasked: '********0000'
+  });
+
+  const blockedReason = Object.freeze({
+    replied: 'customer_replied',
+    negotiation: 'active_conversation',
+    closed: 'closed_status',
+    do_not_contact: 'do_not_contact'
+  });
+
+  function simulate(state) {
+    if (state === 'waiting') {
+      return {
+        ok: true,
+        sample: true,
+        mode: 'dry-run-local',
+        sendEnabled: false,
+        persisted: false,
+        whatsappSent: false,
+        state,
+        dueCount: 1,
+        due: [{
+          ...sample,
+          stage: 1,
+          template: 'lead_followup_1',
+          message: 'Bom dia, Ana Teste 👋 Carlos por aqui. Estou a dar seguimento ao seu pedido sobre o Audi Q4 e-tron — TESTE. Continua interessado? Se precisar de alguma informação, simulação ou ajuda com retoma, diga-me e trato disso consigo.'
+        }],
+        blocked: {}
+      };
+    }
+
+    const reason = blockedReason[state] || 'unknown';
+    return {
+      ok: true,
+      sample: true,
+      mode: 'dry-run-local',
+      sendEnabled: false,
+      persisted: false,
+      whatsappSent: false,
+      state,
+      dueCount: 0,
+      due: [],
+      blocked: { [reason]: 1 }
+    };
+  }
+
+  button.addEventListener('click', () => {
+    const state = document.getElementById('state').value;
+    const data = simulate(state);
+    const due = data.due[0] || null;
+
+    summary.innerHTML = due
+      ? `<p><strong>${due.name}</strong> — ${due.vehicle}</p><p>🕐 Follow-up ${due.stage} devido<br>📱 ${due.phoneMasked}</p><div class="message">${due.message}</div><p class="status">Estado: SIMULAÇÃO — não enviado</p>`
+      : `<p>Nenhuma mensagem seria enviada neste estado.</p><p><strong>Bloqueio:</strong> ${Object.keys(data.blocked)[0]}</p><p class="status">Estado: SIMULAÇÃO — não enviado</p>`;
+
+    raw.textContent = JSON.stringify(data, null, 2);
+    result.hidden = false;
+  });
+</script>
+</body>
+</html>
