@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>AutoValorPT · Agente Instagram</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f4f6f9}
+    *{box-sizing:border-box}body{margin:0}.wrap{max-width:980px;margin:auto;padding:24px 16px 60px}.top{display:flex;gap:14px;justify-content:space-between;align-items:center;margin-bottom:18px}.top h1{font-size:clamp(22px,5vw,34px);margin:0}.muted{color:#667085}.card{background:#fff;border:1px solid #e4e7ec;border-radius:18px;box-shadow:0 8px 24px rgba(16,24,40,.06);padding:18px;margin:14px 0}.status{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pill{font-size:13px;border-radius:999px;padding:7px 10px;background:#eef2f6}.ok{background:#eaf8ef;color:#176b38}.warn{background:#fff4df;color:#8a5200}.actions{display:flex;gap:9px;flex-wrap:wrap}button{border:0;border-radius:12px;padding:11px 14px;font-weight:700;cursor:pointer;background:#e9edf3;color:#172033}button.primary{background:#172033;color:white}button.danger{background:#fff0f0;color:#9c2323}button:disabled{opacity:.45;cursor:not-allowed}.grid{display:grid;gap:14px}.draft{display:grid;grid-template-columns:minmax(150px,260px) 1fr;gap:16px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;align-content:start}.photos img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;background:#eef1f4}.photos img:first-child:nth-last-child(1){grid-column:1/-1;aspect-ratio:4/3}.placeholder{min-height:180px;border-radius:12px;background:#eef1f4;display:grid;place-items:center;color:#667085;text-align:center;padding:16px}textarea{width:100%;min-height:250px;border:1px solid #d0d5dd;border-radius:12px;padding:12px;font:inherit;resize:vertical}.meta{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#667085;margin:8px 0 12px}.login{max-width:440px;margin:15vh auto;background:#fff;padding:24px;border-radius:20px;border:1px solid #e4e7ec}.login input{width:100%;border:1px solid #d0d5dd;border-radius:12px;padding:12px;font:inherit;margin:10px 0}.empty{text-align:center;padding:36px 18px}.notice{border-left:4px solid #f2b134;padding:10px 12px;background:#fff8e8;border-radius:10px}.error{border-left-color:#d92d20;background:#fff1f0}.hidden{display:none!important}a{color:inherit}@media(max-width:720px){.draft{grid-template-columns:1fr}.photos{grid-template-columns:repeat(3,1fr)}textarea{min-height:220px}.top{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app">
+    <section class="login hidden" id="loginBox">
+      <h1>Acesso privado</h1>
+      <p class="muted">Usa o mesmo código da área privada de retomas.</p>
+      <input id="access" type="password" autocomplete="current-password" placeholder="Código de acesso">
+      <button class="primary" id="loginBtn">Entrar</button>
+      <p class="muted" id="loginMsg"></p>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="top">
+        <div><h1>Agente Instagram</h1><div class="muted">Samucar → AutoValorPT, sempre com aprovação antes de publicar.</div></div>
+        <div class="actions"><button id="syncBtn" class="primary">Verificar agora</button><button id="logoutBtn">Sair</button></div>
+      </div>
+      <section class="card">
+        <strong>Estado do agente</strong>
+        <div class="status" id="status"></div>
+        <div class="notice hidden" id="setupNotice"></div>
+      </section>
+      <section class="grid" id="drafts"></section>
+      <section class="card empty" id="emptyBox">
+        <h2>Ainda não há rascunhos</h2>
+        <p class="muted">Quando a ligação à Meta estiver ativa, as novas publicações serão detetadas automaticamente.</p>
+        <button id="seedBtn">Carregar exemplo da Ranger Raptor</button>
+      </section>
+    </section>
+  </main>
+<script>
+const $=id=>document.getElementById(id);
+let configuration={};
+function esc(value=''){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtDate(value){try{return new Intl.DateTimeFormat('pt-PT',{dateStyle:'short',timeStyle:'short'}).format(new Date(value));}catch{return '';}}
+async function jsonFetch(url,options={}){const response=await fetch(url,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok){const e=new Error(data.error||'Pedido falhou.');e.status=response.status;e.data=data;throw e;}return data;}
+function renderStatus(){const root=$('status');root.innerHTML=`<span class="pill ${configuration.storageConfigured?'ok':'warn'}">${configuration.storageConfigured?'✓':'!'} Armazenamento</span><span class="pill ${configuration.metaConfigured?'ok':'warn'}">${configuration.metaConfigured?'✓':'!'} Ligação Meta</span><span class="pill">Origem: @${esc(configuration.source||'samucar_stand')}</span><span class="pill">Destino: @${esc(configuration.target||'autovalorpt')}</span>`;const notice=$('setupNotice');notice.classList.remove('error');if(!configuration.metaConfigured){notice.classList.remove('hidden');notice.innerHTML='<strong>Falta apenas ligar a conta Meta.</strong><br>O painel e o fluxo de aprovação já estão prontos. Depois de autorizar a conta profissional da AutoValorPT, o agente consegue ler as novas publicações elegíveis da origem e publicar no destino.';}else notice.classList.add('hidden');}
+function mediaHtml(item){const media=Array.isArray(item.media)?item.media:[];if(!media.length)return `<div class="placeholder">${item.isExample?'Exemplo de texto pronto. As fotografias reais entram quando a Meta estiver ligada.':'Sem fotografias publicáveis.'}</div>`;return `<div class="photos">${media.map((m,index)=>`<img src="/api/instagram-agent-media?sourceId=${encodeURIComponent(item.sourceId)}&position=${index}" alt="Fotografia da viatura" loading="lazy">`).join('')}</div>`;}
+function draftHtml(item){const published=item.status==='published',ignored=item.status==='ignored';return `<article class="card draft" data-id="${esc(item.sourceId)}"><div>${mediaHtml(item)}</div><div><div class="meta"><span>${esc(item.sourceUsername?'@'+item.sourceUsername:'')}</span><span>${fmtDate(item.sourceTimestamp)}</span><span>${published?'Publicado':ignored?'Ignorado':'A aguardar aprovação'}</span>${item.isExample?'<span>Exemplo</span>':''}</div><textarea class="caption" ${published||ignored?'disabled':''}>${esc(item.caption||'')}</textarea><div class="actions" style="margin-top:10px">${!published&&!ignored?`<button data-action="save">Guardar alterações</button><button class="primary" data-action="publish" ${item.media?.length?'':'disabled'}>Publicar</button><button class="danger" data-action="ignore">Ignorar</button>`:''}${item.sourcePermalink?`<a href="${esc(item.sourcePermalink)}" target="_blank" rel="noreferrer"><button>Ver original</button></a>`:''}</div></div></article>`;}
+async function load(){try{const data=await jsonFetch('/api/instagram-agent-drafts');configuration=data.configuration||{};$('loginBox').classList.add('hidden');$('dashboard').classList.remove('hidden');renderStatus();const items=data.items||[];$('drafts').innerHTML=items.map(draftHtml).join('');$('emptyBox').classList.toggle('hidden',items.length>0);}catch(error){if(error.status===401){$('dashboard').classList.add('hidden');$('loginBox').classList.remove('hidden');return;}showError(error.message);}}
+function showError(message){const notice=$('setupNotice');notice.classList.remove('hidden');notice.classList.add('error');notice.textContent=message;}
+async function action(sourceId,action,caption=''){const item=document.querySelector(`[data-id="${CSS.escape(sourceId)}"]`);const buttons=item?[...item.querySelectorAll('button')]:[];buttons.forEach(b=>b.disabled=true);try{await jsonFetch('/api/instagram-agent-action',{method:'POST',body:JSON.stringify({sourceId,action,caption})});await load();}catch(error){showError(error.message);buttons.forEach(b=>b.disabled=false);}}
+$('loginBtn').onclick=async()=>{try{await jsonFetch('/api/admin-session',{method:'POST',body:JSON.stringify({access:$('access').value})});$('loginMsg').textContent='';await load();}catch(e){$('loginMsg').textContent=e.message;}};
+$('logoutBtn').onclick=async()=>{await jsonFetch('/api/admin-session',{method:'POST',body:JSON.stringify({action:'logout'})}).catch(()=>{});location.reload();};
+$('syncBtn').onclick=async()=>{const b=$('syncBtn');b.disabled=true;b.textContent='A verificar…';try{const data=await jsonFetch('/api/instagram-agent-sync',{method:'POST',body:'{}'});await load();if(!data.created?.length){b.textContent='Sem novidades';setTimeout(()=>b.textContent='Verificar agora',1800);}}catch(e){showError(e.message);}finally{b.disabled=false;if(b.textContent==='A verificar…')b.textContent='Verificar agora';}};
+$('seedBtn').onclick=async()=>{try{await jsonFetch('/api/instagram-agent-action',{method:'POST',body:JSON.stringify({action:'seed'})});await load();}catch(e){showError(e.message);}};
+$('drafts').addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(!button)return;const card=button.closest('[data-id]');const caption=card.querySelector('.caption')?.value||'';action(card.dataset.id,button.dataset.action,caption);});
+load();
+</script>
+</body>
+</html>
