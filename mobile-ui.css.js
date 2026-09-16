@@ -9,7 +9,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const style = document.createElement('style');
   style.textContent = `
+    .followup-actions{
+      grid-template-columns:1fr!important;
+      gap:10px!important;
+      margin:12px 0 18px!important;
+    }
+    .followup-main{
+      width:100%!important;
+      min-height:76px!important;
+      padding:16px 20px!important;
+      border-radius:19px!important;
+      font-size:20px!important;
+      line-height:1.25!important;
+      font-weight:950!important;
+      letter-spacing:-.01em!important;
+      box-shadow:0 12px 28px rgba(21,144,95,.24)!important;
+    }
+    .followup-main::before{
+      content:'💬';
+      margin-right:9px;
+      font-size:22px;
+    }
+    .followup-secondary{
+      min-height:46px!important;
+    }
     @media(max-width:820px){
+      .followup-main{
+        min-height:82px!important;
+        padding:18px 16px!important;
+        border-radius:20px!important;
+        font-size:21px!important;
+      }
       #composer.keyboard-open{
         position:fixed!important;
         left:0!important;
@@ -29,6 +59,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   `;
   document.head.appendChild(style);
+
+  function emphasizeFinalWhatsAppButton(root = document) {
+    root.querySelectorAll?.('.followup-main').forEach((button) => {
+      if (button.dataset.finalWhatsappReady === '1') return;
+      button.textContent = 'Enviar agora pelo WhatsApp ao Carlos';
+      button.setAttribute('aria-label', 'Enviar agora pelo WhatsApp ao Carlos');
+      button.dataset.finalWhatsappReady = '1';
+    });
+  }
+
+  emphasizeFinalWhatsAppButton();
+  const finalButtonObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches?.('.followup-main')) emphasizeFinalWhatsAppButton(node.parentElement || document);
+        else if (node.querySelector?.('.followup-main')) emphasizeFinalWhatsAppButton(node);
+      }
+    }
+  });
+  finalButtonObserver.observe(document.body, { childList: true, subtree: true });
 
   function anchorComposer() {
     if (!isMobile() || document.activeElement !== input) return;
