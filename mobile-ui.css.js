@@ -14,18 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
       gap:10px!important;
       margin:12px 0 18px!important;
     }
-    .followup-main{
+    .followup-main,
+    #quickSendPartial{
       width:100%!important;
       min-height:76px!important;
       padding:16px 20px!important;
+      border:0!important;
       border-radius:19px!important;
+      background:#15905f!important;
+      color:#fff!important;
+      text-decoration:none!important;
+      text-align:center!important;
       font-size:20px!important;
       line-height:1.25!important;
       font-weight:950!important;
       letter-spacing:-.01em!important;
       box-shadow:0 12px 28px rgba(21,144,95,.24)!important;
     }
-    .followup-main::before{
+    .followup-main::before,
+    #quickSendPartial::before{
       content:'💬';
       margin-right:9px;
       font-size:22px;
@@ -34,7 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
       min-height:46px!important;
     }
     @media(max-width:820px){
-      .followup-main{
+      .followup-main,
+      #quickSendPartial{
         min-height:82px!important;
         padding:18px 16px!important;
         border-radius:20px!important;
@@ -61,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.head.appendChild(style);
 
   function emphasizeFinalWhatsAppButton(root = document) {
-    root.querySelectorAll?.('.followup-main').forEach((button) => {
+    root.querySelectorAll?.('.followup-main, #quickSendPartial').forEach((button) => {
       if (button.dataset.finalWhatsappReady === '1') return;
       button.textContent = 'Enviar agora pelo WhatsApp ao Carlos';
       button.setAttribute('aria-label', 'Enviar agora pelo WhatsApp ao Carlos');
@@ -74,8 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (!(node instanceof Element)) continue;
-        if (node.matches?.('.followup-main')) emphasizeFinalWhatsAppButton(node.parentElement || document);
-        else if (node.querySelector?.('.followup-main')) emphasizeFinalWhatsAppButton(node);
+        if (node.matches?.('.followup-main, #quickSendPartial')) emphasizeFinalWhatsAppButton(node.parentElement || document);
+        else if (node.querySelector?.('.followup-main, #quickSendPartial')) emphasizeFinalWhatsAppButton(node);
       }
     }
   });
