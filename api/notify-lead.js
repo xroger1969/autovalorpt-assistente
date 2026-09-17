@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
+import { sendWhatsAppLead } from '../lib/whatsapp-lead.js';
 
-// As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
+// As credenciais OneSignal, Slack e WhatsApp são lidas apenas do ambiente seguro da Vercel.
 const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
 const EXTERNAL_ID = 'autovalorpt-carlos';
 const MAX_TEXT = 4000;
@@ -177,7 +178,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [oneSignalResponse, slack] = await Promise.all([
+    const [oneSignalResponse, slack, whatsapp] = await Promise.all([
       fetch('https://api.onesignal.com/notifications', {
         method: 'POST',
         headers: {
@@ -186,20 +187,23 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(payload)
       }),
-      sendSlack(lead)
+      sendSlack(lead),
+      sendWhatsAppLead(lead)
     ]);
 
     const data = await oneSignalResponse.json().catch(() => ({}));
     if (!oneSignalResponse.ok) {
       console.error('onesignal_notify_lead_failed', oneSignalResponse.status, data?.errors || data?.error || 'unknown');
-      return res.status(502).json({ ok: false, error: 'onesignal_failed', slack });
+      return res.status(502).json({ ok: false, error: 'onesignal_failed', slack, whatsapp });
     }
 
     return res.status(200).json({
       ok: true,
       id: data.id || null,
       onesignal: true,
-      slack: Boolean(slack.ok)
+      slack: Boolean(slack.ok),
+      whatsapp: Boolean(whatsapp.ok),
+      whatsappSkipped: Boolean(whatsapp.skipped)
     });
   } catch (error) {
     console.error('notify_lead_error', error?.message || error);
