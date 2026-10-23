@@ -51,13 +51,24 @@ globalThis.AutoValorValidation = (() => {
     return formatName(candidate);
   }
 
-  function contactNumberCandidate(compact = '') {
-    const sequences = String(compact).match(/(?:(?:\+|00)?351[\s.-]*)?\d[\d\s.-]{6,16}/g) || [];
-    if (!sequences.length) return '';
-    let digits = sequences[sequences.length - 1].replace(/\D/g, '');
+  function normalizePhone(value = '') {
+    const raw = String(value).trim();
+    if (!/^(?:\+351|00351|351)?[\d\s().-]+$/.test(raw)) return '';
+    let digits = raw.replace(/\D/g, '');
     if (digits.startsWith('00351')) digits = digits.slice(5);
-    else if (digits.startsWith('351') && digits.length > 9) digits = digits.slice(3);
-    return digits;
+    else if (digits.startsWith('351') && digits.length >= 12) digits = digits.slice(3);
+    if (raw.startsWith('+') && !/^\+351(?:\D|\d)/.test(raw)) return '';
+    return /^9\d{8}$/.test(digits) ? digits : '';
+  }
+
+  function contactCandidates(compact = '') {
+    return [...String(compact).matchAll(/\+?\d[\d\s.()-]*/g)].map((match) => {
+      const raw = match[0].trim().replace(/[.()-]+$/, '').trim();
+      let candidateDigits = raw.replace(/\D/g, '');
+      if (candidateDigits.startsWith('00351')) candidateDigits = candidateDigits.slice(5);
+      else if (candidateDigits.startsWith('351') && candidateDigits.length > 9) candidateDigits = candidateDigits.slice(3);
+      return { raw, index: match.index, candidateDigits, telefone: normalizePhone(raw) };
+    });
   }
 
   function cleanNameSegment(value = '') {
@@ -103,20 +114,19 @@ globalThis.AutoValorValidation = (() => {
 
   function extractFlexibleContact(text = '') {
     const compact = String(text).replace(/\s+/g, ' ').trim();
-    const phoneMatch = compact.match(/(?:(?:\+|00)?351[\s.-]*)?(9\d{2}[\s.-]?\d{3}[\s.-]?\d{3})/);
-    const telefone = phoneMatch ? phoneMatch[1].replace(/\D/g, '') : '';
+    const candidates = contactCandidates(compact).filter((item) => item.candidateDigits.length >= 7);
+    const candidate = candidates.at(-1);
+    const telefone = candidate?.telefone || '';
     let nome = '';
-
-    if (phoneMatch && phoneMatch.index != null) {
-      const before = compact.slice(0, phoneMatch.index);
-      const after = compact.slice(phoneMatch.index + phoneMatch[0].length);
+    if (telefone) {
+      const before = compact.slice(0, candidate.index);
+      const after = compact.slice(candidate.index + candidate.raw.length);
       const explicitAfter = /\b(?:nome|sou|chamo-me|chamo me)\b/i.test(after);
       nome = explicitAfter ? nameFromSegment(after, true) : '';
       if (!nome) nome = nameFromSegment(before, false);
       if (!nome) nome = nameFromSegment(after, true);
     }
-
-    return { nome, telefone, candidateDigits: contactNumberCandidate(compact) };
+    return { nome, telefone, candidateDigits: candidate?.candidateDigits || '' };
   }
 
   function negativeUnknown(clean = '', subjectPattern = '') {
@@ -177,93 +187,76 @@ globalThis.AutoValorValidation = (() => {
     return [...new Set(values.filter((value) => Number.isFinite(value) && value > 0))];
   }
 
-  function validateTradeIn(text = '') {
+  function parseTradeInDetails(text = '', previous = {}) {
     const clean = String(text).trim().replace(/\s+/g, ' ');
     const currentYear = new Date().getFullYear();
-    const explicitYearMatch = clean.match(/\b(?:ano|de|matriculad[oa]\s+em)\s*[:=-]?\s*(\d{4})\b/i);
-    if (explicitYearMatch) {
-      const explicitYear = Number(explicitYearMatch[1]);
-      if (explicitYear < 1900 || explicitYear > currentYear + 1) {
-        return {
-          ok: false,
-          plausible: true,
-          hardReject: true,
-          normalized: clean,
-          retry: `O ano ${explicitYear} parece incorreto. Indique um ano válido, por exemplo: 2019.`
-        };
-      }
-    }
-
     const yearLikeModelIndexes = new Set(
-      [...clean.matchAll(/\bpeugeot\s+(1007|2008|3008|4007|4008|5008)\b/gi)]
-        .map((match) => (match.index || 0) + match[0].toLocaleLowerCase('pt-PT').lastIndexOf(match[1].toLocaleLowerCase('pt-PT')))
+      [...clean.matchAll(/\bpeugeot\s+(?:e[-\s]?)?(1007|2008|3008|4007|4008|5008)\b/gi)]
+        .map((match) => match.index + match[0].lastIndexOf(match[1]))
     );
-    const yearMatches = [...clean.matchAll(/\b(19|20)\d{2}\b/g)]
-      .filter((match) => Number(match[0]) <= currentYear + 1 && !yearLikeModelIndexes.has(match.index || 0));
-    const yearMatch = yearMatches.at(-1);
-    const year = yearMatch?.[0] || '';
-    const yearIndex = yearMatch?.index ?? -1;
-    let withoutYear = clean;
-    if (year) {
-      const index = clean.lastIndexOf(year);
-      withoutYear = `${clean.slice(0, index)} ${clean.slice(index + year.length)}`;
+    const yearCandidates = [...clean.matchAll(/\b(?:19|20)\d{2}\b/g)]
+      .filter((match) => !yearLikeModelIndexes.has(match.index) && !(previous.year && !previous.mileage && /^\d{1,6}$/.test(clean)));
+    const explicitYear = clean.match(/\b(?:ano|de|matriculad[oa]\s+em)\s*[:=-]?\s*(\d{4})\b/i);
+    const futureYear = yearCandidates.find((match) => Number(match[0]) > currentYear);
+    if (futureYear || (explicitYear && (Number(explicitYear[1]) < 1900 || Number(explicitYear[1]) > currentYear))) {
+      const year = futureYear?.[0] || explicitYear[1];
+      return { ...previous, ok: false, plausible: true, hardReject: true, normalized: clean,
+        retry: `O ano ${year} parece incorreto. Indique um ano até ${currentYear}.` };
     }
+    const distinctYears = [...new Set(yearCandidates.map((match) => match[0]))];
+    if (distinctYears.length > 1) return { ...previous, ok: false, plausible: true, hardReject: true, normalized: clean,
+      retry: 'Encontrei mais do que um ano. Qual é o ano da sua viatura?' };
+    const yearMatch = yearCandidates.at(-1);
+    let working = clean;
+    if (yearMatch) working = `${working.slice(0, yearMatch.index)} ${working.slice(yearMatch.index + yearMatch[0].length)}`;
 
-    const labelledMileageMatches = [...clean.matchAll(/\b(\d{1,3}(?:[ .]\d{3})*|\d{1,7})\s*(mil\s*)?(?:km|kms|quil[oó]metros?)\b/giu)]
-      .filter((match) => !(year && match.index === yearIndex && Number(match[1].replace(/\D/g, '')) === Number(year)));
-    const labelledMileageValues = labelledMileageMatches.map((match) => mileageNumber(match[1], Boolean(match[2])));
-
-    let afterYear = yearIndex >= 0 ? clean.slice(yearIndex + year.length) : clean;
-    for (const match of labelledMileageMatches) afterYear = afterYear.replace(match[0], ' ');
-    const unlabelledMileageValues = [...afterYear.matchAll(/\b\d[\d .]{3,}\b/g)]
-      .map((match) => Number(match[0].replace(/\D/g, '')))
-      .filter((value) => Number.isFinite(value) && value >= 5000);
-
-    const mileageValues = uniqueNumbers([...labelledMileageValues, ...unlabelledMileageValues]);
-    const implausible = mileageValues.filter((value) => value > 500000);
-    if (implausible.length) {
-      const mileage = Math.max(...implausible);
-      return {
-        ok: false,
-        plausible: true,
-        hardReject: true,
-        normalized: clean,
-        retry: `Percebi ${mileage.toLocaleString('pt-PT')} km. É uma quilometragem muito elevada. Confirma esse valor ou indique a quilometragem correta.`
-      };
+    const labelled = [...working.matchAll(/\b(\d{1,3}(?:[ .]\d{3})+|\d{1,8})\s*(mil\s*)?(?:km|kms|quil[oó]metros?)\b/giu)];
+    const thousand = labelled.length ? [] : [...working.matchAll(/\b(\d{1,3})\s*mil\b/gi)];
+    const measurements = [...labelled, ...thousand];
+    let values = measurements.map((match) => mileageNumber(match[1], Boolean(match[2]) || thousand.includes(match)));
+    for (const match of measurements) working = working.replace(match[0], ' ');
+    if (!measurements.length) {
+      const modelIndexes = new Set([...working.matchAll(/\bpeugeot\s+(?:e[-\s]?)?(1007|2008|3008|4007|4008|5008)\b/gi)].map((match) => match.index + match[0].lastIndexOf(match[1])));
+      const implicit = [...working.matchAll(/\b(?:\d{1,3}(?:[ .]\d{3})+|\d{4,8})\b/g)]
+        .filter((match) => !modelIndexes.has(match.index) && (Number(match[0].replace(/\D/g, '')) >= 5000 || (!/[A-Za-zÀ-ÿ]/u.test(working) && previous.description)));
+      values = implicit.map((match) => mileageNumber(match[0]));
+      for (const match of implicit) working = working.replace(match[0], ' ');
     }
+    values = [...new Set(values)];
+    if (values.some((value) => value > 500000)) return { ...previous, ok: false, plausible: true, hardReject: true, normalized: clean,
+      retry: `Percebi ${Math.max(...values).toLocaleString('pt-PT')} km. Verifique a quilometragem e indique o valor correto.` };
+    if (values.length > 1) return { ...previous, ok: false, plausible: true, hardReject: true, normalized: clean,
+      retry: `Encontrei mais do que uma quilometragem (${values.map((value) => `${value.toLocaleString('pt-PT')} km`).join(' e ')}). Qual é o valor correto?` };
 
-    if (mileageValues.length > 1) {
-      const sorted = [...mileageValues].sort((a, b) => a - b);
-      if (sorted.at(-1) - sorted[0] > 1000) {
-        return {
-          ok: false,
-          plausible: true,
-          hardReject: true,
-          normalized: clean,
-          retry: `Encontrei mais do que uma quilometragem (${sorted.map((value) => `${value.toLocaleString('pt-PT')} km`).join(' e ')}). Qual é o valor correto?`
-        };
-      }
-    }
-
-    const tokens = withoutYear.match(/\b[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9'’\-]*\b/gu) || [];
-    const meaningfulTokens = tokens.filter((token) => !TRADE_IN_BLOCKED_WORDS.has(normalizeText(token)));
-    const numericModelTokens = [...withoutYear.matchAll(/\b\d{3,4}\b/g)]
-      .map((match) => match[0])
-      .filter((value) => Number(value) < 10000 && !mileageValues.includes(Number(value)));
-
-    const hasMileage = mileageValues.length > 0;
-    const ok = Boolean(year && hasMileage && meaningfulTokens.length + numericModelTokens.length >= 2);
-    let retry = 'Faltam dados da retoma. Indique marca, modelo, ano e quilómetros, por exemplo: Renault Clio, 2019, 85 000 km.';
-    if (year && !hasMileage) retry = 'Percebi a viatura e o ano. Falta apenas indicar os quilómetros.';
-    if (!year && hasMileage) retry = 'Percebi a quilometragem. Falta indicar a marca, o modelo e o ano.';
-
-    return {
-      ok,
-      plausible: ok || Boolean(year || hasMileage || meaningfulTokens.length || numericModelTokens.length),
-      hardReject: false,
-      normalized: clean,
-      retry
+    let description = working
+      .replace(/^(?:tenho|é|e)\s+(?:(?:um|uma)\s+)?/i, '')
+      .replace(/\b(?:marca|modelo|ano|quil[oó]metros?|kms?|viatura|carro|de|com|matriculad[oa]|em)\b\s*[:=-]?/gi, ' ')
+      .replace(/[,;|/\\]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!/[A-Za-zÀ-ÿ]/u.test(description)) description = '';
+    description = description.split(' ').filter(Boolean).map((word) => {
+      if (/^\d+$/.test(word)) return word;
+      if (/^[A-ZÀ-Ÿ]{1,3}$/u.test(word) || /^[A-Za-zÀ-ÿ]{1,2}$/u.test(word)) return word.toLocaleUpperCase('pt-PT');
+      return word.charAt(0).toLocaleUpperCase('pt-PT') + word.slice(1).toLocaleLowerCase('pt-PT');
+    }).join(' ');
+    const parts = {
+      description: description || String(previous.description || ''),
+      year: yearMatch?.[0] || String(previous.year || ''),
+      mileage: values.length ? String(values[0]) : String(previous.mileage || '')
     };
+    const meaningful = parts.description.split(/\s+/).filter((word) => word && !TRADE_IN_BLOCKED_WORDS.has(normalizeText(word)));
+    const hasDescription = meaningful.length >= 2;
+    const hasMileage = parts.mileage !== '' && Number(parts.mileage) >= 0;
+    const ok = Boolean(hasDescription && parts.year && hasMileage);
+    let retry = 'Indique a marca, o modelo, o ano e os quilómetros da sua viatura.';
+    if (hasDescription && parts.year && !hasMileage) retry = 'Percebi a viatura e o ano. Falta apenas indicar os quilómetros.';
+    else if (hasDescription && !parts.year && hasMileage) retry = 'Percebi a viatura e a quilometragem. Falta apenas indicar o ano.';
+    else if (!hasDescription && parts.year && hasMileage) retry = 'Percebi o ano e a quilometragem. Falta indicar a marca e o modelo.';
+    const normalized = [parts.description, parts.year, hasMileage ? `${Number(parts.mileage).toLocaleString('pt-PT')} km` : ''].filter(Boolean).join(', ');
+    return { ...parts, ok, plausible: Boolean(parts.description || parts.year || hasMileage), hardReject: false, normalized, retry };
+  }
+
+  function validateTradeIn(text = '') {
+    return parseTradeInDetails(text);
   }
 
   function explicitDateFromText(original = '') {
@@ -398,6 +391,9 @@ globalThis.AutoValorValidation = (() => {
   return {
     normalizeText,
     normalizeVisit,
+    normalizePhone,
+    validContactName,
+    parseTradeInDetails,
     extractFlexibleContact,
     validateFinancing,
     validateTradeIn,

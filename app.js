@@ -207,7 +207,7 @@ function renderSummary() {
   const rows = [
     ['Nome', state.lead.nome], ['Contacto', state.lead.telefone], ['Viatura', state.lead.viatura],
     ['Financiamento', state.lead.financiamento], ['Retoma', state.lead.retoma],
-    ['Matrícula', state.lead.matricula], ['Visita', state.lead.visita]
+    ['Matrícula', state.lead.matricula], ['Visita', state.lead.visita], ['Pedido / observações', state.lead.observacoes]
   ];
   for (const [label, value] of rows) {
     const row = el('div', 'summary-row');
@@ -242,7 +242,7 @@ function setComposer(placeholder, hidden = false) {
 
 function confirmationFor(intent) {
   if (intent === 'visita') return `✓ Data e horário compreendidos: ${state.lead.visita}. A visita fica sujeita à confirmação do Carlos.`;
-  if (intent === 'contacto') return `✓ Obrigado, ${state.lead.nome}. O nome e o contacto foram registados corretamente.`;
+  if (intent === 'contacto') return `✓ Obrigado, ${state.lead.nome}. Confirme o nome e o contacto no resumo antes de enviar.`;
   if (intent === 'financiamento') return `✓ Informação de financiamento compreendida: ${state.lead.financiamento}.`;
   if (intent === 'retoma') return `✓ Informação da retoma compreendida: ${state.lead.retoma}.`;
   if (intent === 'matricula') return `✓ Matrícula da retoma registada: ${state.lead.matricula}.`;
@@ -279,6 +279,7 @@ function renderPurposeActions() {
   wrap.appendChild(el('div', 'action-heading', 'Pode escolher uma ou várias opções'));
   const grid = el('div', 'quick-actions');
   for (const [intent, icon, label] of ACTIONS) {
+    if (state.vehicle?.general && intent === 'disponibilidade') continue;
     const button = el('button', 'quick');
     button.type = 'button';
     button.setAttribute('aria-pressed', 'false');
@@ -294,6 +295,17 @@ function renderPurposeActions() {
     grid.appendChild(button);
   }
   wrap.appendChild(grid);
+  const question = el('button', 'free-question-action', 'Tenho outra pergunta');
+  question.type = 'button';
+  question.addEventListener('click', () => {
+    removeActionPanels();
+    state.selectedIntents = [];
+    state.pendingIntent = '';
+    $('chatTitle').textContent = 'A sua pergunta';
+    setComposer('Escreva a sua dúvida ou o que procura…');
+    $('messageInput')?.focus();
+  });
+  wrap.appendChild(question);
   const footer = el('div', 'selection-footer');
   footer.appendChild(el('div', 'selection-count', 'Selecione uma ou várias opções'));
   const continueButton = el('button', 'continue-selection', 'Continuar');
@@ -316,27 +328,14 @@ function beginSelectedIntents() {
 
 function renderFollowupActions() {
   removeActionPanels();
-  const wrap = el('div', 'followup-actions');
-  wrap.id = 'followupActions';
-  const whatsapp = document.createElement('a');
-  whatsapp.className = 'followup-main';
-  whatsapp.href = whatsappUrl();
-  whatsapp.target = '_blank';
-  whatsapp.rel = 'noopener';
-  whatsapp.textContent = 'Enviar pedido ao Carlos';
-  const other = el('button', 'followup-secondary', 'Adicionar outros assuntos');
-  other.type = 'button';
-  other.addEventListener('click', renderPurposeActions);
-  wrap.append(whatsapp, other);
-  $('messages').appendChild(wrap);
-  scrollEnd();
+  if (window.AutoValorLead?.renderReview) return window.AutoValorLead.renderReview();
 }
 
 function finishFlow() {
   state.pendingIntent = '';
   state.finished = true;
-  $('chatTitle').textContent = 'Pedido preparado';
-  setComposer('Pode acrescentar uma observação…');
+  $('chatTitle').textContent = 'Rever e enviar';
+  setComposer('Pode acrescentar uma observação antes de enviar…');
   renderSummary();
   renderFollowupActions();
 }
@@ -367,13 +366,7 @@ function intentComplete(intent) {
 }
 
 function extractContact(text) {
-  const compact = String(text).replace(/\s+/g, ' ').trim();
-  const match = compact.match(/(?:\+?351[\s.-]*)?(9\d{2}[\s.-]?\d{3}[\s.-]?\d{3})/);
-  const telefone = match ? match[1].replace(/\D/g, '') : '';
-  let nome = compact.replace(match?.[0] || '', ' ').replace(/\b(nome|contacto|telefone|telemóvel|telemovel|whatsapp|sou|chamo-me)\b\s*[:=-]?/gi, ' ').replace(/[,;|/\\]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!/^[A-Za-zÀ-ÿ'’\- ]{2,60}$/u.test(nome)) nome = '';
-  nome = nome.split(' ').filter(Boolean).map((word) => word.charAt(0).toLocaleUpperCase('pt-PT') + word.slice(1).toLocaleLowerCase('pt-PT')).join(' ');
-  return { nome, telefone };
+  return globalThis.AutoValorValidation?.extractFlexibleContact(text) || { nome: '', telefone: '' };
 }
 
 function handleContact(text) {
@@ -433,7 +426,11 @@ async function loadStock() {
   setComposer('', true);
   resetMessageSizing();
   $('messages').textContent = '';
-  addBubble('Escolha uma viatura para continuar.', 'bot');
+  addBubble('Escolha uma viatura ou diga-nos o que procura.', 'bot');
+  const general = el('button', 'general-request-action', 'Ainda não escolhi uma viatura');
+  general.type = 'button';
+  general.addEventListener('click', () => selectVehicle({ title: 'Pedido geral', general: true, url: '' }));
+  $('messages').appendChild(general);
   const status = el('div', 'stock-status', 'A carregar fotografias e dados das viaturas…');
   status.id = 'stockStatus';
   $('messages').appendChild(status);
@@ -453,8 +450,9 @@ async function loadStock() {
 
 function selectVehicle(item) {
   if (state.busy) return;
+  state.stockRequest += 1;
   state.vehicle = item;
-  state.lead = { ...EMPTY_LEAD, viatura: item.title };
+  state.lead = { ...EMPTY_LEAD, viatura: item.general ? '' : item.title };
   state.history = [];
   state.selectedIntents = [];
   state.intentQueue = [];
@@ -465,7 +463,7 @@ function selectVehicle(item) {
   $('chatTitle').textContent = 'Viatura selecionada';
   renderSelected();
   renderSummary();
-  addBubble(item.title, 'user');
+  addBubble(item.general ? 'Ainda não escolhi uma viatura.' : item.title, 'user');
   renderPurposeActions();
 }
 
@@ -498,7 +496,7 @@ async function sendMessage(message) {
       body: JSON.stringify({
         message: text,
         intent: currentIntent,
-        contexto: { viatura: state.vehicle?.title || state.lead.viatura || '' },
+        contexto: { viatura: state.vehicle?.general ? (state.lead.viatura || '') : (state.vehicle?.title || state.lead.viatura || '') },
         lead: state.lead,
         history: currentIntent ? [] : state.history.slice(-8, -1)
       })

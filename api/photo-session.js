@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import {
   MAX_PHOTOS,
+  UPLOAD_LIFETIME_MS,
   blobStorageConfigured,
   cleanText,
   createPhotoSessionIds,
@@ -10,6 +11,18 @@ import {
   readJsonBody,
   sameOriginRequest
 } from '../lib/photo-security.js';
+
+const sessionAttempts = new Map();
+function rateLimited(req) {
+  const now = Date.now();
+  const key = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  for (const [ip, entry] of sessionAttempts) if (now >= entry.resetAt) sessionAttempts.delete(ip);
+  const entry = sessionAttempts.get(key) || { count: 0, resetAt: now + 60 * 60 * 1000 };
+  entry.count += 1;
+  if (sessionAttempts.size >= 10000 && !sessionAttempts.has(key)) return true;
+  sessionAttempts.set(key, entry);
+  return entry.count > 12;
+}
 
 function requestBaseUrl(req) {
   const protocol = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
@@ -21,6 +34,10 @@ export default async function handler(req, res) {
   noStoreHeaders(res);
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
   if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origem não autorizada.' });
+  if (rateLimited(req)) {
+    res.setHeader('Retry-After', '3600');
+    return res.status(429).json({ error: 'Foram iniciados demasiados envios. Tente novamente mais tarde.' });
+  }
   if (!blobStorageConfigured()) {
     return res.status(503).json({
       code: 'storage_not_configured',
@@ -38,12 +55,15 @@ export default async function handler(req, res) {
     }
     if (!registration) return res.status(400).json({ error: 'Indique primeiro a matrícula da retoma.' });
 
-    const { batchId, viewerToken } = createPhotoSessionIds();
+    const { batchId, viewerToken, uploadToken } = createPhotoSessionIds();
     const createdAt = new Date().toISOString();
+    const uploadExpiresAt = new Date(Date.now() + UPLOAD_LIFETIME_MS).toISOString();
     const manifest = {
-      version: 1,
+      version: 2,
       batchId,
       viewerTokenHash: hashViewerToken(viewerToken),
+      uploadTokenHash: hashViewerToken(uploadToken),
+      uploadExpiresAt,
       createdAt,
       vehicle,
       tradeIn,
@@ -62,12 +82,14 @@ export default async function handler(req, res) {
     return res.status(201).json({
       batchId,
       viewerToken,
+      uploadToken,
+      uploadExpiresAt,
       galleryUrl: `${requestBaseUrl(req)}/fotos.html?${query.toString()}`,
       maxPhotos: MAX_PHOTOS,
       createdAt
     });
   } catch (error) {
-    console.error('Falha ao criar sessão de fotografias', error?.message);
+    console.error('photo_session_failed', error?.name || 'Error');
     return res.status(500).json({ error: 'Não foi possível preparar o envio das fotografias.' });
   }
 }

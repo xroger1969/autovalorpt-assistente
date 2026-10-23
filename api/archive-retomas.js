@@ -1,5 +1,5 @@
 import { del, issueSignedToken, list, presignUrl } from '@vercel/blob';
-import { verifyArchiveAccessToken } from '../lib/archive-auth.js';
+import { adminRequestAuthorized } from '../lib/admin-security.js';
 import { loadPhotoManifest } from '../lib/photo-manifest.js';
 import {
   MAX_PHOTOS,
@@ -116,12 +116,12 @@ async function deleteArchiveRetoma(res, batchId) {
 
 export default async function handler(req, res) {
   noStoreHeaders(res);
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  if (!adminRequestAuthorized(req)) return res.status(401).json({ error: 'Sessão expirada. Entre na área privada.' });
   if (!blobStorageConfigured()) return res.status(503).json({ error: 'O arquivo de fotografias ainda não está ligado.' });
 
   try {
     if (req.method === 'GET') {
-      const access = String(req.query?.access || '');
-      if (!verifyArchiveAccessToken(access)) return res.status(403).json({ error: 'Acesso privado inválido ou expirado.' });
       const action = String(req.query?.action || 'list');
       if (action === 'list') return listArchive(res);
       if (action === 'open') return openArchiveRetoma(res, String(req.query?.batch || ''));
@@ -131,8 +131,6 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       if (!sameOriginRequest(req)) return res.status(403).json({ error: 'Origem não autorizada.' });
       const body = await readJsonBody(req);
-      const access = String(body?.access || '');
-      if (!verifyArchiveAccessToken(access)) return res.status(403).json({ error: 'Acesso privado inválido ou expirado.' });
       const action = String(body?.action || req.query?.action || '');
       if (action === 'delete') return deleteArchiveRetoma(res, String(body?.batchId || ''));
       return res.status(400).json({ error: 'Operação inválida.' });
