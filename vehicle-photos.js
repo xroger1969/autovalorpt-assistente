@@ -31,10 +31,17 @@
     submitted: false,
     leadId: ''
   };
+  let draftRestored = false;
+
+  function uploadSessionExpired() {
+    if (!photoState.batchId) return false;
+    const expiresAt = Date.parse(photoState.uploadExpiresAt);
+    return !photoState.uploadToken || !Number.isFinite(expiresAt) || Date.now() >= expiresAt;
+  }
 
   function announcePhotosChanged() {
     document.dispatchEvent(new CustomEvent('autovalor:photos-changed', {
-      detail: { count: photoState.count, status: photoState.status, ready: photoState.status !== 'uploading', submitted: photoState.submitted }
+      detail: { count: photoState.count, status: photoState.status, ready: draftRestored && photoState.status !== 'uploading', submitted: photoState.submitted }
     }));
   }
 
@@ -145,7 +152,16 @@
   }
 
   async function createSession() {
-    if (photoState.batchId && photoState.uploadToken) return;
+    if (photoState.batchId && photoState.uploadToken && !uploadSessionExpired()) return;
+    // This path is used only when the customer actively chooses photographs.
+    // A pending submission never reaches it, so its frozen attachment stays intact.
+    photoState.batchId = '';
+    photoState.viewerToken = '';
+    photoState.uploadToken = '';
+    photoState.uploadExpiresAt = '';
+    photoState.galleryUrl = '';
+    photoState.count = 0;
+    photoState.previewUrls = [];
     const data = await requestJson('/api/photo-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -166,11 +182,15 @@
 
   async function refreshGallery() {
     if (!photoState.batchId || !photoState.viewerToken) return null;
+    const batchId = photoState.batchId;
+    const generation = photoState.uploadGeneration;
     const query = new URLSearchParams({
-      batch: photoState.batchId,
+      batch: batchId,
       token: photoState.viewerToken
     });
     const data = await requestJson(`/api/photo-gallery?${query.toString()}`, {}, 20000);
+    // A draft gallery request can finish after a rejected session was reset.
+    if (batchId !== photoState.batchId || generation !== photoState.uploadGeneration) return null;
     photoState.count = Math.min(MAX_PHOTOS, Array.isArray(data.photos) ? data.photos.length : 0);
     photoState.previewUrls = (data.photos || []).map((photo) => photo.url).filter(Boolean);
     if (photoState.count && photoState.status !== 'uploading') photoState.status = 'complete';
@@ -284,7 +304,8 @@
   }
 
   async function handleFiles(fileList) {
-    if (photoState.submitting || photoState.submitted || photoState.status === 'uploading') return;
+    if (!draftRestored || photoState.submitting || photoState.submitted || photoState.status === 'uploading') return;
+    if (uploadSessionExpired()) clearPhotoState();
     const selected = [...fileList].filter((file) => normalizeFileType(file));
     const remaining = MAX_PHOTOS - photoState.count;
     if (!selected.length) {
@@ -386,6 +407,7 @@
       validateTradeIn(tradeIn).ok
     );
     if (!completeTradeIn || !state?.lead?.matricula || (photoState.dismissed && !photoState.count)) return;
+    const expired = !photoState.submitted && !photoState.submitting && uploadSessionExpired();
 
     const card = document.createElement('section');
     card.id = 'photoUploadCard';
@@ -409,14 +431,16 @@
     card.appendChild(guide);
     renderPreviews(card);
 
-    if (photoState.status === 'uploading' || photoState.message || photoState.submitted || photoState.submitting) {
+    if (photoState.status === 'uploading' || photoState.message || photoState.submitted || photoState.submitting || expired) {
       const status = document.createElement('div');
-      status.className = `photo-upload-status ${photoState.status === 'complete' ? 'success' : photoState.status === 'error' ? 'error' : ''}`;
+      status.className = `photo-upload-status ${expired || photoState.status === 'error' ? 'error' : photoState.status === 'complete' ? 'success' : ''}`;
       status.setAttribute('role', 'status');
       status.setAttribute('aria-live', 'polite');
       status.textContent = photoState.submitted
         ? photoState.count ? `${photoState.count} ${photoState.count === 1 ? 'fotografia associada' : 'fotografias associadas'} ao seu pedido.` : 'Pedido enviado sem fotografias.'
-        : photoState.submitting ? 'Fotografias prontas. A confirmar o pedido…' : photoState.message || 'A enviar fotografias…';
+        : photoState.submitting ? 'Fotografias prontas. A confirmar o pedido…'
+          : expired ? 'O prazo para anexar estas fotografias terminou. Volte a escolher todas as fotografias que pretende incluir neste pedido.'
+            : photoState.message || 'A enviar fotografias…';
       card.appendChild(status);
     }
     if (photoState.status === 'uploading') {
@@ -445,8 +469,8 @@
     const choose = document.createElement('button');
     choose.type = 'button';
     choose.className = 'photo-upload-primary';
-    choose.disabled = photoState.status === 'uploading' || photoState.count >= MAX_PHOTOS || photoState.submitting || photoState.submitted;
-    choose.textContent = photoState.submitted ? 'Fotografias incluídas no pedido' : photoState.submitting ? 'A confirmar pedido…' : photoState.status === 'uploading'
+    choose.disabled = photoState.status === 'uploading' || (photoState.count >= MAX_PHOTOS && !expired) || photoState.submitting || photoState.submitted;
+    choose.textContent = photoState.submitted ? 'Fotografias incluídas no pedido' : photoState.submitting ? 'A confirmar pedido…' : expired ? 'Voltar a escolher fotografias' : photoState.status === 'uploading'
       ? 'A enviar…'
       : photoState.count
         ? (photoState.count >= MAX_PHOTOS ? '10 fotografias recebidas' : 'Adicionar fotografias')
@@ -505,21 +529,32 @@
         count: photoState.count
       };
     },
-    readyForSubmit() { return photoState.status !== 'uploading'; },
+    readyForSubmit() { return draftRestored && photoState.status !== 'uploading'; },
     freezeForSubmit() {
-      if (photoState.status === 'uploading') return false;
+      if (!draftRestored || photoState.status === 'uploading') return false;
       photoState.submitting = true;
       saveDraft();
       renderPhotoCard();
       announcePhotosChanged();
       return true;
     },
-    resumeEditing() {
-      if (photoState.submitted) return;
+    resumeEditing(errorCode = '') {
+      if (photoState.submitted) return false;
+      const resetSession = ['photo_session_expired', 'invalid_photo_session', 'photos_already_attached'].includes(String(errorCode));
+      if (resetSession) {
+        clearPhotoState();
+        photoState.fingerprint = currentFingerprint();
+        photoState.status = 'error';
+        photoState.message = errorCode === 'photo_session_expired'
+          ? 'O prazo para anexar estas fotografias terminou. Selecione-as novamente para as incluir no pedido. Os restantes dados mantêm-se.'
+          : 'Não foi possível reutilizar este envio de fotografias. Selecione-as novamente para as incluir no pedido. Os restantes dados mantêm-se.';
+      }
       photoState.submitting = false;
       saveDraft();
+      renderSummary();
       renderPhotoCard();
       announcePhotosChanged();
+      return resetSession;
     },
     markSubmitted(leadId) {
       photoState.submitted = true;
@@ -571,17 +606,26 @@
       return previousResetState();
     };
 
-    restoreDraft();
-    if (photoState.batchId) {
-      refreshGallery()
-        .catch(() => null)
-        .finally(() => {
-          renderSummary();
-          renderPhotoCard();
-        });
-    } else {
+    function restorePhotosAfterAssistant() {
+      if (draftRestored) return;
+      restoreDraft();
+      draftRestored = true;
       renderSummary();
-      schedulePhotoCard();
+      announcePhotosChanged();
+      if (photoState.batchId) {
+        refreshGallery()
+          .catch(() => null)
+          .finally(() => {
+            renderSummary();
+            renderPhotoCard();
+            announcePhotosChanged();
+          });
+      } else {
+        schedulePhotoCard();
+      }
     }
+    document.addEventListener('autovalor:draft-ready', restorePhotosAfterAssistant, { once: true });
+    // The no-draft bootstrap can finish before this DOMContentLoaded callback.
+    if (globalThis.AutoValorDraft?.ready !== false) restorePhotosAfterAssistant();
   });
 })();

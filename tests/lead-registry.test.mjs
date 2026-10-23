@@ -120,3 +120,47 @@ test('alterações administrativas usam ETags e não reabrem um pedido por repet
   assert.equal((await repo.saveSubmission(submission)).status, 'closed');
   await assert.rejects(repo.setStatus(record.id, 'arbitrary'), { status: 400 });
 });
+
+
+test('a paginação de recuperação tem um único lease e retoma os grupos pendentes depois de expirar', async () => {
+  const memory = memoryBlob();
+  let clock = Date.now();
+  const repo = createLeadRepository({storage:memory.storage,namespace:'test',now:()=>clock});
+  for (let i = 0; i < 9; i++) await repo.saveSubmission({requestId:randomUUID(),lead:validLead()});
+  const claims = await Promise.all([repo.claimRecoveryScan(), repo.claimRecoveryScan()]);
+  assert.equal(claims.filter(Boolean).length, 1);
+  const first = claims.find(Boolean);
+  const attempted = await repo.takeRecoveryItems(first, 2);
+  assert.equal(attempted.length, 2);
+  assert.equal(await repo.claimRecoveryScan(), null);
+  clock += 91_000;
+  const fresh = createLeadRepository({storage:memory.storage,namespace:'test',now:()=>clock});
+  const resumed = await fresh.claimRecoveryScan();
+  assert.equal(resumed.items.length, 6);
+  assert.equal(resumed.items.some((record) => attempted.some((previous) => previous.id === record.id)), false);
+  await repo.releaseRecoveryScan(first); // An old worker cannot clear the new lease.
+  assert.equal(await repo.claimRecoveryScan(), null);
+  await fresh.takeRecoveryItems(resumed, 8);
+  await fresh.releaseRecoveryScan(resumed);
+  const last = await fresh.claimRecoveryScan();
+  assert.equal(last.items.length, 1);
+  await fresh.releaseRecoveryScan(last);
+});
+
+test('um cursor após entradas removidas reinicia a volta e a recuperação é isolada por namespace', async () => {
+  const memory = memoryBlob();
+  const repo = createLeadRepository({storage:memory.storage,namespace:'one'});
+  for (let i = 0; i < 10; i++) await repo.saveSubmission({requestId:randomUUID(),lead:validLead()});
+  const first = await repo.claimRecoveryScan();
+  const items = await repo.takeRecoveryItems(first, 8);
+  for (const record of items) await repo.settleOutbox(record, {onesignal:{status:'accepted'},slack:{status:'accepted'},whatsapp:{status:'disabled'}});
+  await repo.releaseRecoveryScan(first);
+  const next = await repo.claimRecoveryScan();
+  assert.equal(next.items.length, 2);
+  const separate = createLeadRepository({storage:memory.storage,namespace:'two'});
+  const independent = await separate.claimRecoveryScan();
+  assert.ok(independent);
+  assert.equal(independent.items.length, 0);
+  await separate.releaseRecoveryScan(independent);
+  await repo.releaseRecoveryScan(next);
+});

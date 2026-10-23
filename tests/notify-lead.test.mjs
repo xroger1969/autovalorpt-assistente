@@ -40,7 +40,7 @@ function fixture(options = {}) {
     return res;
   };
   const adminHeaders = () => ({ cookie: `${ADMIN_COOKIE_NAME}=${encodeURIComponent(createAdminSession(env))}` });
-  return { memory, repository, env, outgoing, invoke, adminHeaders };
+  return { memory, repository, env, outgoing, invoke, adminHeaders, fetchImpl };
 }
 
 function submission(lead = inputLead()) { return { requestId: randomUUID(), lead, photoSession: null }; }
@@ -196,4 +196,75 @@ test('compatibilidade do texto antigo conserva perguntas e usa identidade sem ja
   assert.equal(first.body.persisted, true);
   assert.equal(first.body.leadId, second.body.leadId);
   assert.equal(setup.outgoing.length, 2);
+});
+
+
+test('o cursor durável alcança o nono pedido apesar de oito falhas persistentes e volta a repetir as anteriores', async () => {
+  const persistentFailures = new Set();
+  const setup = fixture({ fetchImpl: async (url, settings) => {
+    if (!url.includes('onesignal')) return new Response('ok');
+    const id = JSON.parse(settings.body).data.leadId;
+    return persistentFailures.has(id)
+      ? new Response(JSON.stringify({ errors: ['synthetic temporary failure'] }), { status: 503 })
+      : new Response(JSON.stringify({ id: 'synthetic-accepted' }));
+  } });
+  for (let i = 0; i < 9; i++) await setup.repository.saveSubmission({ requestId: randomUUID(), lead: normalizeLead(inputLead()) });
+  const ordered = (await setup.repository.page({ outbox: true, limit: 9 })).items;
+  ordered.slice(0, 8).forEach((record) => persistentFailures.add(record.id));
+  const last = ordered[8].id;
+  const headers = { authorization: `Bearer ${setup.env.CRON_SECRET}` };
+  const first = await setup.invoke({ method: 'GET', query: { action: 'retry-pending' }, headers });
+  assert.equal(first.body.processed, 8);
+  assert.equal((await setup.repository.notifications(last)).onesignal.status, 'pending');
+
+  // Rebuild the handler and repository, as happens on another serverless instance.
+  const freshRepository = createLeadRepository({ storage: setup.memory.storage, namespace: 'test' });
+  const freshHandler = createNotifyLeadHandler({ repository: freshRepository, env: setup.env, fetchImpl: setup.fetchImpl });
+  const second = response();
+  await freshHandler({ method: 'GET', query: { action: 'retry-pending' }, headers }, second);
+  assert.equal(second.body.processed, 1);
+  assert.equal((await freshRepository.notifications(last)).onesignal.status, 'accepted');
+  assert.equal((await freshRepository.page({ outbox: true })).items.length, 8);
+
+  const third = response();
+  await freshHandler({ method: 'GET', query: { action: 'retry-pending' }, headers }, third);
+  assert.equal(third.body.processed, 8);
+  for (const record of ordered.slice(0, 8)) {
+    const channel = (await freshRepository.notifications(record.id)).onesignal;
+    assert.equal(channel.status, 'failed');
+    assert.equal(channel.attempts, 2);
+  }
+});
+
+test('o limite temporal termina a resposta e guarda os grupos ainda não tentados para a execução seguinte', async () => {
+  let slow = true;
+  const held = [];
+  const attempted = [];
+  const notifications = { notify(record) {
+    attempted.push(record.id);
+    return slow ? new Promise((resolve) => held.push(resolve)) : Promise.resolve({});
+  } };
+  const setup = fixture({ handler: { notifications, recoveryBudgetMs: 100 } });
+  for (let i = 0; i < 9; i++) await setup.repository.saveSubmission({ requestId: randomUUID(), lead: normalizeLead(inputLead()) });
+  const order = (await setup.repository.page({outbox:true,limit:9})).items.map((record) => record.id);
+  const headers = { authorization: `Bearer ${setup.env.CRON_SECRET}` };
+  const first = await setup.invoke({method:'GET',query:{action:'retry-pending'},headers});
+  assert.equal(first.body.timedOut, true);
+  assert.equal(first.body.attempted, 2);
+  assert.deepEqual(attempted, order.slice(0, 2));
+  const checkpoint = JSON.parse([...setup.memory.records.entries()].find(([path]) => path.endsWith('/recovery/scan.json'))[1].text);
+  assert.deepEqual(checkpoint.pendingIds, order.slice(2, 8));
+  // Resolve only mocked operations. No provider or client receives a message.
+  slow = false;
+  held.forEach((resolve) => resolve({}));
+  await new Promise((resolve) => setImmediate(resolve));
+  const fresh = createNotifyLeadHandler({ repository: createLeadRepository({storage:setup.memory.storage,namespace:'test'}), env:setup.env, notifications });
+  const second = response();
+  await fresh({method:'GET',query:{action:'retry-pending'},headers}, second);
+  assert.equal(second.body.processed, 6);
+  assert.deepEqual(attempted, order.slice(0, 8));
+  const third = response();
+  await fresh({method:'GET',query:{action:'retry-pending'},headers}, third);
+  assert.equal(third.body.processed, 1);
+  assert.deepEqual(attempted, order);
 });

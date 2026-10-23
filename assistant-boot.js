@@ -197,9 +197,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chatTitle').textContent = 'Contacto'; setComposer(INTENTS.contacto.placeholder); saveDraft();
   };
 
-  window.AutoValorDraft = { save: saveDraft, clear: clearDraft };
+  window.AutoValorDraft = { save: saveDraft, clear: clearDraft, ready: false };
+  function finishDraftRestoration() {
+    window.AutoValorDraft.ready = true;
+    document.dispatchEvent(new CustomEvent('autovalor:draft-ready'));
+  }
   window.addEventListener('pagehide', saveDraft);
   document.getElementById('resetBtn')?.addEventListener('click', clearDraft, { capture: true });
   document.getElementById('changeBtn')?.addEventListener('click', clearDraft, { capture: true });
-  const draft = readDraft(); document.getElementById('startBtn')?.click(); if (draft) setTimeout(() => restoreDraft(draft), 0);
+  const draft = readDraft();
+  document.getElementById('startBtn')?.click();
+  if (draft) {
+    setTimeout(() => {
+      try { restoreDraft(draft); }
+      finally { finishDraftRestoration(); }
+    }, 0);
+  } else {
+    finishDraftRestoration();
+  }
 });

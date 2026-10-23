@@ -87,17 +87,44 @@ export function createNotifyLeadHandler(options = {}) {
 
   async function retryPending(req, res) {
     if (!cronAuthorized(req, env)) return res.status(401).json({ ok: false, error: 'cron_unauthorized' });
-    const page = await repository.page({ limit: 8, outbox: true });
+    // Leave ten seconds below the function's 60-second limit. Pending work is
+    // checkpointed, and delivery leases/outbox markers survive a forced stop.
+    const budgetMs = Math.max(10, Math.min(50_000, options.recoveryBudgetMs || 50_000));
+    let stopped = false;
+    let timer;
     let processed = 0;
     let failed = 0;
-    for (let offset = 0; offset < page.items.length; offset += 2) {
-      const results = await Promise.allSettled(page.items.slice(offset, offset + 2).map((record) => notifications.notify(record)));
-      for (const result of results) {
-        if (result.status === 'fulfilled') processed += 1;
-        else failed += 1;
+    let attempted = 0;
+    let claim;
+    const deadline = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        stopped = true;
+        resolve({ ok: false, processed, failed, attempted, timedOut: true });
+      }, budgetMs);
+    });
+    const work = (async () => {
+      try {
+        claim = await repository.claimRecoveryScan({ limit: 8 });
+        if (!claim) return { ok: true, processed: 0, failed: 0, attempted: 0, busy: true };
+        while (!stopped && attempted < 8 && claim.state.pendingIds.length) {
+          const items = await repository.takeRecoveryItems(claim, Math.min(2, 8 - attempted));
+          if (stopped) break;
+          attempted += items.length;
+          const results = await Promise.allSettled(items.map((record) => notifications.notify(record)));
+          for (const result of results) {
+            if (result.status === 'fulfilled') processed += 1;
+            else failed += 1;
+          }
+        }
+        return { ok: failed === 0, processed, failed, attempted };
+      } finally {
+        // When the deadline wins, this task never starts another group. Its
+        // lease either clears here after the in-flight calls finish or expires.
+        if (claim) await repository.releaseRecoveryScan(claim);
       }
-    }
-    return res.status(200).json({ ok: failed === 0, processed, failed });
+    })();
+    try { return res.status(200).json(await Promise.race([work, deadline])); }
+    finally { clearTimeout(timer); }
   }
 
   async function postAdmin(req, res, body) {

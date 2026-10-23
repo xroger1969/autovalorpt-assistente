@@ -245,10 +245,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if ([400, 413, 422].includes(response.status) && result.persisted !== true) {
           submission = null;
           saveSubmission();
-          window.AutoValorPhotos?.resumeEditing?.();
+          const photosReset = window.AutoValorPhotos?.resumeEditing?.(String(result.error || ''));
           if (composer) composer.hidden = false;
           renderReview();
-          showStatus('O pedido ainda não foi enviado. Confirme os dados do resumo e tente novamente.', 'error');
+          showStatus(photosReset
+            ? 'O pedido ainda não foi enviado. Selecione novamente as fotografias para as anexar ou confirme o envio sem fotografias. Os restantes dados mantêm-se.'
+            : 'O pedido ainda não foi enviado. Confirme os dados do resumo e tente novamente.', 'error');
           return;
         }
         throw new Error('receipt_not_confirmed');

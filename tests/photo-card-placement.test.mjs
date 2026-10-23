@@ -74,6 +74,7 @@ function setupPhotoCard({ complete = true } = {}) {
     addEventListener(name, listener) {
       if (name === 'DOMContentLoaded') domReadyListeners.push(listener);
     },
+    dispatchEvent() {},
     createElement(tagName) {
       return new FakeElement(tagName, document);
     },
@@ -131,6 +132,7 @@ function setupPhotoCard({ complete = true } = {}) {
     clearTimeout() {},
     URLSearchParams,
     AbortController,
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Intl,
     console
   };
