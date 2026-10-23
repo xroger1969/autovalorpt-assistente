@@ -1,7 +1,9 @@
 import { issueSignedToken, presignUrl } from '@vercel/blob';
-import { loadAuthorizedPhotoManifest } from '../lib/photo-manifest.js';
+import { loadAuthorizedUploadManifest } from '../lib/photo-manifest.js';
 import {
   MAX_PHOTO_BYTES,
+  MAX_PHOTOS,
+  UPLOAD_URL_WINDOW_MS,
   blobStorageConfigured,
   noStoreHeaders,
   normalizePhotoType,
@@ -9,8 +11,6 @@ import {
   readJsonBody,
   sameOriginRequest
 } from '../lib/photo-security.js';
-
-const UPLOAD_WINDOW_MS = 10 * 60 * 1000;
 
 export default async function handler(req, res) {
   noStoreHeaders(res);
@@ -26,26 +26,27 @@ export default async function handler(req, res) {
   try {
     const body = await readJsonBody(req);
     const batchId = String(body?.batchId || '');
-    const viewerToken = String(body?.viewerToken || '');
+    const uploadToken = String(body?.uploadToken || '');
     const contentType = normalizePhotoType(body?.contentType);
     const size = Number(body?.size);
     const index = Number(body?.index);
 
-    if (!contentType || !Number.isFinite(size) || size < 1 || size > MAX_PHOTO_BYTES) {
+    if (!contentType || !Number.isInteger(size) || size < 1 || size > MAX_PHOTO_BYTES ||
+        !Number.isInteger(index) || index < 1 || index > MAX_PHOTOS) {
       return res.status(400).json({ error: 'A fotografia tem um formato ou tamanho inválido.' });
     }
 
-    const manifest = await loadAuthorizedPhotoManifest(batchId, viewerToken);
-    if (!manifest) return res.status(403).json({ error: 'Este envio já não é válido.' });
+    const manifest = await loadAuthorizedUploadManifest(batchId, uploadToken);
+    if (!manifest) return res.status(403).json({ code: 'photo_session_closed', error: 'Este envio terminou ou expirou. Já não pode adicionar fotografias.' });
 
     const pathname = photoPath(batchId, index, contentType);
-    const validUntil = Date.now() + UPLOAD_WINDOW_MS;
+    const validUntil = Math.min(Date.now() + UPLOAD_URL_WINDOW_MS, Date.parse(manifest.uploadExpiresAt));
     const signedToken = await issueSignedToken({
       pathname,
       operations: ['put'],
       validUntil,
       allowedContentTypes: [contentType],
-      maximumSizeInBytes: MAX_PHOTO_BYTES
+      maximumSizeInBytes: size
     });
     const { presignedUrl } = await presignUrl(signedToken, {
       operation: 'put',
@@ -53,14 +54,14 @@ export default async function handler(req, res) {
       access: 'private',
       validUntil,
       allowedContentTypes: [contentType],
-      maximumSizeInBytes: MAX_PHOTO_BYTES,
+      maximumSizeInBytes: size,
       addRandomSuffix: false,
       allowOverwrite: false
     });
 
     return res.status(200).json({ uploadUrl: presignedUrl, pathname, validUntil });
   } catch (error) {
-    console.error('Falha ao autorizar fotografia', error?.message);
+    console.error('photo_authorization_failed', error?.name || 'Error');
     return res.status(500).json({ error: 'Não foi possível autorizar esta fotografia.' });
   }
 }

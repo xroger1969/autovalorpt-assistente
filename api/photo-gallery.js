@@ -1,10 +1,10 @@
-import { issueSignedToken, list, presignUrl } from '@vercel/blob';
-import { loadAuthorizedPhotoManifest } from '../lib/photo-manifest.js';
+import { issueSignedToken, presignUrl } from '@vercel/blob';
+import { listPhotoBlobs, loadAuthorizedPhotoManifest, loadPhotoAttachment, loadPhotoManifest } from '../lib/photo-manifest.js';
+import { adminRequestAuthorized } from '../lib/admin-security.js';
 import {
   MAX_PHOTOS,
   blobStorageConfigured,
-  noStoreHeaders,
-  photoPrefix
+  noStoreHeaders
 } from '../lib/photo-security.js';
 
 const VIEW_WINDOW_MS = 20 * 60 * 1000;
@@ -22,14 +22,13 @@ export default async function handler(req, res) {
   try {
     const batchId = String(req.query?.batch || '');
     const viewerToken = String(req.query?.token || '');
-    const manifest = await loadAuthorizedPhotoManifest(batchId, viewerToken);
+    const manifest = adminRequestAuthorized(req)
+      ? await loadPhotoManifest(batchId)
+      : await loadAuthorizedPhotoManifest(batchId, viewerToken);
     if (!manifest) return res.status(403).json({ error: 'Este acesso já não é válido.' });
 
-    const result = await list({ prefix: photoPrefix(batchId), limit: MAX_PHOTOS + 2 });
-    const blobs = (result?.blobs || [])
-      .filter((blob) => blob?.pathname)
-      .sort((a, b) => String(a.pathname).localeCompare(String(b.pathname)))
-      .slice(0, MAX_PHOTOS);
+    const attachment = await loadPhotoAttachment(batchId);
+    const blobs = await listPhotoBlobs(manifest, attachment);
     const validUntil = Date.now() + VIEW_WINDOW_MS;
 
     const photos = await Promise.all(blobs.map(async (blob, position) => {
@@ -61,11 +60,12 @@ export default async function handler(req, res) {
       tradeIn: manifest.tradeIn,
       registration: manifest.registration || '',
       maxPhotos: manifest.maxPhotos || MAX_PHOTOS,
+      uploadsClosed: Boolean(attachment),
       photos,
       urlsValidUntil: validUntil
     });
   } catch (error) {
-    console.error('Falha ao abrir galeria de fotografias', error?.message);
+    console.error('photo_gallery_failed', error?.name || 'Error');
     return res.status(500).json({ error: 'Não foi possível abrir as fotografias.' });
   }
 }

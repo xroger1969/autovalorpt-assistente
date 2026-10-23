@@ -108,20 +108,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function restoreDraft(draft) {
     state.stockRequest += 1;
     state.vehicle = draft.vehicle;
-    state.lead = { ...EMPTY_LEAD, ...draft.lead, viatura: draft.vehicle.title || draft.lead?.viatura || '' };
+    state.lead = { ...EMPTY_LEAD, ...draft.lead, viatura: draft.vehicle.general ? (draft.lead?.viatura || '') : (draft.lead?.viatura || draft.vehicle.title || '') };
     state.selectedIntents = Array.isArray(draft.selectedIntents) ? draft.selectedIntents : [];
     state.intentQueue = Array.isArray(draft.intentQueue) ? draft.intentQueue : [];
     state.pendingIntent = String(draft.pendingIntent || '');
     state.finished = Boolean(draft.finished);
     if (state.lead.retoma && !state.lead.matricula) {
       state.finished = false;
-      state.pendingIntent = 'matricula';
+      state.pendingIntent = globalThis.AutoValorValidation?.validateTradeIn(state.lead.retoma)?.ok ? 'matricula' : 'retoma';
     }
     for (const intent of state.selectedIntents) completedIntents.add(intent);
     document.getElementById('messages').textContent = '';
     document.getElementById('changeBtn').hidden = false;
     renderSelected(); renderSummary();
-    addBubble(`Retomámos o pedido relativo a ${state.lead.viatura}.`, 'bot');
+    addBubble(state.lead.viatura ? `Retomámos o pedido relativo a ${state.lead.viatura}.` : 'Retomámos o seu pedido.', 'bot');
     if (state.finished) return finishFlow();
     if (state.pendingIntent && INTENTS[state.pendingIntent]) {
       document.getElementById('chatTitle').textContent = INTENTS[state.pendingIntent].short;
@@ -197,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chatTitle').textContent = 'Contacto'; setComposer(INTENTS.contacto.placeholder); saveDraft();
   };
 
+  window.AutoValorDraft = { save: saveDraft, clear: clearDraft };
   window.addEventListener('pagehide', saveDraft);
   document.getElementById('resetBtn')?.addEventListener('click', clearDraft, { capture: true });
   document.getElementById('changeBtn')?.addEventListener('click', clearDraft, { capture: true });

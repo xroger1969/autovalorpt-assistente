@@ -71,6 +71,7 @@ function setupTradeInFlow({ pendingIntent = 'retoma', finished = false } = {}) {
     console
   };
 
+  vm.runInNewContext(readFileSync(new URL('../validation-core.js', import.meta.url), 'utf8'), context);
   vm.runInNewContext(source, context);
   assert.equal(domReadyListeners.length, 2);
   domReadyListeners[1]();
@@ -200,4 +201,44 @@ test('rejects an invalid registration and keeps asking for it', async () => {
   assert.equal(flow.context.state.pendingIntent, '');
   assert.deepEqual(flow.confirmations, ['matricula']);
   assert.equal(flow.advances, 1);
+});
+
+
+test('keeps Peugeot 2008 as the model until the customer supplies the year', async () => {
+  const flow = setupTradeInFlow();
+  await flow.context.sendMessage('Peugeot 2008 GT 90000 km');
+  assert.equal(flow.context.state.pendingIntent, 'retoma');
+  assert.match(flow.context.state.lead.retoma, /Peugeot 2008 GT/);
+  assert.match(flow.bubbles.at(-1).text, /De que ano/);
+  await flow.context.sendMessage('2022');
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
+  assert.equal(flow.context.state.lead.retoma, `Peugeot 2008 GT, 2022, ${formattedMileage(90000)}`);
+});
+
+test('progressive flow rejects future years and excessive mileage', async () => {
+  for (const value of ['Fiat Bravo 2019 1 230 000 km', `Renault Clio ${new Date().getFullYear() + 3} 1000 km`]) {
+    const flow = setupTradeInFlow();
+    await flow.context.sendMessage(value);
+    assert.equal(flow.context.state.pendingIntent, 'retoma');
+    assert.equal(flow.context.state.lead.retoma, '');
+    assert.equal(flow.confirmations.length, 0);
+  }
+});
+
+test('a negative trade-in answer does not start the trade-in flow', async () => {
+  const flow = setupTradeInFlow({pendingIntent: '', finished: false});
+  await flow.context.sendMessage('Não tenho retoma');
+  assert.equal(flow.context.state.pendingIntent, '');
+  assert.equal(flow.fallbackCalls, 0);
+  assert.match(flow.bubbles.at(-1).text, /sem retoma/);
+});
+
+
+test('preserves a Peugeot 5008 model and accepts a low mileage answer after its year', async () => {
+  const flow = setupTradeInFlow();
+  await flow.context.sendMessage('Peugeot 5008 2022');
+  assert.equal(flow.context.state.lead.retoma, 'Peugeot 5008, 2022');
+  await flow.context.sendMessage('2000');
+  assert.equal(flow.context.state.lead.retoma, `Peugeot 5008, 2022, ${formattedMileage(2000)}`);
+  assert.equal(flow.context.state.pendingIntent, 'matricula');
 });

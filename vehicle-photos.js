@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const DRAFT_KEY = 'autovalorpt-retoma-fotos-v1';
+  const DRAFT_KEY = 'autovalorpt-retoma-fotos-v2';
   const MAX_PHOTOS = 10;
   const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
   const MAX_IMAGE_EDGE = 1800;
@@ -17,6 +17,8 @@
   const photoState = {
     batchId: '',
     viewerToken: '',
+    uploadToken: '',
+    uploadExpiresAt: '',
     galleryUrl: '',
     fingerprint: '',
     count: 0,
@@ -24,8 +26,17 @@
     dismissed: false,
     message: '',
     previewUrls: [],
-    uploadGeneration: 0
+    uploadGeneration: 0,
+    submitting: false,
+    submitted: false,
+    leadId: ''
   };
+
+  function announcePhotosChanged() {
+    document.dispatchEvent(new CustomEvent('autovalor:photos-changed', {
+      detail: { count: photoState.count, status: photoState.status, ready: photoState.status !== 'uploading', submitted: photoState.submitted }
+    }));
+  }
 
   function currentFingerprint() {
     return [state?.vehicle?.title || state?.lead?.viatura || '', state?.lead?.retoma || '', state?.lead?.matricula || '']
@@ -40,10 +51,15 @@
         savedAt: Date.now(),
         batchId: photoState.batchId,
         viewerToken: photoState.viewerToken,
+        uploadToken: photoState.uploadToken,
+        uploadExpiresAt: photoState.uploadExpiresAt,
         galleryUrl: photoState.galleryUrl,
         fingerprint: photoState.fingerprint,
         count: photoState.count,
-        dismissed: photoState.dismissed
+        dismissed: photoState.dismissed,
+        submitted: photoState.submitted,
+        submitting: photoState.submitting,
+        leadId: photoState.leadId
       }));
     } catch {}
   }
@@ -55,10 +71,15 @@
       if (!draft.fingerprint || draft.fingerprint !== currentFingerprint()) return;
       photoState.batchId = String(draft.batchId || '');
       photoState.viewerToken = String(draft.viewerToken || '');
+      photoState.uploadToken = String(draft.uploadToken || '');
+      photoState.uploadExpiresAt = String(draft.uploadExpiresAt || '');
       photoState.galleryUrl = String(draft.galleryUrl || '');
       photoState.fingerprint = String(draft.fingerprint || '');
       photoState.count = Math.min(MAX_PHOTOS, Math.max(0, Number(draft.count || 0)));
       photoState.dismissed = Boolean(draft.dismissed);
+      photoState.submitted = Boolean(draft.submitted);
+      photoState.submitting = Boolean(draft.submitting);
+      photoState.leadId = String(draft.leadId || '');
       photoState.status = photoState.count ? 'complete' : 'idle';
     } catch {}
   }
@@ -67,6 +88,8 @@
     photoState.uploadGeneration += 1;
     photoState.batchId = '';
     photoState.viewerToken = '';
+    photoState.uploadToken = '';
+    photoState.uploadExpiresAt = '';
     photoState.galleryUrl = '';
     photoState.fingerprint = '';
     photoState.count = 0;
@@ -74,8 +97,12 @@
     photoState.dismissed = false;
     photoState.message = '';
     photoState.previewUrls = [];
+    photoState.submitting = false;
+    photoState.submitted = false;
+    photoState.leadId = '';
     try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
     document.getElementById('photoUploadCard')?.remove();
+    announcePhotosChanged();
   }
 
   function injectStyles() {
@@ -118,7 +145,7 @@
   }
 
   async function createSession() {
-    if (photoState.batchId && photoState.viewerToken) return;
+    if (photoState.batchId && photoState.uploadToken) return;
     const data = await requestJson('/api/photo-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -130,6 +157,8 @@
     });
     photoState.batchId = data.batchId;
     photoState.viewerToken = data.viewerToken;
+    photoState.uploadToken = data.uploadToken;
+    photoState.uploadExpiresAt = data.uploadExpiresAt;
     photoState.galleryUrl = data.galleryUrl;
     photoState.fingerprint = currentFingerprint();
     saveDraft();
@@ -144,7 +173,10 @@
     const data = await requestJson(`/api/photo-gallery?${query.toString()}`, {}, 20000);
     photoState.count = Math.min(MAX_PHOTOS, Array.isArray(data.photos) ? data.photos.length : 0);
     photoState.previewUrls = (data.photos || []).map((photo) => photo.url).filter(Boolean);
-    if (photoState.count) photoState.status = 'complete';
+    if (photoState.count && photoState.status !== 'uploading') photoState.status = 'complete';
+    // A frozen photo batch can precede the lead's durable receipt. Preserve the
+    // writer token for an identical retry until markSubmitted confirms success.
+    if (data.uploadsClosed && !photoState.submitted) photoState.submitting = true;
     saveDraft();
     return data;
   }
@@ -227,7 +259,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         batchId: photoState.batchId,
-        viewerToken: photoState.viewerToken,
+        uploadToken: photoState.uploadToken,
         contentType: prepared.contentType,
         size: prepared.blob.size,
         index
@@ -252,6 +284,7 @@
   }
 
   async function handleFiles(fileList) {
+    if (photoState.submitting || photoState.submitted || photoState.status === 'uploading') return;
     const selected = [...fileList].filter((file) => normalizeFileType(file));
     const remaining = MAX_PHOTOS - photoState.count;
     if (!selected.length) {
@@ -270,6 +303,7 @@
     photoState.status = 'uploading';
     photoState.message = `A preparar ${files.length} ${files.length === 1 ? 'fotografia' : 'fotografias'}…`;
     renderPhotoCard();
+    announcePhotosChanged();
     setProgress(0, files.length);
 
     let uploaded = 0;
@@ -317,6 +351,7 @@
     saveDraft();
     renderPhotoCard();
     renderSummary();
+    announcePhotosChanged();
     document.querySelectorAll('.followup-main').forEach((link) => { link.href = whatsappUrl(); });
   }
 
@@ -350,7 +385,7 @@
       typeof validateTradeIn !== 'function' ||
       validateTradeIn(tradeIn).ok
     );
-    if (!state?.vehicle || !completeTradeIn || !state?.lead?.matricula || (photoState.dismissed && !photoState.count)) return;
+    if (!completeTradeIn || !state?.lead?.matricula || (photoState.dismissed && !photoState.count)) return;
 
     const card = document.createElement('section');
     card.id = 'photoUploadCard';
@@ -363,7 +398,7 @@
       <div class="photo-upload-icon" aria-hidden="true">📷</div>
       <div>
         <h3 class="photo-upload-title">Enviar fotografias da sua viatura</h3>
-        <p class="photo-upload-copy">Opcional — ajuda-nos a preparar uma avaliação mais rigorosa da retoma.</p>
+        <p class="photo-upload-copy">Opcional — adicione as fotografias antes de confirmar o pedido.</p>
       </div>
     `;
     card.appendChild(head);
@@ -374,10 +409,14 @@
     card.appendChild(guide);
     renderPreviews(card);
 
-    if (photoState.status === 'uploading' || photoState.message) {
+    if (photoState.status === 'uploading' || photoState.message || photoState.submitted || photoState.submitting) {
       const status = document.createElement('div');
       status.className = `photo-upload-status ${photoState.status === 'complete' ? 'success' : photoState.status === 'error' ? 'error' : ''}`;
-      status.textContent = photoState.message || 'A enviar fotografias…';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.textContent = photoState.submitted
+        ? photoState.count ? `${photoState.count} ${photoState.count === 1 ? 'fotografia associada' : 'fotografias associadas'} ao seu pedido.` : 'Pedido enviado sem fotografias.'
+        : photoState.submitting ? 'Fotografias prontas. A confirmar o pedido…' : photoState.message || 'A enviar fotografias…';
       card.appendChild(status);
     }
     if (photoState.status === 'uploading') {
@@ -406,8 +445,8 @@
     const choose = document.createElement('button');
     choose.type = 'button';
     choose.className = 'photo-upload-primary';
-    choose.disabled = photoState.status === 'uploading' || photoState.count >= MAX_PHOTOS;
-    choose.textContent = photoState.status === 'uploading'
+    choose.disabled = photoState.status === 'uploading' || photoState.count >= MAX_PHOTOS || photoState.submitting || photoState.submitted;
+    choose.textContent = photoState.submitted ? 'Fotografias incluídas no pedido' : photoState.submitting ? 'A confirmar pedido…' : photoState.status === 'uploading'
       ? 'A enviar…'
       : photoState.count
         ? (photoState.count >= MAX_PHOTOS ? '10 fotografias recebidas' : 'Adicionar fotografias')
@@ -423,7 +462,7 @@
       gallery.rel = 'noopener';
       gallery.textContent = 'Ver fotografias';
       actions.appendChild(gallery);
-    } else if (photoState.status !== 'uploading') {
+    } else if (photoState.status !== 'uploading' && !photoState.submitting && !photoState.submitted) {
       const skip = document.createElement('button');
       skip.type = 'button';
       skip.className = 'photo-upload-secondary';
@@ -433,6 +472,7 @@
         photoState.fingerprint = currentFingerprint();
         saveDraft();
         card.remove();
+        announcePhotosChanged();
       });
       actions.appendChild(skip);
     }
@@ -454,6 +494,43 @@
       renderPhotoCard();
     }, 0);
   }
+
+  globalThis.AutoValorPhotos = Object.freeze({
+    getLeadAttachment() {
+      if (!photoState.count || !photoState.batchId || photoState.submitted) return null;
+      return {
+        batchId: photoState.batchId,
+        uploadToken: photoState.uploadToken,
+        viewerToken: photoState.viewerToken,
+        count: photoState.count
+      };
+    },
+    readyForSubmit() { return photoState.status !== 'uploading'; },
+    freezeForSubmit() {
+      if (photoState.status === 'uploading') return false;
+      photoState.submitting = true;
+      saveDraft();
+      renderPhotoCard();
+      announcePhotosChanged();
+      return true;
+    },
+    resumeEditing() {
+      if (photoState.submitted) return;
+      photoState.submitting = false;
+      saveDraft();
+      renderPhotoCard();
+      announcePhotosChanged();
+    },
+    markSubmitted(leadId) {
+      photoState.submitted = true;
+      photoState.submitting = false;
+      photoState.leadId = String(leadId || '');
+      photoState.uploadToken = '';
+      saveDraft();
+      renderPhotoCard();
+      announcePhotosChanged();
+    }
+  });
 
   document.addEventListener('DOMContentLoaded', () => {
     injectStyles();

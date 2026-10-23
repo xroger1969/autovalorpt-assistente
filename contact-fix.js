@@ -99,8 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (state.finished) {
-      freeQuestionTitle.textContent = '💬 Ainda tem alguma dúvida?';
-      freeQuestionHint.textContent = 'Pode continuar a perguntar sem voltar a preencher o pedido.';
+      freeQuestionTitle.textContent = '💬 Quer acrescentar alguma informação?';
+      freeQuestionHint.textContent = 'Reveja os dados no resumo e toque em “Enviar pedido” para os fazer chegar ao Carlos.';
       return;
     }
     if (state.pendingIntent) {
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'O envio fica disponível quando existir informação concreta para o Carlos.'
       ];
       freeQuestionTitle.textContent = title;
-      freeQuestionHint.textContent = `${hint} O envio só aparece depois de existir conteúdo útil.`;
+      freeQuestionHint.textContent = hint;
       return;
     }
     if (state.selectedIntents?.length) {
@@ -128,56 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
     freeQuestionHint.textContent = 'Ex.: “Tem garantia?”, “Aceitam retoma?” ou “Quanto poderá ficar por mês?”';
   }
 
-  function normalizedRequest(value = '') {
-    return String(value)
-      .toLocaleLowerCase('pt-PT')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9?]+/g, ' ')
-      .trim();
-  }
-
-  function hasMeaningfulDraft(value = '') {
-    const clean = String(value).trim();
-    const normalized = normalizedRequest(clean);
-    const genericOnly = new Set([
-      'financiamento', 'quero financiamento', 'pretendo financiamento',
-      'retoma', 'tenho retoma', 'quero retoma', 'pretendo retoma',
-      'visita', 'marcar visita', 'quero marcar visita', 'pretendo visita',
-      'disponibilidade', 'confirmar disponibilidade'
-    ]);
-    if (!normalized || genericOnly.has(normalized)) return false;
-    if (/\d/.test(clean)) return clean.length >= 2;
-    if (clean.length < 5) return false;
-    const words = normalized.replace(/\?/g, '').split(/\s+/).filter(Boolean);
-    return words.length >= 2 || clean.includes('?');
-  }
-
-  function hasCollectedInformation() {
-    const lead = state.lead || {};
-    const storedRequest = [lead.financiamento, lead.retoma, lead.visita, lead.observacoes]
-      .some((value) => String(value || '').trim().length >= 3);
-    return storedRequest || hasMeaningfulDraft(messageInput?.value);
-  }
-
-  function quickSendUrl() {
-    const draft = String(messageInput?.value || '').trim();
-    if (!hasMeaningfulDraft(draft)) return whatsappUrl();
-    return `https://wa.me/${PHONE}?text=${encodeURIComponent(`${whatsappText()}\nMensagem: ${draft}`)}`;
-  }
-
   function syncQuickSend() {
-    const hasVehicle = Boolean(state.vehicle || state.lead?.viatura);
-    const available = hasVehicle && hasCollectedInformation();
-    quickSend.hidden = !available;
-    quickSend.style.display = available ? 'block' : 'none';
-    if (available) quickSend.href = quickSendUrl();
-
+    quickSend.hidden = true;
+    quickSend.style.display = 'none';
+    quickSend.removeAttribute('href');
     const sideSend = document.getElementById('sideWhatsApp');
     if (sideSend) {
-      sideSend.hidden = !available;
-      sideSend.style.display = available ? 'grid' : 'none';
-      if (available) sideSend.href = quickSendUrl();
+      sideSend.hidden = true;
+      sideSend.style.display = 'none';
+      sideSend.removeAttribute('href');
     }
     updateFreeQuestionPrompt();
   }
@@ -310,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({
           message: text,
           intent: '',
-          contexto: { viatura: state.vehicle?.title || state.lead.viatura || '' },
+          contexto: { viatura: state.vehicle?.general ? (state.lead.viatura || '') : (state.vehicle?.title || state.lead.viatura || '') },
           lead: state.lead,
           history: [
             {
@@ -327,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
       addPreparedObservation(text);
       state.finished = true;
       state.pendingIntent = '';
-      document.getElementById('chatTitle').textContent = 'Pedido preparado';
+      document.getElementById('chatTitle').textContent = 'Rever e enviar';
       setComposer('Pode fazer outra pergunta…');
       renderFollowupActions();
       syncQuickSend();

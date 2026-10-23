@@ -90,6 +90,8 @@
     h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.15rem); line-height: 1; letter-spacing: -.055em; }
     .subtitle { max-width: 610px; margin: 13px 0 0; color: var(--muted); font-size: 1rem; line-height: 1.6; }
     .actions { display: flex; gap: 10px; }
+    .private-navigation { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 24px; }
+    .private-navigation a { text-decoration: none; }
     .button {
       min-height: 44px;
       display: inline-flex;
@@ -314,7 +316,7 @@
       <span class="login-icon" aria-hidden="true">🔐</span>
       <p class="eyebrow">Acesso reservado</p>
       <h1>Retomas recebidas</h1>
-      <p>Introduza o seu código privado. Num dispositivo de confiança, a sessão fica ativa durante 30 dias.</p>
+      <p>Introduza o seu código privado. Num dispositivo de confiança, a sessão fica ativa durante sete dias.</p>
       <form id="loginForm" class="login-form">
         <label for="accessCode">Código privado</label>
         <input id="accessCode" class="code-input" name="access" type="password" autocomplete="current-password" required>
@@ -325,6 +327,10 @@
   </section>
 
   <main id="dashboardView" class="shell" hidden>
+    <nav class="private-navigation" aria-label="Área privada">
+      <a class="button primary" href="/leads.html">Pedidos e contactos</a>
+      <a class="button" href="/avisos-carlos.html">Ativar avisos</a>
+    </nav>
     <section class="hero">
       <div>
         <p class="eyebrow">Arquivo privado</p>

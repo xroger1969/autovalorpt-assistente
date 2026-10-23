@@ -20,6 +20,7 @@ const closeGallery = document.querySelector('#closeGallery');
 
 let items = [];
 let lastFocusedElement = null;
+let pendingBatchId = batchFromLocation();
 
 function setStatus(element, message = '', isError = false) {
   element.textContent = message;
@@ -47,15 +48,22 @@ function formatDate(value) {
   }).format(date);
 }
 
+function batchFromLocation() {
+  const batch = new URLSearchParams(window.location.search).get('batch') || '';
+  return /^[a-f0-9]{32}$/.test(batch) ? batch : '';
+}
+
 function accessFromLocation() {
-  const query = new URLSearchParams(window.location.search);
+  // Fragment links remain compatible with a private code handoff. Query-string
+  // credentials are never accepted because they reach servers and access logs.
   const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  return fragment.get('access') || query.get('access') || '';
+  return fragment.get('access') || '';
 }
 
 function removeAccessFromAddress() {
   if (!window.location.search && !window.location.hash) return;
-  window.history.replaceState(null, '', window.location.pathname);
+  const query = pendingBatchId ? `?${new URLSearchParams({ batch: pendingBatchId })}` : '';
+  window.history.replaceState(null, '', `${window.location.pathname}${query}`);
 }
 
 async function createSession(code) {
@@ -165,6 +173,11 @@ async function loadInbox({ quiet = false } = {}) {
     renderInbox();
     showDashboard();
     setStatus(dashboardStatus, items.length ? `Atualizado às ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}.` : '');
+    if (pendingBatchId) {
+      const batchId = pendingBatchId;
+      pendingBatchId = '';
+      await openGallery(batchId, refreshButton);
+    }
     return true;
   } catch (error) {
     showDashboard();
@@ -201,6 +214,7 @@ async function openGallery(batchId, trigger) {
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
+      pendingBatchId = batchId;
       closeGalleryModal();
       showLogin('A sessão terminou. Volte a entrar com o código privado.');
       return;

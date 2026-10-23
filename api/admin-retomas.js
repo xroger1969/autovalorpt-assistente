@@ -1,6 +1,6 @@
 import { issueSignedToken, list, presignUrl } from '@vercel/blob';
 import { adminRequestAuthorized } from '../lib/admin-security.js';
-import { loadPhotoManifest } from '../lib/photo-manifest.js';
+import { loadPhotoManifest, loadPhotoAttachment, listPhotoBlobs } from '../lib/photo-manifest.js';
 import {
   MAX_PHOTOS,
   blobStorageConfigured,
@@ -91,8 +91,8 @@ async function buildDetail(batchId) {
   const manifest = await loadPhotoManifest(batchId);
   if (!manifest) return null;
 
-  const result = await list({ prefix: photoPrefix(batchId), limit: MAX_PHOTOS + 2 });
-  const blobs = (result?.blobs || [])
+  const attachment = await loadPhotoAttachment(batchId);
+  const blobs = (await listPhotoBlobs(manifest, attachment))
     .filter((blob) => blob?.pathname)
     .sort((a, b) => String(a.pathname).localeCompare(String(b.pathname)))
     .slice(0, MAX_PHOTOS);
@@ -121,6 +121,7 @@ async function buildDetail(batchId) {
 
   return {
     batchId,
+    leadId: attachment?.leadId || null,
     createdAt: manifest.createdAt || null,
     vehicle: String(manifest.vehicle || ''),
     tradeIn: String(manifest.tradeIn || ''),

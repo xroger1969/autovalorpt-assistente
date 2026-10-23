@@ -1,13 +1,37 @@
 {
   "cleanUrls": false,
   "trailingSlash": false,
-  "routes": [
-    { "src": "/api/chat", "dest": "/api/chat-smart" },
-    { "src": "/api/archive-retoma", "dest": "/api/archive-retomas?action=open" },
-    { "src": "/api/archive-retoma-delete", "dest": "/api/archive-retomas?action=delete" },
-    { "src": "/", "dest": "/welcome.html" }
+  "rewrites": [
+    { "source": "/api/chat", "destination": "/api/chat-smart" },
+    { "source": "/api/archive-retoma", "destination": "/api/archive-retomas?action=open" },
+    { "source": "/api/archive-retoma-delete", "destination": "/api/archive-retomas?action=delete" },
+    { "source": "/", "destination": "/welcome.html" }
+  ],
+  "functions": {
+    "api/notify-lead.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/notify-lead?action=retry-pending", "schedule": "0 8 * * *" }
   ],
   "headers": [
+    {
+      "source": "/aviso-lead.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
+    {
+      "source": "/leads.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data: https://*.private.blob.vercel-storage.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
     {
       "source": "/fotos.html",
       "headers": [

@@ -24,10 +24,11 @@ window.OneSignalDeferred = window.OneSignalDeferred || [];
 <main class="card">
   <div class="brand">AutoValorPT · <strong>Assistente do Carlos</strong></div>
   <h1>Avisos de novas leads</h1>
-  <p class="intro">Esta página serve apenas para ativar, nos dispositivos do Carlos, os avisos do assistente AutoValorPT.</p>
+  <p class="intro">Entre primeiro na área privada para ativar os avisos neste dispositivo. Os detalhes de cada pedido continuam protegidos pela sua sessão.</p>
   <div id="iosSteps" class="steps" hidden><b>No iPhone/iPad:</b> toque em Partilhar → <b>Adicionar ao ecrã principal</b>. Depois abra o AutoValorPT pelo novo ícone e volte a tocar em “Ativar avisos”.</div>
   <div id="status" class="status">A preparar o sistema de avisos…</div>
   <button id="enablePush" type="button" disabled>Ativar avisos neste dispositivo</button>
+  <p><a id="privateArea" href="/leads.html">Entrar na área privada</a></p>
   <p class="small">Os clientes que usam o assistente normal não são inscritos automaticamente nestes avisos.</p>
 </main>
 <script>
@@ -47,8 +48,20 @@ window.OneSignalDeferred = window.OneSignalDeferred || [];
 
   if (isIOS && !isStandalone) iosSteps.hidden = false;
 
+  async function requirePrivateSession() {
+    const response = await fetch('/api/admin-session', { credentials: 'same-origin', cache: 'no-store' });
+    const session = await response.json().catch(() => ({}));
+    if (!response.ok || !session.authenticated) {
+      setStatus('Entre na área privada e depois volte a esta página para ativar os avisos.', 'warn');
+      button.disabled = true;
+      return false;
+    }
+    return true;
+  }
+
   OneSignalDeferred.push(async function(OneSignal) {
     try {
+      if (!await requirePrivateSession()) return;
       await OneSignal.init({ appId: APP_ID });
       await OneSignal.login(EXTERNAL_ID);
       OneSignal.User.addTags({ role: 'carlos', channel: 'lead_alerts' });
@@ -82,6 +95,7 @@ window.OneSignalDeferred = window.OneSignalDeferred || [];
         button.disabled = true;
         setStatus('A pedir autorização para notificações…');
         try {
+          if (!await requirePrivateSession()) return;
           await OneSignal.User.PushSubscription.optIn();
           await OneSignal.login(EXTERNAL_ID);
           OneSignal.User.addTags({ role: 'carlos', channel: 'lead_alerts' });

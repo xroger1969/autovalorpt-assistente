@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .toLocaleLowerCase('pt-PT')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
-    return /\b(retoma|retomas)\b/.test(normalized);
+    return /\b(retoma|retomas)\b/.test(normalized) && !/\b(?:nao|sem)\b/.test(normalized);
   }
 
   function titleCaseVehicle(value = '') {
@@ -179,76 +179,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatMileage(value) {
     const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return '';
+    if (value === '' || !Number.isFinite(number) || number < 0) return '';
     return `${new Intl.NumberFormat('pt-PT').format(Math.round(number))} km`;
   }
 
   function parseTradeInPart(value = '') {
-    const original = cleanSpaces(value);
-    let working = original;
-    let year = '';
-    let mileage = '';
-
-    const yearMatch = [...working.matchAll(/\b(19[8-9]\d|20[0-2]\d)\b/g)]
-      .reduce((best, current) => {
-        if (!best) return current;
-        return Number(current[1]) >= Number(best[1]) ? current : best;
-      }, null);
-    if (yearMatch) {
-      year = yearMatch[1];
-      const start = yearMatch.index;
-      working = `${working.slice(0, start)} ${working.slice(start + yearMatch[0].length)}`;
-    }
-
-    const thousandMatch = working.match(/\b(\d{1,3})\s*mil(?:\s*(?:km|kms|quil[oó]metros?))?\b/i);
-    if (thousandMatch) {
-      mileage = String(Number(thousandMatch[1]) * 1000);
-      working = working.replace(thousandMatch[0], ' ');
-    }
-
-    if (!mileage) {
-      const explicitMileage = working.match(/\b(\d{1,3}(?:[ .]\d{3})+|\d{4,6})\s*(?:km|kms|quil[oó]metros?)\b/i);
-      if (explicitMileage) {
-        mileage = explicitMileage[1].replace(/\D/g, '');
-        working = working.replace(explicitMileage[0], ' ');
-      }
-    }
-
-    if (!mileage && year) {
-      const implicitMileage = working.match(/\b(\d{1,3}(?:[ .]\d{3})+|\d{5,6})\b/);
-      const remainingDescription = implicitMileage
-        ? working.replace(implicitMileage[0], ' ')
-        : '';
-      const mileageNumber = Number(implicitMileage?.[1].replace(/\D/g, ''));
-      if (
-        implicitMileage &&
-        /[A-Za-zÀ-ÿ]/u.test(remainingDescription) &&
-        Number.isFinite(mileageNumber) &&
-        mileageNumber >= 1000 &&
-        mileageNumber <= 999999
-      ) {
-        mileage = String(mileageNumber);
-        working = remainingDescription;
-      }
-    }
-
-    if (!mileage && tradeInDraft.description && tradeInDraft.year) {
-      const numberOnly = working.match(/^\s*(\d{1,3}(?:[ .]\d{3})+|\d{4,6})\s*$/);
-      if (numberOnly) {
-        mileage = numberOnly[1].replace(/\D/g, '');
-        working = '';
-      }
-    }
-
-    const description = titleCaseVehicle(
-      working
-        .replace(/\b(?:marca|modelo|ano|quil[oó]metros?|kms?|viatura|carro)\b\s*[:=-]?/gi, ' ')
-        .replace(/[,;|/\\]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
-
-    return { description, year, mileage };
+    const parser = globalThis.AutoValorValidation?.parseTradeInDetails;
+    return parser ? parser(value, tradeInDraft) : { ...tradeInDraft, ok: false, hardReject: true, retry: 'Não foi possível validar os dados. Volte a carregar a página.' };
   }
 
   function mergeTradeIn(part) {
@@ -324,6 +261,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = cleanSpaces(message);
     if (!text || state.busy) return;
 
+    if (!state.pendingIntent && /\b(?:n[aã]o\s+(?:tenho|quero)|sem)\s+retoma\b/i.test(text)) {
+      document.getElementById('messageInput').value = '';
+      removeActionPanels();
+      addBubble(text, 'user');
+      tradeInDraft = emptyTradeIn();
+      state.lead.retoma = '';
+      state.lead.matricula = '';
+      state.selectedIntents = (state.selectedIntents || []).filter((intent) => intent !== 'retoma');
+      addBubble('Compreendido. Continuamos sem retoma. Pode indicar o que pretende saber.', 'bot');
+      renderSummary();
+      setComposer('Escreva a sua dúvida ou o que procura…');
+      return;
+    }
+
     if (
       !state.pendingIntent &&
       !String(state.lead?.retoma || '').trim() &&
@@ -378,7 +329,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('messageInput').value = '';
     addBubble(text, 'user');
-    mergeTradeIn(parseTradeInPart(text));
+    if (/\b(?:n[aã]o\s+(?:tenho|quero)|sem)\s+retoma\b/i.test(text)) {
+      tradeInDraft = emptyTradeIn();
+      state.lead.retoma = '';
+      state.lead.matricula = '';
+      state.selectedIntents = (state.selectedIntents || []).filter((intent) => intent !== 'retoma');
+      state.intentQueue = (state.intentQueue || []).filter((intent) => intent !== 'retoma');
+      state.pendingIntent = '';
+      addBubble('Compreendido. Continuamos sem retoma.', 'bot');
+      renderSummary();
+      advanceIntent();
+      return;
+    }
+    if (!tradeInDraft.description && !tradeInDraft.year && state.lead.retoma) {
+      const previous = globalThis.AutoValorValidation?.parseTradeInDetails(state.lead.retoma);
+      if (previous && !previous.hardReject) mergeTradeIn(previous);
+    }
+    const validation = parseTradeInPart(text);
+    if (validation.hardReject) {
+      addBubble(validation.retry, 'bot');
+      state.pendingIntent = 'retoma';
+      return;
+    }
+    mergeTradeIn(validation);
 
     const collected = formattedTradeIn();
     if (collected) {
@@ -387,8 +360,13 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSelected();
     }
 
-    const complete = Boolean(tradeInDraft.description && tradeInDraft.year && tradeInDraft.mileage);
+    const complete = validation.ok;
     if (!complete) {
+      if (tradeInDraft.description && tradeInDraft.description.split(/\s+/).length < 2) {
+        addBubble('Falta identificar a marca e o modelo da sua viatura.', 'bot');
+        setFocusedTradeInPrompt('💬 Complete a viatura', 'Indique a marca e o modelo.', 'Ex.: Renault Clio');
+        return;
+      }
       state.pendingIntent = 'retoma';
       askOnlyMissingTradeInData();
       return;

@@ -10,9 +10,9 @@ test('welcome page exposes the generic social metadata', async () => {
   const html = await readFile(new URL('../welcome.html', import.meta.url), 'utf8');
 
   assert.match(html, /<title>Assistente do Carlos<\/title>/);
-  assert.match(html, /<meta name="description" content="Vou dar seguimento ao seu pedido em 1 minuto\.">/);
+  assert.match(html, /<meta name="description" content="Informações sobre viaturas, financiamento e retoma\. Deixe o seu pedido para o Carlos lhe ligar\.">/);
   assert.match(html, /<meta property="og:title" content="Assistente do Carlos">/);
-  assert.match(html, /<meta property="og:description" content="Vou dar seguimento ao seu pedido em 1 minuto\.">/);
+  assert.match(html, /<meta property="og:description" content="Informações sobre viaturas, financiamento e retoma\. Deixe o seu pedido para o Carlos lhe ligar\.">/);
   assert.equal(html.includes(expectedImageUrl), true);
   assert.equal(html.includes('Avaliação da sua viatura'), false);
 });

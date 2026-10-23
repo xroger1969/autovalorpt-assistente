@@ -1,208 +1,174 @@
-import crypto from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { adminRequestAuthorized } from '../lib/admin-security.js';
+import { attachPhotoSessionToLead } from '../lib/photo-manifest.js';
+import { noStoreHeaders, readJsonBody, sameOriginRequest } from '../lib/photo-security.js';
+import { createLeadRepository, leadNamespace, normalizeLead, receiptFor } from '../lib/lead-registry.js';
+import { createNotificationService, publicNotificationStatuses } from '../lib/lead-notifications.js';
 
-// As credenciais OneSignal e Slack são lidas apenas do ambiente seguro da Vercel.
-const APP_ID = '522f4efa-67b0-4a78-8181-6362ee9b3325';
-const EXTERNAL_ID = 'autovalorpt-carlos';
-const MAX_TEXT = 4000;
+const LEAD_ID = /^[a-f0-9]{32}$/;
+const MAX_BODY_BYTES = 24 * 1024;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
-const RATE_LIMIT = 8;
-const buckets = new Map();
+const RATE_LIMIT = 20;
 
-function clean(value = '', max = 180) {
-  return String(value || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
-}
-
-function parseLead(text = '') {
-  const lines = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+export function parseLegacyLead(text = '') {
+  const source = String(text).trim();
+  if (!source.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) return null;
   const fields = {};
-  for (const line of lines) {
-    const match = line.match(/^([^:]{2,40}):\s*(.+)$/);
-    if (!match) continue;
-    fields[match[1].toLocaleLowerCase('pt-PT')] = clean(match[2], 500);
+  for (const line of source.split(/\r?\n/)) {
+    const match = line.trim().match(/^([^:]{2,50}):\s*(.*)$/);
+    if (match) fields[match[1].toLocaleLowerCase('pt-PT')] = match[2].trim();
   }
-  return {
-    vehicle: fields.viatura || '',
-    vehicleUrl: fields['anúncio'] || fields.anuncio || '',
-    subjects: fields.assuntos || '',
-    name: fields.nome || '',
-    phone: fields.contacto || '',
-    visit: fields.visita || '',
-    financing: fields.financiamento || '',
-    tradeIn: fields.retoma || '',
+  return normalizeLead({
+    vehicle: fields.viatura || '', vehicleUrl: fields['anúncio'] || fields.anuncio || '',
+    subjects: fields.assuntos || '', name: fields.nome || '', phone: fields.contacto || '',
+    visit: fields.visita || '', financing: fields.financiamento || '', tradeIn: fields.retoma || '',
     registration: fields['matrícula'] || fields.matricula || '',
-    observations: fields['observações'] || fields.observacoes || ''
+    observations: fields['observações'] || fields.observacoes || fields.pergunta || ''
+  });
+}
+
+export function legacyRequestId(lead) {
+  const digest = createHash('sha256').update(`autovalorpt-legacy-v1:${JSON.stringify(lead)}`).digest('hex');
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
+
+function cronAuthorized(req, env) {
+  const expected = String(env.CRON_SECRET || '');
+  if (expected.length < 32) return false;
+  const match = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i);
+  if (!match) return false;
+  const actual = Buffer.from(match[1]);
+  const wanted = Buffer.from(expected);
+  return actual.length === wanted.length && timingSafeEqual(actual, wanted);
+}
+
+export function createNotifyLeadHandler(options = {}) {
+  const env = options.env || process.env;
+  const repository = options.repository || createLeadRepository({ namespace: options.namespace || leadNamespace(env) });
+  const notifications = options.notifications || createNotificationService({ repository, env, fetchImpl: options.fetchImpl });
+  const attachPhotos = options.attachPhotos || attachPhotoSessionToLead;
+  const authorizeAdmin = options.authorizeAdmin || ((req) => adminRequestAuthorized(req, env));
+  const now = options.now || (() => Date.now());
+  const buckets = new Map();
+
+  function rateLimited(req) {
+    const time = now();
+    const ip = String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+    for (const [key, bucket] of buckets) if (time >= bucket.resetAt) buckets.delete(key);
+    const current = buckets.get(ip) || { count: 0, resetAt: time + RATE_WINDOW_MS };
+    if (buckets.size >= 10000 && !buckets.has(ip)) return true;
+    current.count += 1;
+    buckets.set(ip, current);
+    return current.count > RATE_LIMIT;
+  }
+
+  async function adminRecord(record) {
+    return { ...record, receipt: receiptFor(record), notifications: await repository.notifications(record.id) };
+  }
+
+  async function getAdmin(req, res) {
+    if (!authorizeAdmin(req)) return res.status(401).json({ ok: false, error: 'private_access_required' });
+    const action = String(req.query?.action || 'list');
+    if (action === 'get') {
+      const id = String(req.query?.id || '');
+      if (!LEAD_ID.test(id)) return res.status(400).json({ ok: false, error: 'invalid_lead_id' });
+      const record = await repository.loadRecord(id);
+      if (!record) return res.status(404).json({ ok: false, error: 'lead_not_found' });
+      return res.status(200).json({ ok: true, lead: await adminRecord(record) });
+    }
+    if (action !== 'list') return res.status(400).json({ ok: false, error: 'invalid_action' });
+    const cursor = String(req.query?.cursor || '');
+    if (cursor.length > 1000) return res.status(400).json({ ok: false, error: 'invalid_cursor' });
+    const page = await repository.page({ cursor: cursor || undefined, limit: 20 });
+    const items = [];
+    for (let i = 0; i < page.items.length; i += 5) items.push(...await Promise.all(page.items.slice(i, i + 5).map(adminRecord)));
+    return res.status(200).json({ ok: true, items, cursor: page.cursor, configuration: notifications.configuration() });
+  }
+
+  async function retryPending(req, res) {
+    if (!cronAuthorized(req, env)) return res.status(401).json({ ok: false, error: 'cron_unauthorized' });
+    const page = await repository.page({ limit: 8, outbox: true });
+    let processed = 0;
+    let failed = 0;
+    for (let offset = 0; offset < page.items.length; offset += 2) {
+      const results = await Promise.allSettled(page.items.slice(offset, offset + 2).map((record) => notifications.notify(record)));
+      for (const result of results) {
+        if (result.status === 'fulfilled') processed += 1;
+        else failed += 1;
+      }
+    }
+    return res.status(200).json({ ok: failed === 0, processed, failed });
+  }
+
+  async function postAdmin(req, res, body) {
+    if (!authorizeAdmin(req)) return res.status(401).json({ ok: false, error: 'private_access_required' });
+    const leadId = String(body.leadId || '');
+    if (!LEAD_ID.test(leadId)) return res.status(400).json({ ok: false, error: 'invalid_lead_id' });
+    if (body.action === 'status') {
+      const record = await repository.setStatus(leadId, String(body.status || ''));
+      if (!record) return res.status(404).json({ ok: false, error: 'lead_not_found' });
+      return res.status(200).json({ ok: true, leadId, status: record.status });
+    }
+    const record = await repository.loadRecord(leadId);
+    if (!record) return res.status(404).json({ ok: false, error: 'lead_not_found' });
+    const states = await notifications.notify(record, { allowUnknown: body.retryUnconfirmed === true, manual: true });
+    return res.status(200).json({ ok: true, leadId, notifications: states });
+  }
+
+  return async function handler(req, res) {
+    noStoreHeaders(res);
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    if (!['GET', 'POST'].includes(req.method)) {
+      res.setHeader('Allow', 'GET, POST');
+      return res.status(405).json({ ok: false, error: 'method_not_allowed' });
+    }
+    try {
+      if (req.method === 'GET') {
+        if (req.query?.action === 'retry-pending') return await retryPending(req, res);
+        return await getAdmin(req, res);
+      }
+      if (!sameOriginRequest(req)) return res.status(403).json({ ok: false, error: 'invalid_origin' });
+      let body;
+      try { body = await readJsonBody(req, MAX_BODY_BYTES); }
+      catch (error) {
+        const large = /demasiado grande/.test(error?.message || '');
+        return res.status(large ? 413 : 400).json({ ok: false, error: large ? 'request_too_large' : 'invalid_json' });
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ ok: false, error: 'invalid_request' });
+      if (body.action === 'retry' || body.action === 'status') return await postAdmin(req, res, body);
+      if (body.action) return res.status(400).json({ ok: false, error: 'invalid_action' });
+      if (rateLimited(req)) {
+        res.setHeader('Retry-After', '600');
+        return res.status(429).json({ ok: false, error: 'rate_limited' });
+      }
+      const legacy = typeof body.text === 'string' && !body.lead;
+      const lead = legacy ? parseLegacyLead(body.text) : normalizeLead(body.lead);
+      if (!lead) return res.status(422).json({ ok: false, error: 'invalid_lead', persisted: false });
+      const requestId = legacy ? legacyRequestId(lead) : String(body.requestId || '');
+      const photoSession = legacy ? null : body.photoSession || null;
+      if (photoSession && (typeof photoSession !== 'object' || Array.isArray(photoSession))) return res.status(422).json({ ok: false, error: 'invalid_photo_session', persisted: false });
+      const record = await repository.saveSubmission({ requestId, lead, photoSession, attachPhotos, source: legacy ? 'assistant-legacy' : 'assistant' });
+      // The record, inbox and outbox are durable. Notification failures cannot
+      // turn this acknowledged lead into a lost contact or a duplicate retry.
+      let states;
+      try { states = await notifications.notify(record); }
+      catch {
+        try { states = await repository.notifications(record.id); }
+        catch { states = {}; }
+        console.error('lead_notification_recovery_pending');
+      }
+      return res.status(200).json({
+        ok: true, persisted: true, leadId: record.id, receipt: receiptFor(record),
+        notifications: publicNotificationStatuses(states)
+      });
+    } catch (error) {
+      const status = [400, 409, 422].includes(error?.status) ? error.status : 503;
+      const safeCodes = new Set(['invalid_request_id', 'request_id_conflict', 'invalid_status', 'invalid_photo_session', 'photos_already_attached', 'photo_session_expired', 'photos_not_ready']);
+      const code = safeCodes.has(error?.code) ? error.code : safeCodes.has(error?.message) ? error.message : 'storage_unavailable';
+      if (status === 503) console.error('lead_storage_operation_failed');
+      return res.status(status).json({ ok: false, persisted: false, error: code });
+    }
   };
 }
 
-function isAllowedOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === req.headers.host;
-  } catch {
-    return false;
-  }
-}
-
-function rateLimited(req) {
-  const now = Date.now();
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
-  const recent = (buckets.get(ip) || []).filter((time) => now - time < RATE_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT) {
-    buckets.set(ip, recent);
-    return true;
-  }
-  recent.push(now);
-  buckets.set(ip, recent);
-  return false;
-}
-
-function idempotencyKey(text = '') {
-  const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
-  const hex = crypto.createHash('sha256').update(`${bucket}:${text}`).digest('hex').slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
-
-function summaryUrl(lead = {}) {
-  const url = new URL('https://autovalorpt-assistente.vercel.app/aviso-lead.html');
-  const fields = [
-    ['viatura', lead.vehicle],
-    ['cliente', lead.name],
-    ['assuntos', lead.subjects],
-    ['visita', lead.visit],
-    ['financiamento', lead.financing],
-    ['retoma', lead.tradeIn],
-    ['matricula', lead.registration]
-  ];
-  for (const [key, value] of fields) {
-    const safe = clean(value, 320);
-    if (safe) url.searchParams.set(key, safe);
-  }
-  return url.toString();
-}
-
-function slackMessage(lead = {}) {
-  const lines = [
-    '🚗 *NOVO LEAD — AutoValorPT*',
-    '',
-    `👤 *Nome:* ${lead.name || 'Não indicado'}`,
-    `📱 *Contacto:* ${lead.phone || 'Não indicado'}`,
-    `🚘 *Viatura:* ${lead.vehicle || 'Não indicada'}`
-  ];
-  if (lead.vehicleUrl) lines.push(`🔗 *Anúncio:* ${lead.vehicleUrl}`);
-  if (lead.subjects) lines.push(`🎯 *Interesse:* ${lead.subjects}`);
-  if (lead.financing) lines.push(`💳 *Financiamento:* ${lead.financing}`);
-  if (lead.tradeIn) lines.push(`🔄 *Retoma:* ${lead.tradeIn}`);
-  if (lead.registration) lines.push(`🔢 *Matrícula:* ${lead.registration}`);
-  if (lead.visit) lines.push(`📅 *Visita:* ${lead.visit}`);
-  if (lead.observations) lines.push(`📝 *Observações:* ${lead.observations}`);
-  lines.push('', '✅ Pedido enviado pelo Assistente AI CV.');
-  return lines.join('\n');
-}
-
-async function sendSlack(lead = {}) {
-  const webhook = String(process.env.SLACK_WEBHOOK_URL || '').trim();
-  if (!webhook) return { ok: false, skipped: true, error: 'slack_not_configured' };
-  try {
-    const response = await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: slackMessage(lead) })
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      console.error('slack_notify_lead_failed', response.status, detail.slice(0, 200));
-      return { ok: false, error: 'slack_failed' };
-    }
-    return { ok: true };
-  } catch (error) {
-    console.error('slack_notify_lead_error', error?.message || error);
-    return { ok: false, error: 'slack_unreachable' };
-  }
-}
-
-export function buildNotification(text = '') {
-  const lead = parseLead(text);
-  const isVisit = Boolean(lead.visit || /visita/i.test(lead.subjects));
-  const heading = isVisit
-    ? `🚗 Nova visita${lead.name ? ` — ${lead.name}` : ''}`
-    : `🚘 Nova lead${lead.name ? ` — ${lead.name}` : ''}`;
-
-  const details = [];
-  if (lead.vehicle) details.push(lead.vehicle);
-  if (lead.visit) details.push(lead.visit);
-  else if (lead.subjects) details.push(lead.subjects);
-  if (lead.financing) details.push(`Financiamento: ${lead.financing}`);
-  if (lead.tradeIn) details.push(`Retoma: ${lead.tradeIn}`);
-  if (lead.registration) details.push(`Matrícula: ${lead.registration}`);
-
-  const openUrl = summaryUrl(lead);
-
-  return {
-    lead,
-    payload: {
-      app_id: APP_ID,
-      target_channel: 'push',
-      include_aliases: { external_id: [EXTERNAL_ID] },
-      headings: { en: heading.slice(0, 120) },
-      contents: { en: (details.join(' · ') || 'Novo pedido recebido no AutoValorPT').slice(0, 350) },
-      data: {
-        source: 'autovalorpt',
-        kind: isVisit ? 'visit_request' : 'lead',
-        vehicle: lead.vehicle,
-        visit: lead.visit
-      },
-      url: openUrl,
-      idempotency_key: idempotencyKey(text)
-    }
-  };
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'use_post' });
-  if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: 'invalid_origin' });
-  if (rateLimited(req)) return res.status(429).json({ ok: false, error: 'rate_limited' });
-
-  const apiKey = process.env.ONESIGNAL_AUTOVALORPT_API_KEY || process.env.ONESIGNAL_API_KEY;
-  if (!apiKey) return res.status(503).json({ ok: false, error: 'onesignal_not_configured' });
-
-  const text = String(req.body?.text || '').replace(/[<>]/g, '').trim().slice(0, MAX_TEXT);
-  if (!text.startsWith('Olá Carlos, venho do assistente AutoValorPT.')) {
-    return res.status(400).json({ ok: false, error: 'invalid_lead' });
-  }
-
-  const { lead, payload } = buildNotification(text);
-  if (!lead.vehicle || !lead.name || !lead.phone) {
-    return res.status(400).json({ ok: false, error: 'incomplete_lead' });
-  }
-
-  try {
-    const [oneSignalResponse, slack] = await Promise.all([
-      fetch('https://api.onesignal.com/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Key ${apiKey}`
-        },
-        body: JSON.stringify(payload)
-      }),
-      sendSlack(lead)
-    ]);
-
-    const data = await oneSignalResponse.json().catch(() => ({}));
-    if (!oneSignalResponse.ok) {
-      console.error('onesignal_notify_lead_failed', oneSignalResponse.status, data?.errors || data?.error || 'unknown');
-      return res.status(502).json({ ok: false, error: 'onesignal_failed', slack });
-    }
-
-    return res.status(200).json({
-      ok: true,
-      id: data.id || null,
-      onesignal: true,
-      slack: Boolean(slack.ok)
-    });
-  } catch (error) {
-    console.error('notify_lead_error', error?.message || error);
-    return res.status(502).json({ ok: false, error: 'notification_unreachable' });
-  }
-}
+export default createNotifyLeadHandler();
