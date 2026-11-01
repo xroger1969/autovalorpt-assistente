@@ -255,7 +255,8 @@ function buildPayload({ model, intent, vehicle, lead, history, message, retry = 
     : [];
   return {
     model,
-    max_output_tokens: retry ? 600 : 480,
+    reasoning: { effort: 'low' },
+    max_output_tokens: retry ? 4096 : 3072,
     input: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `Assunto escolhido: ${intent || 'pergunta livre'}` },
@@ -277,6 +278,7 @@ async function requestOpenAI(apiKey, payload) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error?.message || 'Falha no serviço de IA.');
+  console.info('AI model response', { requestedModel: payload.model, actualModel: data.model || null, status: data.status || null });
   return parseOutput(data);
 }
 
@@ -302,7 +304,7 @@ export default async function handler(req, res) {
     role: entry.role === 'assistant' ? 'assistant' : 'user',
     content: clean(redactForbidden(entry.content), 800)
   })) : [];
-  const model = process.env.OPENAI_MODEL || 'gpt-5.5';
+  const model = process.env.OPENAI_MODEL || 'gpt-6-astra';
   const vehicle = clean(body.contexto?.viatura || lead.viatura, 200);
 
   let parsed;
