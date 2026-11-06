@@ -323,6 +323,14 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  // Keep the integration behind this existing function to fit the Hobby
+  // function limit. Load image processing only for its dedicated modes.
+  if (req.query?.integration === 'instagram-sync') {
+    return (await import('../lib/instagram-sync-handler.js')).default(req, res);
+  }
+  if (req.query?.integration === 'instagram-image') {
+    return (await import('../lib/instagram-image-handler.js')).default(req, res);
+  }
   if (req.method !== 'GET') return res.status(405).json({ error: 'Use GET.' });
   try {
     const { items, stale } = await loadStock();

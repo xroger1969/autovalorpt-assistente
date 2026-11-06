@@ -8,10 +8,12 @@
     { "source": "/", "destination": "/welcome.html" }
   ],
   "functions": {
-    "api/notify-lead.js": { "maxDuration": 60 }
+    "api/notify-lead.js": { "maxDuration": 60 },
+    "api/stock.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/notify-lead?action=retry-pending", "schedule": "0 8 * * *" }
+    { "path": "/api/notify-lead?action=retry-pending", "schedule": "0 8 * * *" },
+    { "path": "/api/stock?integration=instagram-sync&action=run", "schedule": "0 10 * * *" }
   ],
   "headers": [
     {
