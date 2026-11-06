@@ -9,7 +9,7 @@ const PATH = 'instagram/v1/production/auth.json';
 function fixture(overrides = {}) {
   const memory = memoryBlob(); let clock = 1794000000000;
   const env = { VERCEL_ENV: 'production', INSTAGRAM_USER_ID: '17841400000000000', INSTAGRAM_ACCESS_TOKEN: 'synthetic-bootstrap-token-only', INSTAGRAM_TOKEN_EXPIRES_AT: new Date(clock + 60 * DAY).toISOString(), ADMIN_SESSION_SECRET: 'synthetic-secret-at-least-32-characters', INSTAGRAM_GRAPH_VERSION: 'v26.0', ...overrides };
-  const calls = []; let refreshCount = 0; let failRefresh = false; let wrongAccount = false; let pauseRefresh = null; let invalidRefresh = false;
+  const calls = []; let refreshCount = 0; let failRefresh = false; let wrongAccount = false; let pauseRefresh = null; let invalidRefresh = false; let refreshExpiresIn = 60 * 86400;
   const fetchImpl = async (url, options) => {
     assert.equal(options.redirect, 'error');
     const parsed = new URL(url); const isRefresh = parsed.pathname === '/refresh_access_token';
@@ -23,13 +23,14 @@ function fixture(overrides = {}) {
       refreshCount++;
       if (pauseRefresh) await pauseRefresh;
       if (failRefresh) throw new Error(`provider URL includes ${token} must never escape`);
-      return Response.json(invalidRefresh ? { access_token: 'not enough', expires_in: 60 * 86400 } : { access_token: `synthetic-renewed-token-${refreshCount}`, token_type: 'bearer', expires_in: 60 * 86400 });
+      return Response.json(invalidRefresh ? { access_token: 'not enough', expires_in: 60 * 86400 } : { access_token: `synthetic-renewed-token-${refreshCount}`, token_type: 'bearer', expires_in: refreshExpiresIn });
     }
     return Response.json({ user_id: env.INSTAGRAM_USER_ID, username: wrongAccount && token !== env.INSTAGRAM_ACCESS_TOKEN ? 'someone_else' : 'autovalorpt' });
   };
   const make = () => createInstagramTokenManager({ env, storage: memory.storage, fetchImpl, now: () => clock });
   return { memory, env, calls, make, manager: make(), advance: (ms) => { clock += ms; }, now: () => clock,
     setFail: (value) => { failRefresh = value; }, setWrong: (value) => { wrongAccount = value; }, setInvalid: (value) => { invalidRefresh = value; },
+    setExpirySeconds: (value) => { refreshExpiresIn = value; },
     holdRefresh: () => { let release; pauseRefresh = new Promise((resolve) => { release = resolve; }); return () => { release(); pauseRefresh = null; }; },
     refreshCount: () => refreshCount };
 }
@@ -49,6 +50,24 @@ test('renewed token survives a new process and refreshes weekly with provider-re
   const renewed = await f.manager.resolve(); const nextProcess = f.make(); assert.equal(await nextProcess.resolve(), renewed);
   f.advance(6 * DAY); assert.equal(await nextProcess.resolve(), renewed); assert.equal(f.refreshCount(), 1);
   f.advance(DAY); assert.notEqual(await nextProcess.resolve(), renewed); assert.equal(f.refreshCount(), 2);
+});
+
+test('shorter long-lived renewals refresh one day before expiry and never before 24 hours', async () => {
+  for (const days of [3, 5]) {
+    const f = fixture(); await f.manager.resolve(); f.advance(25 * 3600_000); f.setExpirySeconds(days * 86400);
+    const renewed = await f.manager.resolve(); const status = await f.manager.status();
+    assert.equal(Date.parse(status.expiresAt), f.now() + days * DAY);
+    assert.equal(Date.parse(status.nextRefreshAt), f.now() + (days - 1) * DAY);
+    f.advance((days - 1) * DAY - 1); assert.equal(await f.make().resolve(), renewed); assert.equal(f.refreshCount(), 1);
+    f.advance(1); assert.notEqual(await f.make().resolve(), renewed); assert.equal(f.refreshCount(), 2);
+  }
+});
+
+test('renewals valid for less than three days preserve the previous authorization', async () => {
+  const f = fixture(); await f.manager.resolve(); f.advance(25 * 3600_000); f.setExpirySeconds(3 * 86400 - 1);
+  assert.equal(await f.manager.resolve(), f.env.INSTAGRAM_ACCESS_TOKEN);
+  const status = await f.manager.status(); assert.equal(status.lastError, 'refresh_failed');
+  assert.equal(status.expiresAt, f.env.INSTAGRAM_TOKEN_EXPIRES_AT);
 });
 
 test('concurrent refresh uses one CAS lease; the loser cannot replace the new token', async () => {
