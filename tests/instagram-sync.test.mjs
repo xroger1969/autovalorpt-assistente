@@ -9,32 +9,33 @@ const car = (id, overrides = {}) => ({ id, title: 'Tesla Model 3', description: 
 const csv = (items) => [headers, ...items.map((item) => headers.map((key) => item[key]))].map((row) => row.map((v) => `"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n');
 function fixture(options = {}) {
   const memory = memoryBlob(); const calls = [];
-  const env = { VERCEL_ENV: 'production', INSTAGRAM_SYNC_ENABLED: 'true', INSTAGRAM_ACCESS_TOKEN: 'synthetic-token-only', INSTAGRAM_USER_ID: '17841400000000000', INSTAGRAM_GRAPH_VERSION: 'v26.0', INSTAGRAM_FEED_URL: 'https://docs.google.com/spreadsheets/d/synthetic-test/export?format=csv&gid=0', ADMIN_SESSION_SECRET: 'synthetic-secret-with-at-least-32-characters', INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt-assistente.vercel.app', CRON_SECRET: 'synthetic-cron-secret-at-least-32-characters', ...options.env };
+  const env = { VERCEL_ENV: 'production', INSTAGRAM_SYNC_ENABLED: 'true', INSTAGRAM_ACCESS_TOKEN: 'synthetic-token-only', INSTAGRAM_TOKEN_EXPIRES_AT: new Date(Date.now() + 60 * 86400_000).toISOString(), INSTAGRAM_USER_ID: '17841400000000000', INSTAGRAM_GRAPH_VERSION: 'v26.0', INSTAGRAM_FEED_URL: 'https://docs.google.com/spreadsheets/d/synthetic-test/export?format=csv&gid=0', ADMIN_SESSION_SECRET: 'synthetic-secret-with-at-least-32-characters', INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt-assistente.vercel.app', CRON_SECRET: 'synthetic-cron-secret-at-least-32-characters', ...options.env };
   let items = [car('ID8base01')]; let rawFeed; let accountName = 'autovalorpt'; let containerStatus = 'FINISHED'; let statusSequence = []; let failPublish = false; let failCreate = false; let containerCount = 0;
   const fetchImpl = async (url, settings) => {
     calls.push({ url, method: settings.method || 'GET', body: settings.body });
     if (url.startsWith('https://docs.google.com/')) return new Response(rawFeed ?? csv(items), { headers: { 'content-type': 'text/csv' } });
     const parsed = new URL(url);
-    assert.equal(settings.headers.Authorization, `Bearer ${env.INSTAGRAM_ACCESS_TOKEN}`);
+    assert.equal(settings.headers.Authorization, `Bearer ${options.resolvedToken || env.INSTAGRAM_ACCESS_TOKEN}`);
     assert.equal(parsed.searchParams.has('access_token'), false);
     if (parsed.pathname.endsWith('/me')) return Response.json({ user_id: env.INSTAGRAM_USER_ID, username: accountName });
     if (parsed.pathname.endsWith(`/${env.INSTAGRAM_USER_ID}`)) return Response.json({ id: env.INSTAGRAM_USER_ID, username: accountName });
     if (parsed.pathname.endsWith('/media')) {
-      const persisted = JSON.parse([...memory.records.values()][0].text);
+      const persisted = JSON.parse(memory.records.get('instagram/v1/production/state.json').text);
       assert.equal(persisted.active.phase, 'creating');
       assert.match(new URLSearchParams(settings.body).get('image_url'), /\/api\/stock\?integration=instagram-image&src=/);
       if (failCreate) return Response.json({ error: { code: 100, message: 'provider raw body must not leak' } }, { status: 400 });
       return Response.json({ id: String(900000 + ++containerCount) });
     }
     if (parsed.pathname.endsWith('/media_publish')) {
-      assert.equal(JSON.parse([...memory.records.values()][0].text).active.phase, 'publishing');
+      assert.equal(JSON.parse(memory.records.get('instagram/v1/production/state.json').text).active.phase, 'publishing');
       if (failPublish) throw new Error('synthetic timeout with secret must not leak');
       return Response.json({ id: '80000001' });
     }
     return Response.json({ status_code: statusSequence.shift() || containerStatus });
   };
   let clock = Date.now();
-  const publisher = createInstagramPublisher({ env, fetchImpl, storage: memory.storage, now: () => clock, pollAttempts: options.pollAttempts || 0, pause: async () => {} });
+  const publisher = createInstagramPublisher({ env, fetchImpl, storage: memory.storage, now: () => clock, pollAttempts: options.pollAttempts || 0, pause: async () => {},
+    ...(options.resolvedToken ? { tokenManager: { resolve: async () => options.resolvedToken, status: async () => ({ automaticRefresh: true }) } } : {}) });
   return { publisher, memory, calls, env, advance: (ms) => { clock += ms; }, setItems: (next) => { items = next; }, setRawFeed: (next) => { rawFeed = next; }, setAccount: (next) => { accountName = next; }, setContainerStatus: (next) => { containerStatus = next; }, setStatusSequence: (next) => { statusSequence = next; }, setFailPublish: (next) => { failPublish = next; }, setFailCreate: (next) => { failCreate = next; } };
 }
 
@@ -81,7 +82,7 @@ test('an uncertain publication remains blocked across retries and account status
 
 test('a lost storage acknowledgement after successful publication cannot cause a duplicate', async () => {
   const f = fixture(); await f.publisher.run(); f.setItems([car('ID8base01'), car('ID8new001')]);
-  f.memory.faults.put = (_, value) => value.items.ID8new001?.status === 'published';
+  f.memory.faults.put = (_, value) => value.items?.ID8new001?.status === 'published';
   await assert.rejects(f.publisher.run()); f.memory.faults.put = null; f.advance(91_000);
   assert.equal((await f.publisher.run()).status, 'review_required');
   assert.equal(f.calls.filter((c) => c.url.endsWith('/media_publish')).length, 1);
@@ -154,6 +155,13 @@ test('dry run is read-only and Facebook login selects the correct Graph host', a
   assert.equal(dry.candidateCount, 1); assert.match(dry.nextPost.caption, /Tesla Model 3/);
   assert.equal(f.calls.filter((c) => c.method === 'POST').length, 0);
   assert.ok(f.calls.some((c) => c.url.startsWith('https://graph.facebook.com/v26.0/')));
+});
+
+test('publisher uses the resolved renewed token for account, creation, status and publication', async () => {
+  const f = fixture({ resolvedToken: 'synthetic-renewed-authorization-only' });
+  await f.publisher.run(); f.setItems([car('ID8base01'), car('ID8new001')]);
+  assert.equal((await f.publisher.run()).status, 'published');
+  assert.equal(f.calls.filter((c) => c.url.endsWith('/media_publish')).length, 1);
 });
 
 test('private endpoint rejects anonymous/GET admin mutations, accepts authenticated cron', async () => {

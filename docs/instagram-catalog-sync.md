@@ -12,11 +12,18 @@ Configurar apenas no servidor/Vercel; nunca colocar tokens no código, logs ou c
 | `INSTAGRAM_FEED_URL` | `https://docs.google.com/spreadsheets/d/1RENDbmN9Inyd2fr0FQJJmbe1jMpJl4Psevlawc92uVs/export?format=csv&gid=2105479537` |
 | `INSTAGRAM_USER_ID` | ID confirmado pela Meta para `autovalorpt` |
 | `INSTAGRAM_ACCESS_TOKEN` | Token da conta autorizada, variável sensível |
+| `INSTAGRAM_TOKEN_EXPIRES_AT` | No modo `instagram`, data ISO de expiração devolvida para o token inicial de longa duração |
 | `INSTAGRAM_LOGIN_MODE` | `instagram` ou `facebook`, conforme o fluxo autorizado |
 | `INSTAGRAM_GRAPH_VERSION` | `v26.0` |
 | `INSTAGRAM_PUBLIC_BASE_URL` | `https://autovalorpt-assistente.vercel.app` |
 
-Reutiliza `CRON_SECRET`, `ADMIN_SESSION_SECRET` e o Blob privado OIDC já configurados. Não altera as filas, dados ou envio de contactos. Não usa o token WhatsApp da Watermelon. O modo Instagram Login requer apenas acesso básico e publicação; mensagens/comentários não são necessários. Gerir a validade/renovação do token no fluxo Meta usado; esta integração não faz refresh automático.
+Reutiliza `CRON_SECRET`, `ADMIN_SESSION_SECRET` e o Blob privado OIDC já configurados. Não altera as filas, dados ou envio de contactos. Não usa o token WhatsApp da Watermelon. O modo Instagram Login requer apenas acesso básico e publicação; mensagens/comentários não são necessários.
+
+No modo `instagram`, configurar um token inicial de **longa duração**, com validade conhecida de pelo menos três dias, e a data de expiração devolvida pela Meta. Tokens de uma hora, sem expiração conhecida ou quase expirados são recusados. O primeiro pedido valida `autovalorpt` e guarda a autorização cifrada com AES-256-GCM num Blob privado separado (`instagram/v1/production/auth.json`). A chave é derivada de `ADMIN_SESSION_SECRET`, vinculada à conta e ao token inicial. O valor em Vercel permanece como referência de arranque; os tokens renovados ficam apenas no armazenamento cifrado.
+
+O cron diário verifica a autorização antes de consultar o feed. A primeira renovação fica elegível depois de 25 horas; depois renova a cada sete dias ou um dia antes da expiração, consoante o que ocorrer primeiro, guardando a validade real devolvida pela Meta. Renovações com menos de três dias de validade são recusadas. Uma reserva CAS impede renovações concorrentes. A nova credencial só é persistida depois de confirmar novamente o ID e nome `autovalorpt`. Falhas de renovação conservam a credencial anterior e tentam novamente no dia seguinte; a publicação volta sempre a validar a conta. Se a autorização expirar ou for revogada, bloqueia e exige uma nova ligação. O status privado mostra datas e estado, nunca tokens, URLs de autorização ou respostas brutas.
+
+No modo `facebook`, não chama o endpoint de renovação Instagram e conserva o token do ambiente. Alterar o token inicial ou `ADMIN_SESSION_SECRET` obriga a validar novamente a autorização de arranque; depois de uma rotação, invocar apenas o deployment de produção atual, evitando deployments antigos com credenciais antigas. Nunca apagar os registos de publicações para renovar uma credencial.
 
 ## Arranque e operação
 
@@ -43,6 +50,7 @@ Desativar `INSTAGRAM_SYNC_ENABLED` suspende novas execuções; o estado é prese
 Referências oficiais verificadas em 2026-11-06:
 
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
+- https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login
 - https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media
 - https://vercel.com/docs/vercel-blob/using-blob-sdk
 - https://vercel.com/changelog/cron-jobs-now-support-100-per-project-on-every-plan
