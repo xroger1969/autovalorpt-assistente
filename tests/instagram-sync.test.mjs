@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createInstagramPublisher, instagramCaption, parseInstagramFeed } from '../lib/instagram-publisher.js';
-import { createInstagramSyncHandler } from '../api/instagram-sync.js';
+import { createInstagramSyncHandler } from '../lib/instagram-sync-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const headers = ['id','title','description','availability','condition','price','link','image_link','brand'];
@@ -22,7 +22,7 @@ function fixture(options = {}) {
     if (parsed.pathname.endsWith('/media')) {
       const persisted = JSON.parse([...memory.records.values()][0].text);
       assert.equal(persisted.active.phase, 'creating');
-      assert.match(new URLSearchParams(settings.body).get('image_url'), /\/api\/instagram-image\?src=/);
+      assert.match(new URLSearchParams(settings.body).get('image_url'), /\/api\/stock\?integration=instagram-image&src=/);
       if (failCreate) return Response.json({ error: { code: 100, message: 'provider raw body must not leak' } }, { status: 400 });
       return Response.json({ id: String(900000 + ++containerCount) });
     }

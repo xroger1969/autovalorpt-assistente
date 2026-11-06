@@ -21,7 +21,7 @@ Reutiliza `CRON_SECRET`, `ADMIN_SESSION_SECRET` e o Blob privado OIDC já config
 ## Arranque e operação
 
 1. Publicar com `INSTAGRAM_SYNC_ENABLED=false`. O cron permanece inativo.
-2. Administrador autenticado consulta `GET /api/instagram-sync?action=status` e `GET /api/instagram-sync?action=dry-run`. O segundo valida o CSV e apresenta o próximo texto/foto sem escrever estado nem publicar.
+2. Administrador autenticado consulta `GET /api/stock?integration=instagram-sync&action=status` e `GET /api/stock?integration=instagram-sync&action=dry-run`. O segundo valida o CSV e apresenta o próximo texto/foto sem escrever estado nem publicar.
 3. Depois da autorização da Meta, configurar token/ID, validar a conta e ativar. A primeira execução válida grava todos os IDs atuais como **baseline** e publica zero carros. No estado inicial conhecido existem 11; a fonte atual é sempre revalidada.
 4. Execuções seguintes publicam só IDs novos que estejam `in stock`. Alterar preço ou retirar/repor um ID já publicado ou inicial não cria outro post. Um ID novo visto inicialmente sem stock pode ser publicado quando ficar disponível. O feed original e as suas imagens não são alterados.
 5. Cada foto é entregue à Meta por URL assinado válido duas horas. Apenas a origem OLX permitida é lida. A imagem é convertida em JPEG sRGB e recebe margens neutras quando necessário, sem cortar o automóvel; máximo 1440 px de largura/8 MB.
