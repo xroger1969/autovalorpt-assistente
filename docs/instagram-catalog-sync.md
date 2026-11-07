@@ -9,6 +9,7 @@ Configurar apenas no servidor/Vercel; nunca colocar tokens no código, logs ou c
 | Variável | Valor |
 | --- | --- |
 | `INSTAGRAM_SYNC_ENABLED` | `false` até autorização e validação concluídas; depois `true` |
+| `INSTAGRAM_INCLUDE_EXISTING_STOCK` | `true` para incluir também os carros inicialmente registados como baseline; por defeito `false` |
 | `INSTAGRAM_FEED_URL` | `https://docs.google.com/spreadsheets/d/1RENDbmN9Inyd2fr0FQJJmbe1jMpJl4Psevlawc92uVs/export?format=csv&gid=2105479537` |
 | `INSTAGRAM_USER_ID` | ID confirmado pela Meta para `autovalorpt` |
 | `INSTAGRAM_ACCESS_TOKEN` | Token da conta autorizada, variável sensível |
@@ -30,7 +31,7 @@ No modo `facebook`, não chama o endpoint de renovação Instagram e conserva o 
 1. Publicar com `INSTAGRAM_SYNC_ENABLED=false`. O cron permanece inativo.
 2. Administrador autenticado consulta `GET /api/stock?integration=instagram-sync&action=status` e `GET /api/stock?integration=instagram-sync&action=dry-run`. O segundo valida o CSV e apresenta o próximo texto/foto sem escrever estado nem publicar.
 3. Depois da autorização da Meta, configurar token/ID, validar a conta e ativar. A primeira execução válida grava todos os IDs atuais como **baseline** e publica zero carros. No estado inicial conhecido existem 11; a fonte atual é sempre revalidada.
-4. Execuções seguintes publicam só IDs novos que estejam `in stock`. Alterar preço ou retirar/repor um ID já publicado ou inicial não cria outro post. Um ID novo visto inicialmente sem stock pode ser publicado quando ficar disponível. O feed original e as suas imagens não são alterados.
+4. Execuções seguintes publicam IDs novos que estejam `in stock`. Com `INSTAGRAM_INCLUDE_EXISTING_STOCK=true`, os IDs iniciais ainda não publicados também entram na fila, no máximo um por execução, usando os preços e fotografias atuais. Carros retirados ou sem stock são excluídos. Não se apaga nem reinicia o histórico: IDs já publicados continuam excluídos, mesmo que o preço mude ou sejam retirados e repostos. Um ID novo visto inicialmente sem stock pode ser publicado quando ficar disponível. O feed original e as suas imagens não são alterados.
 5. Cada foto é entregue à Meta por URL assinado válido duas horas. Apenas a origem OLX permitida é lida. A imagem é convertida em JPEG sRGB e recebe margens neutras quando necessário, sem cortar o automóvel; máximo 1440 px de largura/8 MB.
 
 O cron usa UTC: 10:00 em Portugal continental no inverno, 11:00 no verão. A execução anterior das 08:00 para contactos mantém-se. A Vercel suporta 100 cron jobs por projeto em todos os planos; este projeto passa de um para dois e ambos são diários.
