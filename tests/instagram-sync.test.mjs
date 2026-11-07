@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BlobPreconditionFailedError } from '@vercel/blob';
 import { createInstagramPublisher, instagramCaption, parseInstagramFeed } from '../lib/instagram-publisher.js';
 import { createInstagramSyncHandler } from '../lib/instagram-sync-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
@@ -44,6 +45,14 @@ test('first run baselines current stock without creating or publishing media', a
   assert.deepEqual(await f.publisher.run(), { ok: true, status: 'baseline_initialized', count: 11, published: 0 });
   assert.equal(f.calls.filter((c) => c.method === 'POST').length, 0);
   assert.equal((await f.publisher.status()).counts.baseline, 11);
+});
+
+test('a real SDK lease conflict does not create or publish any media', async () => {
+  const f = fixture({ env: { INSTAGRAM_INCLUDE_EXISTING_STOCK: 'true' } });
+  await f.publisher.run();
+  f.memory.faults.put = () => { throw new BlobPreconditionFailedError(); };
+  assert.equal((await f.publisher.run()).status, 'busy');
+  assert.equal(f.calls.filter((call) => call.method === 'POST').length, 0);
 });
 
 test('caption preserves exact cents without inventing commercial conditions', () => {
