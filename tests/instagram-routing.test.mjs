@@ -20,3 +20,10 @@ test('stock method handling remains unchanged without an exact integration selec
     const result = await invoke(query, 'POST'); assert.equal(result.statusCode, 405); assert.equal(result.body.error, 'Use GET.');
   }
 });
+
+test('public post links reject mutation methods and arbitrary media IDs', async () => {
+  assert.equal((await invoke({ integration: 'instagram-post', id: 'ID8new001' }, 'POST')).statusCode, 405);
+  const missing = await invoke({ integration: 'instagram-post', id: '80000001' });
+  assert.equal(missing.statusCode, 404);
+  assert.deepEqual(missing.body, { ok: false, error: 'post_not_found' });
+});
