@@ -51,6 +51,43 @@ test('caption preserves exact cents without inventing commercial conditions', ()
   assert.doesNotMatch(instagramCaption(car('ID8new001')), /garantia|financiamento|desconto/i);
 });
 
+test('opted-in existing stock publishes one per run without resetting history or repeating posts', async () => {
+  const f = fixture({ env: { INSTAGRAM_INCLUDE_EXISTING_STOCK: 'true' } });
+  f.setItems(Array.from({ length: 11 }, (_, i) => car(`ID8base${String(i).padStart(2,'0')}`)));
+  await f.publisher.run();
+  const before = [...f.memory.records.entries()].map(([key, value]) => [key, value.text]);
+  const dry = await f.publisher.dryRun();
+  assert.equal(dry.configuration.includeExistingStock, true);
+  assert.equal(dry.candidateCount, 11);
+  assert.deepEqual([...f.memory.records.entries()].map(([key, value]) => [key, value.text]), before);
+  const published = [];
+  for (let i = 0; i < 11; i++) {
+    const result = await f.publisher.run();
+    assert.equal(result.status, 'published');
+    assert.equal(result.published, 1);
+    published.push(result.id);
+  }
+  assert.equal(new Set(published).size, 11);
+  assert.equal((await f.publisher.run()).status, 'no_new_stock');
+  assert.equal(f.calls.filter((c) => c.url.endsWith('/media_publish')).length, 11);
+  assert.equal((await f.publisher.status()).counts.published, 11);
+});
+
+test('existing stock stays excluded by default and opt-in still excludes sold or removed cars', async () => {
+  const off = fixture(); await off.publisher.run();
+  assert.equal((await off.publisher.dryRun()).candidateCount, 0);
+  assert.equal((await off.publisher.run()).status, 'no_new_stock');
+  const f = fixture({ env: { INSTAGRAM_INCLUDE_EXISTING_STOCK: 'true' } });
+  f.setItems([car('ID8base01'), car('ID8base02'), car('ID8base03')]);
+  await f.publisher.run();
+  f.setItems([car('ID8base02', { availability: 'out of stock' }), car('ID8base03', { price: '21990.00 EUR' })]);
+  assert.equal((await f.publisher.dryRun()).candidateCount, 1);
+  assert.equal((await f.publisher.run()).id, 'ID8base03');
+  const create = f.calls.find((c) => c.url.endsWith('/media'));
+  assert.match(new URLSearchParams(create.body).get('caption'), /21[\s\u00a0]990/);
+  assert.equal((await f.publisher.run()).status, 'no_new_stock');
+});
+
 test('publishes one new in-stock ID and never republishes it, including concurrent runs', async () => {
   const f = fixture(); await f.publisher.run(); f.setItems([car('ID8base01'), car('ID8new001')]);
   const results = await Promise.all([f.publisher.run(), f.publisher.run()]);
