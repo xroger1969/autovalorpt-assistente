@@ -5,6 +5,11 @@ export function memoryBlob() {
   let revision = 0;
   const conflict = () => Object.assign(new Error('Precondition failed'), { name: 'BlobPreconditionFailedError', status: 412 });
   const storage = {
+    async head(path) {
+      const record = records.get(path);
+      if (!record) throw new Error('Mock blob not found');
+      return { etag: record.etag, pathname: path };
+    },
     async get(path, options) {
       calls.push({ method: 'get', path, options });
       if (faults.get?.(path, options)) throw new Error('Mock storage read failure');

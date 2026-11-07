@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BlobPreconditionFailedError } from '@vercel/blob';
 import { createInstagramTokenManager } from '../lib/instagram-token.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
@@ -43,6 +44,13 @@ test('bootstrap stays encrypted, status has no credentials, and refresh waits at
   f.advance(3600_000); assert.match(await f.manager.resolve(), /^synthetic-renewed-token/); assert.equal(f.refreshCount(), 1);
   const status = await f.manager.status(); assert.equal(Date.parse(status.expiresAt), f.now() + 60 * DAY);
   assert.equal(JSON.stringify(status).includes('synthetic'), false);
+});
+
+test('a real SDK refresh lease conflict never contacts the refresh provider', async () => {
+  const f = fixture(); await f.manager.resolve(); f.advance(25 * 3600_000);
+  f.memory.faults.put = () => { throw new BlobPreconditionFailedError(); };
+  await assert.rejects(f.manager.resolve(), { code: 'token_refresh_busy' });
+  assert.equal(f.refreshCount(), 0);
 });
 
 test('renewed token survives a new process and refreshes weekly with provider-returned expiry', async () => {
