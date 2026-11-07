@@ -32,6 +32,7 @@ function fixture(options = {}) {
       if (failPublish) throw new Error('synthetic timeout with secret must not leak');
       return Response.json({ id: '80000001' });
     }
+    if (parsed.pathname.endsWith('/80000001')) return Response.json({ permalink: options.permalink || 'https://www.instagram.com/p/SyntheticPost01/' });
     return Response.json({ status_code: statusSequence.shift() || containerStatus });
   };
   let clock = Date.now();
@@ -53,6 +54,25 @@ test('a real SDK lease conflict does not create or publish any media', async () 
   f.memory.faults.put = () => { throw new BlobPreconditionFailedError(); };
   assert.equal((await f.publisher.run()).status, 'busy');
   assert.equal(f.calls.filter((call) => call.method === 'POST').length, 0);
+});
+
+test('public post lookup returns only the provider link for a confirmed post and never publishes', async () => {
+  const f = fixture(); await f.publisher.run();
+  assert.equal(await f.publisher.postLink('ID8base01'), null);
+  assert.equal(await f.publisher.postLink('80000001'), null);
+  assert.equal(await f.publisher.postLink('ID8unknown'), null);
+  f.setItems([car('ID8base01'), car('ID8new001')]); await f.publisher.run();
+  const writes = f.memory.calls.filter((call) => call.method === 'put').length;
+  const posts = f.calls.filter((call) => call.method === 'POST').length;
+  assert.equal(await f.publisher.postLink('ID8new001'), 'https://www.instagram.com/p/SyntheticPost01/');
+  assert.equal(f.memory.calls.filter((call) => call.method === 'put').length, writes);
+  assert.equal(f.calls.filter((call) => call.method === 'POST').length, posts);
+});
+
+test('post lookup rejects external or malformed provider links', async () => {
+  const f = fixture({ permalink: 'https://example.com/not-instagram' }); await f.publisher.run();
+  f.setItems([car('ID8base01'), car('ID8new001')]); await f.publisher.run();
+  await assert.rejects(f.publisher.postLink('ID8new001'), { code: 'invalid_post_link' });
 });
 
 test('caption preserves exact cents without inventing commercial conditions', () => {

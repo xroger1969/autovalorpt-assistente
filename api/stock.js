@@ -323,6 +323,19 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'instagram-post') {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'method_not_allowed' });
+    const id = typeof req.query.id === 'string' ? req.query.id : '';
+    if (!/^ID[0-9A-Za-z]{5,30}$/.test(id)) return res.status(404).json({ ok: false, error: 'post_not_found' });
+    try {
+      const { createInstagramPublisher } = await import('../lib/instagram-publisher.js');
+      const url = await createInstagramPublisher().postLink(id);
+      if (!url) return res.status(404).json({ ok: false, error: 'post_not_found' });
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
+      return res.status(200).json({ ok: true, url });
+    } catch { return res.status(503).json({ ok: false, error: 'post_link_unavailable' }); }
+  }
   // Keep the integration behind this existing function to fit the Hobby
   // function limit. Load image processing only for its dedicated modes.
   if (req.query?.integration === 'instagram-sync') {
