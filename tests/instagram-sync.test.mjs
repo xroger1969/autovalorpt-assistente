@@ -102,6 +102,19 @@ test('opted-in existing stock publishes one per run without resetting history or
   assert.equal((await f.publisher.status()).counts.published, 11);
 });
 
+test('new stock is prioritized over backlog, newest appended listing first', async () => {
+  const f = fixture({ env: { INSTAGRAM_INCLUDE_EXISTING_STOCK: 'true' } });
+  f.setItems([car('ID8base01'), car('ID8base02')]);
+  await f.publisher.run(); // Establish baseline before arrivals.
+  f.setItems([car('ID8base01'), car('ID8base02'), car('ID8new001'), car('ID8new002')]);
+  const dry = await f.publisher.dryRun();
+  assert.equal(dry.candidateCount, 4);
+  assert.equal(dry.nextPost.id, 'ID8new002');
+  assert.equal((await f.publisher.run()).id, 'ID8new002');
+  assert.equal((await f.publisher.run()).id, 'ID8new001');
+  assert.equal((await f.publisher.run()).id, 'ID8base01');
+});
+
 test('existing stock stays excluded by default and opt-in still excludes sold or removed cars', async () => {
   const off = fixture(); await off.publisher.run();
   assert.equal((await off.publisher.dryRun()).candidateCount, 0);
