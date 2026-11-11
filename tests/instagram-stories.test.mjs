@@ -10,7 +10,8 @@ const publicationPath = 'instagram/v1/production/state.json';
 const fields = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand'];
 const car = (id = 'ID8live01', extra = {}) => ({ id, title: 'Tesla Model Y Long Range', description: '2023 | 42 000 km | Elétrico', availability: 'in stock', condition: 'used', price: '34990.00 EUR', link: `https://www.standvirtual.com/carros/anuncio/tesla-${id}.html`, image_link: `https://ireland.apollo.olxcdn.com/v1/files/${id}/image;q=100;s=600x0`, brand: 'Tesla', ...extra });
 const csv = rows => [fields, ...rows.map(item => fields.map(key => item[key]))].map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
-const permissions = ['instagram_basic', 'instagram_content_publish', 'instagram_manage_contents', 'pages_read_engagement'];
+const permissions = ['instagram_basic', 'instagram_manage_contents', 'pages_read_engagement'];
+const instagramPermissions = ['instagram_business_basic', 'instagram_business_content_publish'];
 
 function fixture(options = {}) {
   const memory = memoryBlob(); const calls = []; const renders = [];
@@ -21,10 +22,11 @@ function fixture(options = {}) {
     INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN: 'synthetic-story-token', INSTAGRAM_RETIREMENTS_GRAPH_VERSION: 'v27.0',
     INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt.example', ADMIN_SESSION_SECRET: 'synthetic-video-signing-secret-32-chars', ...options.env };
   let items = options.items || [car(), car('ID8old001')]; let rawFeed;
-  let granted = [...permissions]; let accountType = 'BUSINESS'; let username = 'autovalorpt'; let linkedId = env.INSTAGRAM_RETIREMENTS_USER_ID;
+  let granted = [...permissions]; let instagramGranted = [...instagramPermissions]; let accountType = 'BUSINESS'; let username = 'autovalorpt'; let linkedId = env.INSTAGRAM_RETIREMENTS_USER_ID;
   let profileId = env.INSTAGRAM_USER_ID; const instagramToken = 'synthetic-instagram-profile-token';
   let publishResult = 'success'; let deleteResult = 'success'; let containerStatus = 'FINISHED';
-  let renderHook, publishHook, containerReadHook, permissionHook, ledgerWriteHook;
+  let renderHook, publishHook, containerReadHook, permissionHook, ledgerWriteHook, storyReadHook;
+  const publishedStories = new Map(); let mappingMode = 'success'; let instagramMediaOverride; let facebookStoriesOverride; let facebookPageResponse;
   let nextContainer = 880000000; let nextMedia = 990000000;
   const publication = { version: 1, accountId: env.INSTAGRAM_USER_ID, username: 'autovalorpt', loginMode: env.INSTAGRAM_LOGIN_MODE,
     sourceHash: createHash('sha256').update(env.INSTAGRAM_FEED_URL).digest('hex'), lastFeedCount: options.lastFeedCount || items.length,
@@ -49,22 +51,25 @@ function fixture(options = {}) {
     const url = new URL(address); const method = settings.method || 'GET';
     calls.push({ url: url.href, method, body: settings.body });
     if (url.hostname === 'docs.google.com') return new Response(rawFeed ?? csv(items), { headers: { 'content-type': 'text/csv' } });
-    if (url.hostname === 'graph.instagram.com') {
+    const instagram = url.hostname === 'graph.instagram.com';
+    assert.ok(instagram || url.hostname === 'graph.facebook.com');
+    assert.equal(url.searchParams.has('access_token'), false);
+    assert.equal(settings.headers.Authorization, `Bearer ${instagram ? instagramToken : env.INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN}`);
+    if (url.pathname.endsWith('/me/permissions')) {
+      await permissionHook?.(); return Response.json({ data: (instagram ? instagramGranted : granted).map(permission => ({ permission, status: 'granted' })) });
+    }
+    if (instagram && url.pathname.endsWith('/me')) {
       assert.equal(method, 'GET'); assert.equal(url.pathname, `/${env.INSTAGRAM_GRAPH_VERSION || 'v26.0'}/me`);
       assert.equal(url.searchParams.get('fields'), 'user_id,username,account_type');
-      assert.equal(url.searchParams.has('access_token'), false); assert.equal(settings.headers.Authorization, `Bearer ${instagramToken}`);
       return Response.json({ user_id: profileId, username, account_type: accountType });
     }
-    assert.equal(url.hostname, 'graph.facebook.com');
-    assert.equal(settings.headers.Authorization, `Bearer ${env.INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN}`);
-    assert.equal(url.searchParams.has('access_token'), false);
-    if (url.pathname.endsWith('/me/permissions')) { await permissionHook?.(); return Response.json({ data: granted.map(permission => ({ permission, status: 'granted' })) }); }
-    if (url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_PAGE_ID}`)) return Response.json({ id: env.INSTAGRAM_RETIREMENTS_PAGE_ID, instagram_business_account: { id: linkedId, username } });
-    if (url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_USER_ID}`)) {
+    if (!instagram && url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_PAGE_ID}`)) return Response.json({ id: env.INSTAGRAM_RETIREMENTS_PAGE_ID, instagram_business_account: { id: linkedId, username } });
+    if (!instagram && url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_USER_ID}`)) {
       assert.equal(url.searchParams.get('fields'), 'id,username');
       return Response.json({ id: env.INSTAGRAM_RETIREMENTS_USER_ID, username });
     }
     if (method === 'POST' && url.pathname.endsWith('/media')) {
+      assert.equal(instagram, true); assert.equal(url.pathname, `/${env.INSTAGRAM_GRAPH_VERSION || 'v26.0'}/${env.INSTAGRAM_USER_ID}/media`);
       const body = new URLSearchParams(settings.body); assert.equal(body.get('media_type'), 'STORIES');
       const video = new URL(body.get('video_url')); assert.equal(video.hostname, 'autovalorpt.example');
       assert.equal(video.searchParams.get('integration'), 'instagram-video'); assert.equal(video.searchParams.has('access_token'), false);
@@ -72,21 +77,43 @@ function fixture(options = {}) {
       return Response.json({ id: String(++nextContainer) });
     }
     if (method === 'POST' && url.pathname.endsWith('/media_publish')) {
+      assert.equal(instagram, true); assert.equal(url.pathname, `/${env.INSTAGRAM_GRAPH_VERSION || 'v26.0'}/${env.INSTAGRAM_USER_ID}/media_publish`);
       const intent = JSON.parse(memory.records.get(ledgerPath).text);
       assert.equal(intent.active.phase, 'publishing', 'Durable claim precedes actual publication');
       await publishHook?.();
       if (publishResult === 'transport') throw new Error('Private transport diagnostic');
       if (publishResult === 'invalid') return Response.json({ success: true });
       if (publishResult === 'rejected') return Response.json({ error: { code: 10, message: 'Private provider diagnostic' } }, { status: 403 });
-      return Response.json({ id: String(++nextMedia) });
+      const id = String(++nextMedia);
+      publishedStories.set(id, { id, facebookId: String(550000000 + nextMedia - 990000000), permalink: `https://www.instagram.com/stories/autovalorpt/${nextMedia + 1000000000}/`, timestamp: new Date(clock).toISOString() });
+      return Response.json({ id });
+    }
+    if (instagram && publishedStories.has(url.pathname.split('/').at(-1))) {
+      assert.equal(method, 'GET'); assert.equal(url.searchParams.get('fields'), 'id,permalink,timestamp');
+      const durable = JSON.parse(memory.records.get(ledgerPath).text);
+      assert.ok(Object.values(durable.items).some(entry => entry.instagramMediaId === url.pathname.split('/').at(-1)), 'IG publication ID is durable before cross-provider readback');
+      await storyReadHook?.();
+      if (mappingMode === 'transport') throw new Error('Mapping read interrupted');
+      const record = publishedStories.get(url.pathname.split('/').at(-1));
+      return Response.json({ id: record.id, permalink: record.permalink, timestamp: record.timestamp, ...instagramMediaOverride });
+    }
+    if (!instagram && url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_USER_ID}/stories`)) {
+      assert.equal(method, 'GET'); assert.equal(url.searchParams.get('fields'), 'id,permalink,media_product_type,timestamp');
+      const records = [...publishedStories.values()].map(record => ({ id: record.facebookId, permalink: record.permalink, timestamp: record.timestamp, media_product_type: 'STORY' }));
+      if (facebookPageResponse) return Response.json(facebookPageResponse(url, records));
+      const data = facebookStoriesOverride || (mappingMode === 'missing' ? [] : mappingMode === 'ambiguous' && records.length ? [...records, { ...records[0], id: '550099999' }] : mappingMode === 'wrong_product' ? records.map(record => ({ ...record, media_product_type: 'FEED' })) : records);
+      return Response.json({ data });
     }
     if (method === 'DELETE') {
+      assert.equal(instagram, false, 'Deletion must use Facebook Login only');
       const id = url.pathname.split('/').at(-1); const intent = JSON.parse(memory.records.get(ledgerPath).text);
-      assert.equal(intent.active.phase, 'deleting'); assert.equal(intent.active.mediaId, id);
+      assert.equal(intent.active.phase, 'deleting'); assert.equal(intent.active.facebookMediaId || intent.active.mediaId, id);
+      assert.equal(publishedStories.has(id), false, 'Instagram-scoped media IDs must never be sent to DELETE');
+      assert.ok([...publishedStories.values()].some(record => record.facebookId === id), 'Delete only a mapped Facebook Story ID');
       if (deleteResult === 'transport') throw new Error('Delete transport interrupted');
       return Response.json({ success: true, deleted_id: deleteResult === 'wrong-id' ? '99999999999' : id });
     }
-    if (url.searchParams.get('fields') === 'status_code') { await containerReadHook?.(); return Response.json({ status_code: containerStatus }); }
+    if (url.searchParams.get('fields') === 'status_code') { assert.equal(instagram, true); await containerReadHook?.(); return Response.json({ status_code: containerStatus }); }
     throw new Error(`Unexpected test request ${method} ${url.pathname}`);
   };
   const renderVideo = async (item, settings) => {
@@ -94,18 +121,22 @@ function fixture(options = {}) {
     return { buffer: Buffer.alloc(2048, 1), mimeType: 'video/mp4', duration: 30, width: 1080, height: 1920 };
   };
   const stories = createInstagramStories({ env, storage: memory.storage, fetchImpl, now: () => clock, renderVideo, tokenManager: { resolve: async () => instagramToken }, pause: async () => {}, pollAttempts: 0 });
-  return { env, memory, calls, renders, stories, publication, getItems: () => items,
+  return { env, memory, calls, renders, stories, publication, publishedStories, getItems: () => items,
     ledger: () => JSON.parse(memory.records.get(ledgerPath).text),
     posts: () => calls.filter(call => call.method === 'POST' && call.url.includes('/media_publish')),
     containers: () => calls.filter(call => call.method === 'POST' && call.url.endsWith('/media')),
     deletes: () => calls.filter(call => call.method === 'DELETE'),
     setItems: value => { items = value; }, setRawFeed: value => { rawFeed = value; },
     setPermissions: value => { granted = value; }, setAccountType: value => { accountType = value; },
+    setInstagramPermissions: value => { instagramGranted = value; },
     setUsername: value => { username = value; }, setLinkedId: value => { linkedId = value; }, setProfileId: value => { profileId = value; },
     setPublishResult: value => { publishResult = value; }, setDeleteResult: value => { deleteResult = value; }, setContainerStatus: value => { containerStatus = value; },
     setRenderHook: value => { renderHook = value; }, setPublishHook: value => { publishHook = value; },
     setContainerReadHook: value => { containerReadHook = value; }, setPermissionHook: value => { permissionHook = value; },
     setLedgerWriteHook: value => { ledgerWriteHook = value; },
+    setStoryReadHook: value => { storyReadHook = value; }, setMappingMode: value => { mappingMode = value; },
+    setInstagramMedia: value => { instagramMediaOverride = value; }, setFacebookStories: value => { facebookStoriesOverride = value; },
+    setFacebookPageResponse: value => { facebookPageResponse = value; },
     advance: milliseconds => { clock += milliseconds; },
     rewriteLedger: change => { const current = memory.records.get(ledgerPath); const value = JSON.parse(current.text); change(value); current.text = JSON.stringify(value); },
   };
@@ -138,6 +169,9 @@ test('explicit first sample requires latest confirmed photo publication and is n
   const f = fixture(); const originalPublication = f.memory.records.get(publicationPath).text;
   assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'published');
   assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'already_processed');
+  assert.equal(f.ledger().publicationProvider, 'instagram');
+  assert.equal(f.ledger().items.ID8live01.mappingStatus, 'ready');
+  assert.notEqual(f.ledger().items.ID8live01.instagramMediaId, f.ledger().items.ID8live01.facebookMediaId);
   assert.equal(f.posts().length, 1); assert.equal(f.memory.records.get(publicationPath).text, originalPublication);
   for (const sampleId of ['ID8old001', 'ID8absent', '../other']) await assert.rejects(f.stories.run({ sampleId }));
   f.advance(49 * 3600_000); await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_test_requires_latest_publication' });
@@ -170,15 +204,22 @@ test('failed or interrupted private previews never automatically publish baselin
   }
 });
 
-test('dry run checks account and permissions without writing media or state', async () => {
+test('dry run authorizes Instagram publishing without Facebook publish permission and writes nothing', async () => {
   const f = fixture(); f.setAccountType('business'); const before = [...f.memory.records.entries()]; const result = await f.stories.dryRun();
   assert.equal(result.authorization.ready, true); assert.equal(result.wouldInitializeBaseline, true);
+  assert.equal(result.authorization.publicationProvider, 'instagram');
   assert.deepEqual([...f.memory.records.entries()], before); assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0);
 });
 
 test('each required permission is enforced before render or publish', async () => {
   for (const omitted of permissions) {
     const f = fixture(); f.setPermissions(permissions.filter(permission => permission !== omitted));
+    const result = await f.stories.run({ sampleId: 'ID8live01' });
+    assert.equal(result.status, 'authorization_required'); assert.deepEqual(result.authorization.missingPermissions, [omitted]);
+    assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
+  }
+  for (const omitted of instagramPermissions) {
+    const f = fixture(); f.setInstagramPermissions(instagramPermissions.filter(permission => permission !== omitted));
     const result = await f.stories.run({ sampleId: 'ID8live01' });
     assert.equal(result.status, 'authorization_required'); assert.deepEqual(result.authorization.missingPermissions, [omitted]);
     assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
@@ -283,7 +324,7 @@ test('unknown publish outcomes block automatic retries and later cars', async ()
     f.setItems([...f.getItems(), car('ID8next01')]);
     assert.equal((await f.stories.run()).status, 'review_required'); assert.equal(f.posts().length, 1);
   }
-  const failedCommit = fixture(); failedCommit.setLedgerWriteHook(state => { if (state.lastResult?.status === 'published') throw new Error('Durable confirmation write failed'); });
+  const failedCommit = fixture(); failedCommit.setLedgerWriteHook(state => { if (state.lastResult?.status === 'mapping_pending') throw new Error('Durable confirmation write failed'); });
   await assert.rejects(failedCommit.stories.run({ sampleId: 'ID8live01' }), /Durable confirmation write failed/);
   assert.equal(failedCommit.ledger().active.phase, 'publishing');
   assert.equal((await failedCommit.stories.run()).status, 'review_required'); assert.equal(failedCommit.posts().length, 1);
@@ -293,8 +334,107 @@ test('unknown publish outcomes block automatic retries and later cars', async ()
   assert.equal((await publishedContainer.stories.run()).status, 'review_required'); assert.equal(publishedContainer.posts().length, 0);
 });
 
+test('missing, ambiguous or unreadable mappings block new publications and recover without reposting', async () => {
+  for (const mode of ['missing', 'ambiguous', 'transport', 'wrong_product']) {
+    const f = fixture(); f.setMappingMode(mode);
+    const first = await f.stories.run({ sampleId: 'ID8live01' });
+    assert.equal(first.status, 'mapping_pending'); assert.equal(first.published, 1);
+    assert.equal(f.ledger().items.ID8live01.status, 'mapping_pending');
+    assert.ok(f.ledger().items.ID8live01.instagramMediaId); assert.equal(f.ledger().items.ID8live01.facebookMediaId, undefined);
+    f.setItems([...f.getItems(), car('ID8next01')]);
+    const retry = await f.stories.run(); assert.equal(retry.status, 'mapping_pending'); assert.equal(retry.published, 0);
+    assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'mapping_pending');
+    assert.equal(f.posts().length, 1); assert.equal(f.renders.length, 1); assert.equal(f.deletes().length, 0);
+    f.setMappingMode('success'); const mapped = await f.stories.run();
+    assert.equal(mapped.status, 'mapped'); assert.equal(mapped.published, 0); assert.equal(f.posts().length, 1);
+    assert.equal(f.ledger().items.ID8live01.mappingStatus, 'ready');
+    assert.equal((await f.stories.run()).id, 'ID8next01'); assert.equal(f.posts().length, 2);
+  }
+});
+
+test('successful publication survives failed mapping commit without another publish request', async () => {
+  const f = fixture(); f.setLedgerWriteHook(state => { if (state.lastResult?.status === 'published') throw new Error('Mapping commit unavailable'); });
+  await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), /Mapping commit unavailable/);
+  assert.equal(f.ledger().active, null); assert.equal(f.ledger().items.ID8live01.status, 'mapping_pending');
+  assert.equal(f.posts().length, 1); f.setLedgerWriteHook(undefined);
+  assert.equal((await f.stories.run()).status, 'mapped'); assert.equal(f.posts().length, 1);
+});
+
+test('unmapped Stories expire from their original publication time without deletion or reposting', async () => {
+  const f = fixture(); f.setMappingMode('missing');
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'mapping_pending');
+  const originalTime = f.ledger().items.ID8live01.at; f.advance(24 * 3600_000);
+  assert.equal((await f.stories.run()).status, 'mapping_pending'); assert.equal(f.ledger().items.ID8live01.at, originalTime);
+  const mediaReads = () => f.calls.filter(call => new URL(call.url).searchParams.get('fields') === 'id,permalink,timestamp').length;
+  const beforeExpiry = mediaReads(); f.advance(3600_001); f.setItems([...f.getItems(), car('ID8next01')]);
+  const result = await f.stories.run(); assert.equal(result.status, 'expired'); assert.equal(result.published, 0);
+  assert.equal(f.ledger().items.ID8live01.mappingStatus, 'expired_unmapped'); assert.equal(f.ledger().items.ID8live01.at, originalTime);
+  assert.equal(mediaReads(), beforeExpiry); assert.equal(f.deletes().length, 0); assert.equal(f.posts().length, 1);
+  f.setMappingMode('success'); assert.equal((await f.stories.run()).id, 'ID8next01'); assert.equal(f.posts().length, 2);
+});
+
+test('mapping reads every bounded Story page and refuses incomplete pagination before publishing', async () => {
+  const complete = fixture(); complete.setFacebookPageResponse((url, records) => url.searchParams.get('after') === 'second' ? { data: records } :
+    { data: [], paging: { next: 'https://graph.facebook.com/ignored-next', cursors: { after: 'second' } } });
+  assert.equal((await complete.stories.run({ sampleId: 'ID8live01' })).status, 'published');
+  assert.ok(complete.calls.some(call => new URL(call.url).searchParams.get('after') === 'second'));
+  assert.equal(complete.calls.some(call => call.url.includes('ignored-next')), false, 'Only validated graph resource and cursor are used');
+  for (const response of [() => ({ data: [], paging: { next: 'https://evil.example/untrusted', cursors: {} } }),
+    url => ({ data: [], paging: { next: 'https://graph.facebook.com/more', cursors: { after: url.searchParams.get('after') || 'repeat' } } }),
+    url => ({ data: [], paging: { next: 'https://graph.facebook.com/more', cursors: { after: String(Number(url.searchParams.get('after') || 0) + 1) } } })]) {
+    const f = fixture(); f.setFacebookPageResponse(response);
+    await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_mapping_list_incomplete' });
+    assert.equal(f.posts().length, 0); assert.equal(f.renders.length, 0);
+    assert.ok(f.calls.filter(call => call.url.includes('/stories?')).length <= 5);
+  }
+});
+
+test('retirement rechecks both provider identities and exact Story permalink before DELETE', async () => {
+  const changes = [
+    [f => f.setInstagramMedia({ id: '990099999' }), 'story_mapping_identity_invalid'],
+    [f => f.setInstagramMedia({ permalink: 'https://www.instagram.com/stories/unrelated/1990000001/' }), 'story_mapping_identity_invalid'],
+    [f => f.setInstagramMedia({ permalink: 'https://www.instagram.com/p/1990000001/' }), 'story_mapping_identity_invalid'],
+    [f => f.setInstagramMedia({ timestamp: '2026-11-11T12:00:01Z' }), 'story_mapping_timestamp_mismatch'],
+    [f => { const item = [...f.publishedStories.values()][0]; f.setFacebookStories([{ id: '550099999', permalink: item.permalink, timestamp: item.timestamp, media_product_type: 'STORY' }]); }, 'story_mapping_identity_changed'],
+    [f => f.setMappingMode('ambiguous'), 'story_mapping_ambiguous'],
+    [f => { const item = [...f.publishedStories.values()][0]; f.setFacebookStories([
+      { id: item.facebookId, permalink: item.permalink, timestamp: item.timestamp, media_product_type: 'STORY' },
+      { id: '550099999', permalink: item.permalink, timestamp: '2026-11-11T12:00:01Z', media_product_type: 'STORY' },
+    ]); }, 'story_mapping_ambiguous'],
+    [f => f.setMappingMode('wrong_product'), 'story_mapping_missing'],
+  ];
+  for (const [alter, code] of changes) {
+    const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); alter(f);
+    f.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
+    await assert.rejects(f.stories.run(), { code }); assert.equal(f.deletes().length, 0); assert.equal(f.posts().length, 1);
+  }
+  const restored = fixture(); await restored.stories.run({ sampleId: 'ID8live01' });
+  restored.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
+  restored.setStoryReadHook(() => restored.setItems([car(), car('ID8old001')]));
+  await restored.stories.run(); assert.equal(restored.deletes().length, 0, 'Current stock is read again after provider identity checks');
+});
+
+test('only unpublished legacy ledgers migrate and old Facebook containers never resume on Instagram', async () => {
+  const baseline = fixture(); await baseline.stories.run(); baseline.rewriteLedger(state => { delete state.publicationProvider; });
+  assert.equal((await baseline.stories.run()).status, 'no_new_stock'); assert.equal(baseline.ledger().publicationProvider, 'instagram');
+  for (const kind of ['published', 'old-active', 'wrong-provider', 'active-provider']) {
+    const f = fixture();
+    if (kind === 'published') await f.stories.run({ sampleId: 'ID8live01' });
+    else if (kind === 'old-active' || kind === 'active-provider') { f.setContainerStatus('IN_PROGRESS'); await f.stories.run({ sampleId: 'ID8live01' }); }
+    else await f.stories.run();
+    f.rewriteLedger(state => {
+      if (kind === 'wrong-provider') state.publicationProvider = 'facebook';
+      else if (kind === 'active-provider') state.active.provider = 'facebook';
+      else delete state.publicationProvider;
+    });
+    const previousPosts = f.posts().length; const previousContainers = f.containers().length;
+    f.advance(7 * 60_000); await assert.rejects(f.stories.run(), { code: 'story_provider_binding_changed' });
+    assert.equal(f.posts().length, previousPosts); assert.equal(f.containers().length, previousContainers);
+  }
+});
+
 test('explicit unavailable Story is deleted by the recorded Facebook ID and never twice', async () => {
-  const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); const mediaId = f.ledger().items.ID8live01.mediaId;
+  const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); const mediaId = f.ledger().items.ID8live01.facebookMediaId;
   f.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
   await f.stories.run(); assert.equal(f.ledger().items.ID8live01.status, 'retired');
   assert.equal(f.deletes().length, 1); assert.equal(new URL(f.deletes()[0].url).pathname.split('/').at(-1), mediaId);
