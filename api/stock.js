@@ -323,6 +323,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'instagram-video') {
+    return (await import('../lib/instagram-video-access.js')).default(req, res);
+  }
   if (req.query?.integration === 'instagram-post') {
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'method_not_allowed' });
