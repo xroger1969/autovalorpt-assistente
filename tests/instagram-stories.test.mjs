@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { BlobNotFoundError } from '@vercel/blob';
 import { createInstagramStories, storyFingerprint } from '../lib/instagram-stories.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
@@ -33,7 +34,7 @@ function fixture(options = {}) {
   const baseHead = memory.storage.head; const basePut = memory.storage.put;
   memory.storage.head = async (path, options) => {
     const entry = memory.records.get(path);
-    if (!entry) throw Object.assign(new Error('Mock blob not found'), { name: 'BlobNotFoundError', status: 404 });
+    if (!entry) throw new BlobNotFoundError();
     const result = await baseHead(path, options);
     return { ...result, size: Buffer.byteLength(entry.text), contentType: path.endsWith('.mp4') ? 'video/mp4' : 'application/json' };
   };
@@ -142,7 +143,11 @@ test('explicit first sample requires latest confirmed photo publication and is n
   f.advance(49 * 3600_000); await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_test_requires_latest_publication' });
 });
 
-test('private preview persists video but never publishes or queries Meta', async () => {
+test('private preview renders an SDK BlobNotFoundError cache miss without publishing', async () => {
+  const missing = new BlobNotFoundError();
+  assert.equal(missing.name, 'Error');
+  assert.equal(missing.status, undefined);
+  assert.equal(missing.statusCode, undefined);
   const f = fixture({ env: { INSTAGRAM_STORIES_ENABLED: undefined } });
   const result = await f.stories.preview('ID8live01');
   assert.equal(result.status, 'preview_ready'); assert.equal(result.published, 0); assert.match(result.videoUrl, /signature=/);
