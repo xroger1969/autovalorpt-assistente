@@ -9,12 +9,13 @@
   ],
   "functions": {
     "api/notify-lead.js": { "maxDuration": 60 },
-    "api/stock.js": { "maxDuration": 60 }
+    "api/stock.js": { "maxDuration": 300, "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/fonts/**}" }
   },
   "crons": [
     { "path": "/api/notify-lead?action=retry-pending", "schedule": "0 8 * * *" },
     { "path": "/api/stock?integration=instagram-sync&action=retirement-run", "schedule": "0 9 * * *" },
-    { "path": "/api/stock?integration=instagram-sync&action=run", "schedule": "0 10 * * *" }
+    { "path": "/api/stock?integration=instagram-sync&action=run", "schedule": "0 10 * * *" },
+    { "path": "/api/stock?integration=instagram-sync&action=stories-run", "schedule": "0 11 * * *" }
   ],
   "headers": [
     {
