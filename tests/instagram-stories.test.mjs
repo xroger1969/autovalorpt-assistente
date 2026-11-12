@@ -22,7 +22,8 @@ function fixture(options = {}) {
     INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN: 'synthetic-story-token', INSTAGRAM_RETIREMENTS_GRAPH_VERSION: 'v27.0',
     INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt.example', ADMIN_SESSION_SECRET: 'synthetic-video-signing-secret-32-chars', ...options.env };
   let items = options.items || [car(), car('ID8old001')]; let rawFeed;
-  let granted = [...permissions]; let instagramGranted = [...instagramPermissions]; let accountType = 'BUSINESS'; let username = 'autovalorpt'; let linkedId = env.INSTAGRAM_RETIREMENTS_USER_ID;
+  let granted = [...permissions]; let accountType = 'BUSINESS'; let username = 'autovalorpt'; let linkedId = env.INSTAGRAM_RETIREMENTS_USER_ID;
+  let quotaResponse = { data: [{ quota_usage: 0, config: { quota_total: 100, quota_duration: 86400 } }] }; let quotaRejected = false;
   let profileId = env.INSTAGRAM_USER_ID; const instagramToken = 'synthetic-instagram-profile-token';
   let publishResult = 'success'; let deleteResult = 'success'; let containerStatus = 'FINISHED';
   let renderHook, publishHook, containerReadHook, permissionHook, ledgerWriteHook, storyReadHook;
@@ -56,7 +57,13 @@ function fixture(options = {}) {
     assert.equal(url.searchParams.has('access_token'), false);
     assert.equal(settings.headers.Authorization, `Bearer ${instagram ? instagramToken : env.INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN}`);
     if (url.pathname.endsWith('/me/permissions')) {
-      await permissionHook?.(); return Response.json({ data: (instagram ? instagramGranted : granted).map(permission => ({ permission, status: 'granted' })) });
+      assert.equal(instagram, false, 'Instagram Login does not support the /me/permissions edge');
+      await permissionHook?.(); return Response.json({ data: granted.map(permission => ({ permission, status: 'granted' })) });
+    }
+    if (instagram && url.pathname.endsWith('/content_publishing_limit')) {
+      assert.equal(method, 'GET'); assert.equal(url.pathname, `/${env.INSTAGRAM_GRAPH_VERSION || 'v26.0'}/${env.INSTAGRAM_USER_ID}/content_publishing_limit`);
+      assert.equal(url.searchParams.get('fields'), 'quota_usage,config');
+      return quotaRejected ? Response.json({ error: { code: 10, message: 'Provider denies the publishing capability probe' } }, { status: 403 }) : Response.json(quotaResponse);
     }
     if (instagram && url.pathname.endsWith('/me')) {
       assert.equal(method, 'GET'); assert.equal(url.pathname, `/${env.INSTAGRAM_GRAPH_VERSION || 'v26.0'}/me`);
@@ -128,7 +135,7 @@ function fixture(options = {}) {
     deletes: () => calls.filter(call => call.method === 'DELETE'),
     setItems: value => { items = value; }, setRawFeed: value => { rawFeed = value; },
     setPermissions: value => { granted = value; }, setAccountType: value => { accountType = value; },
-    setInstagramPermissions: value => { instagramGranted = value; },
+    setQuotaResponse: value => { quotaResponse = value; }, setQuotaRejected: value => { quotaRejected = value; },
     setUsername: value => { username = value; }, setLinkedId: value => { linkedId = value; }, setProfileId: value => { profileId = value; },
     setPublishResult: value => { publishResult = value; }, setDeleteResult: value => { deleteResult = value; }, setContainerStatus: value => { containerStatus = value; },
     setRenderHook: value => { renderHook = value; }, setPublishHook: value => { publishHook = value; },
@@ -173,8 +180,37 @@ test('explicit first sample requires latest confirmed photo publication and is n
   assert.equal(f.ledger().items.ID8live01.mappingStatus, 'ready');
   assert.notEqual(f.ledger().items.ID8live01.instagramMediaId, f.ledger().items.ID8live01.facebookMediaId);
   assert.equal(f.posts().length, 1); assert.equal(f.memory.records.get(publicationPath).text, originalPublication);
-  for (const sampleId of ['ID8old001', 'ID8absent', '../other']) await assert.rejects(f.stories.run({ sampleId }));
+  for (const sampleId of ['ID8old001', 'ID8absent', '../other', '', null]) await assert.rejects(f.stories.run({ sampleId }));
   f.advance(49 * 3600_000); await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_test_requires_latest_publication' });
+});
+
+test('explicit sample publishes only its ID while a newer queued vehicle stays queued', async () => {
+  const f = fixture(); await f.stories.run();
+  const originalPublication = f.memory.records.get(publicationPath).text;
+  f.setItems([...f.getItems(), car('ID8newer1')]);
+  const result = await f.stories.run({ sampleId: 'ID8live01' });
+  assert.equal(result.status, 'published'); assert.equal(result.id, 'ID8live01');
+  assert.deepEqual(f.renders.map(item => item.id), ['ID8live01']); assert.equal(f.posts().length, 1);
+  assert.equal(f.ledger().items.ID8live01.status, 'published'); assert.equal(f.ledger().items.ID8newer1.status, 'queued');
+  const beforeRetry = f.memory.records.get(ledgerPath).text;
+  const retry = await f.stories.run({ sampleId: 'ID8live01' });
+  assert.equal(retry.status, 'already_processed'); assert.equal(retry.published, 0);
+  assert.equal(f.posts().length, 1); assert.equal(f.renders.length, 1);
+  assert.equal(f.memory.records.get(ledgerPath).text, beforeRetry); assert.equal(f.memory.records.get(publicationPath).text, originalPublication);
+  assert.equal((await f.stories.run()).id, 'ID8newer1'); assert.equal(f.posts().length, 2);
+});
+
+test('explicit sample cannot resume another vehicle container or fall back from an invalid ID', async () => {
+  const f = fixture(); await f.stories.run();
+  f.setItems([...f.getItems(), car('ID8newer1')]); f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.stories.run()).status, 'preparing'); f.advance(7 * 60_000); f.setContainerStatus('FINISHED');
+  const before = f.memory.records.get(ledgerPath).text;
+  const result = await f.stories.run({ sampleId: 'ID8live01' });
+  assert.equal(result.status, 'busy'); assert.equal(result.id, 'ID8newer1'); assert.equal(result.published, 0);
+  assert.equal(f.posts().length, 0); assert.equal(f.renders.length, 1); assert.equal(f.memory.records.get(ledgerPath).text, before);
+  for (const sampleId of ['', null, 'ID8absent']) await assert.rejects(f.stories.run({ sampleId }));
+  assert.equal(f.posts().length, 0); assert.equal(f.memory.records.get(ledgerPath).text, before);
+  assert.equal((await f.stories.run()).id, 'ID8newer1'); assert.equal(f.posts().length, 1);
 });
 
 test('private preview renders an SDK BlobNotFoundError cache miss without publishing', async () => {
@@ -208,22 +244,55 @@ test('dry run authorizes Instagram publishing without Facebook publish permissio
   const f = fixture(); f.setAccountType('business'); const before = [...f.memory.records.entries()]; const result = await f.stories.dryRun();
   assert.equal(result.authorization.ready, true); assert.equal(result.wouldInitializeBaseline, true);
   assert.equal(result.authorization.publicationProvider, 'instagram');
+  assert.equal(result.authorization.permissionCheck, 'provider_enforced'); assert.deepEqual(result.authorization.requiredPermissions, instagramPermissions);
+  assert.equal(f.calls.some(call => new URL(call.url).hostname === 'graph.instagram.com' && new URL(call.url).pathname.endsWith('/me/permissions')), false);
   assert.deepEqual([...f.memory.records.entries()], before); assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0);
 });
 
-test('each required permission is enforced before render or publish', async () => {
+test('each required Facebook permission is enforced before render or publish', async () => {
   for (const omitted of permissions) {
     const f = fixture(); f.setPermissions(permissions.filter(permission => permission !== omitted));
     const result = await f.stories.run({ sampleId: 'ID8live01' });
     assert.equal(result.status, 'authorization_required'); assert.deepEqual(result.authorization.missingPermissions, [omitted]);
     assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
   }
-  for (const omitted of instagramPermissions) {
-    const f = fixture(); f.setInstagramPermissions(instagramPermissions.filter(permission => permission !== omitted));
-    const result = await f.stories.run({ sampleId: 'ID8live01' });
-    assert.equal(result.status, 'authorization_required'); assert.deepEqual(result.authorization.missingPermissions, [omitted]);
+});
+
+test('Instagram capability rejection or malformed quota prevents writes and publishing', async () => {
+  const rejected = fixture(); rejected.setQuotaRejected(true);
+  await assert.rejects(rejected.stories.run({ sampleId: 'ID8live01' }), { code: 'story_provider_rejected' });
+  assert.equal(rejected.renders.length, 0); assert.equal(rejected.posts().length, 0); assert.equal(rejected.memory.records.has(ledgerPath), false);
+  for (const quota of [{}, { data: [] }, { data: [{}] },
+    { data: [{ quota_usage: -1, config: { quota_total: 100, quota_duration: 86400 } }] },
+    { data: [{ quota_usage: '0', config: { quota_total: 100, quota_duration: 86400 } }] },
+    { data: [{ quota_usage: Number.MAX_SAFE_INTEGER + 1, config: { quota_total: 100, quota_duration: 86400 } }] },
+    { data: [{ quota_usage: 0, config: { quota_total: 0, quota_duration: 86400 } }] },
+    { data: [{ quota_usage: 0, config: { quota_total: '100', quota_duration: 86400 } }] },
+    { data: [{ quota_usage: 0, config: { quota_total: Number.MAX_SAFE_INTEGER + 1, quota_duration: 86400 } }] },
+    ...[0, -1, 1.5, '86400', null, Number.MAX_SAFE_INTEGER + 1].map(quota_duration => ({ data: [{ quota_usage: 0, config: { quota_total: 100, quota_duration } }] }))]) {
+    const f = fixture(); f.setQuotaResponse(quota);
+    await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }));
     assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
   }
+});
+
+test('publishing preflight uses live capacity and treats duration as optional metadata', async () => {
+  for (const config of [{ quota_total: 7 }, { quota_total: 7, quota_duration: 3600 }]) {
+    const f = fixture(); f.setQuotaResponse({ data: [{ quota_usage: 6, config }] });
+    const result = await f.stories.dryRun();
+    assert.equal(result.authorization.ready, true);
+    assert.deepEqual(result.authorization.publishingQuota, { usage: 6, total: 7,
+      ...(config.quota_duration !== undefined ? { durationSeconds: config.quota_duration } : {}) });
+    assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
+  }
+});
+
+test('exhausted Instagram publishing quota is not ready and never publishes', async () => {
+  const f = fixture(); f.setQuotaResponse({ data: [{ quota_usage: 100, config: { quota_total: 100, quota_duration: 86400 } }] });
+  const result = await f.stories.run({ sampleId: 'ID8live01' });
+  assert.equal(result.status, 'authorization_required'); assert.equal(result.authorization.ready, false);
+  assert.equal(result.authorization.reason, 'story_publishing_limit_reached');
+  assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0); assert.equal(f.memory.records.has(ledgerPath), false);
 });
 
 test('creator or unknown account type cannot publish a Story', async () => {
