@@ -16,6 +16,50 @@ const asProduct = (item) => ({ id: item.id === items[0].id ? '111111111111' : '2
   availability: 'in stock', price: item.price, currency: 'EUR', review_status: 'approved', visibility: 'published', product_feed: { id: FEED } });
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
+test('different source and feed counts survive persistence and status reads', async () => {
+  const f = fixture({ auditSource: async () => ({ valid: false, reason: 'source_feed_mismatch', sourceCount: 9, expectedCount: 7 }) });
+  const report = await f.service.run();
+  assert.equal(report.status, 'source_invalid');
+  assert.equal(report.sourceCount, 9);
+  assert.equal(report.expectedCount, 7);
+  const saved = (await f.service.status()).lastResult;
+  assert.equal(saved.sourceCount, 9);
+  assert.equal(saved.expectedCount, 7);
+  assert.equal(saved.catalogConfirmed, false);
+  assert.equal(f.calls.length, 0);
+});
+
+test('an unreadable source never inherits the known feed count', async () => {
+  const f = fixture({ auditSource: async () => ({ valid: false, reason: 'source_unavailable', expectedCount: 7 }) });
+  assert.equal((await f.service.run()).sourceCount, null);
+  const saved = (await f.service.status()).lastResult;
+  assert.equal(saved.sourceCount, null);
+  assert.equal(saved.expectedCount, 7);
+});
+
+test('source count survives successful audits and invalid item validation', async () => {
+  for (const invalid of [false, true]) {
+    const f = fixture({ auditSource: async () => ({ valid: true, sourceCount: 2, expectedCount: 2,
+      items: items.map(item => ({ ...item, ...(invalid ? { id: 'invalid' } : {}) })) }) });
+    const report = await f.service.run();
+    assert.equal(report.status, invalid ? 'source_invalid' : 'catalog_matches');
+    assert.equal(report.sourceCount, 2);
+    assert.equal((await f.service.status()).lastResult.sourceCount, 2);
+  }
+});
+
+test('legacy saved reports without a source count remain unknown', async () => {
+  const f = fixture();
+  await f.service.run();
+  const record = f.blob.records.get(STATE);
+  const state = JSON.parse(record.text);
+  delete state.lastResult.sourceCount;
+  record.text = JSON.stringify(state);
+  const report = (await f.service.status()).lastResult;
+  assert.equal(report.sourceCount, null);
+  assert.equal(report.expectedCount, 2);
+});
+
 function fixture(options = {}) {
   const blob = options.blob || memoryBlob();
   const calls = [];
