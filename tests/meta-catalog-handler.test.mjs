@@ -12,7 +12,7 @@ function response() {
 function setup() {
   const calls = []; const logs = [];
   const catalog = Object.fromEntries(['status', 'check', 'run'].map(action => [action, async () => {
-    calls.push(action); return { ok: true, status: 'catalog_matches', expectedCount: 9, actualCount: 9, catalogConfirmed: true };
+    calls.push(action); return { ok: true, status: 'catalog_matches', sourceCount: 9, expectedCount: 9, actualCount: 9, catalogConfirmed: true };
   }]));
   const handle = createMetaCatalogHandler({ env: { CRON_SECRET: secret, INSTAGRAM_STORY_WORKER_SECRET: 'different-story-secret-for-tests-only-32' },
     catalog, authorizeAdmin: req => req.admin === true, log: (...entry) => logs.push(entry) });
@@ -51,6 +51,7 @@ test('only the existing cron credential allows scheduled runs without a browser'
   assert.deepEqual(calls, ['run']);
   assert.equal(logs[0][0], 'meta_catalog_result');
   assert.equal(logs[0][1].catalogConfirmed, true);
+  assert.equal(logs[0][1].sourceCount, 9);
   assert.match(result.headers['Cache-Control'], /no-store/);
 });
 

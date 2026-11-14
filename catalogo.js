@@ -54,7 +54,7 @@
     configuration = data.configuration || configuration;
     report = data.lastResult || data.report || (data.status ? data : null);
     const r = report || {};
-    $('sourceCount').textContent = count(r.sourceCount ?? r.source?.sourceCount ?? r.expectedCount);
+    $('sourceCount').textContent = count(r.sourceCount);
     $('feedCount').textContent = count(r.expectedCount);
     $('metaCount').textContent = count(r.actualCount);
     const known = labels[r.status];
