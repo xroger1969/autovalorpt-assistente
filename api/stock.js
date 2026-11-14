@@ -323,6 +323,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'whatsapp-status') {
+    return (await import('../lib/whatsapp-status-handler.js')).default(req, res);
+  }
   if (req.query?.integration === 'morning-flow') {
     return (await import('../lib/morning-flow-handler.js')).default(req, res);
   }

@@ -20,6 +20,7 @@ async function dashboard(options = {}) {
     const u = new URL(endpoint, 'https://example.invalid'); const integration = u.searchParams.get('integration');
     if (integration === 'morning-flow') return response(options.cycle || { ok: true, status: 'not_started', day: u.searchParams.get('day') });
     if (integration === 'meta-catalog') return response(options.catalog || { configuration: { enabled: false }, lastResult: { status: 'authorization_required', sourceCount: 9, expectedCount: 9, actualCount: null, checkedAt: startedAt, authorization: { ready: false } } });
+    if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
     return response({ configuration: { enabled: true }, lastResult: { status: 'no_new_stock', at: startedAt, published: 0 } });
   };
   vm.runInNewContext(script, { document, fetch, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
@@ -139,4 +140,41 @@ test('a readable final check with unknown outcome remains unconfirmed', async ()
   const app = await dashboard({ cycle });
   assert.equal(app.get('cycleBadge').textContent, 'Terminada com pendências');
   assert.match(app.get('stepsList').children.at(-1).children.at(-1).textContent, /retiradas/);
+});
+
+test('WhatsApp observed publication is separate from automatic execution and device access', async () => {
+  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true, expiresAt: '2027-02-12T08:00:00Z' }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, observation: 'Viatura e preço visíveis no meu Estado.' } } });
+  assert.equal(app.get('whatsappBadge').textContent, 'Última publicação observada');
+  assert.match(app.get('whatsappSummary').textContent, /Automação ainda em validação/);
+  assert.match(app.get('whatsappAccess').textContent, /sessão ligada no WhatsApp é verificada separadamente/);
+  assert.match(app.get('whatsappLast').textContent, /IDabcde1.*observada.*Não é uma confirmação da API/);
+  assert.ok(app.calls.some(call => call.endpoint.includes('integration=whatsapp-status&action=status') && !call.init.method));
+});
+
+test('uncertain WhatsApp attempt overrides an earlier observed publication and revocation remains explicit', async () => {
+  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', blocked: true, active: { phase: 'unknown', startedAt }, device: { valid: false, revokedAt: startedAt }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: '2026-11-13T08:00:00Z' } } });
+  assert.equal(app.get('whatsappBadge').textContent, 'Resultado incerto — não repetir');
+  assert.equal(app.get('whatsappBadge').className, 'badge error');
+  assert.match(app.get('whatsappAccess').textContent, /revogado.*não termina a sessão no WhatsApp/);
+  assert.match(app.get('whatsappTime').textContent, /Tentativa atual:.*Último registo:/);
+});
+
+test('closed WhatsApp attempt does not claim publication and read failure does not hide other services', async () => {
+  const closed = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true, expiresAt: startedAt }, lastResult: { status: 'closed_without_publication_confirmation', id: 'IDabcde1', at: startedAt } } });
+  assert.equal(closed.get('whatsappBadge').textContent, 'Tentativa encerrada sem confirmação');
+  assert.match(closed.get('whatsappLast').textContent, /sem confirmação de publicação/);
+  const unavailable = await dashboard({ fetch: endpoint => endpoint.includes('integration=whatsapp-status') ? response({ error: 'status_state_invalid' }, 503) : null });
+  assert.equal(unavailable.get('whatsappBadge').textContent, 'Leitura indisponível');
+  assert.equal(unavailable.get('dashboardView').hidden, false);
+  assert.equal(unavailable.get('sourceCount').textContent, '9');
+});
+
+test('WhatsApp private observation is cleared when authentication expires', async () => {
+  let expired = false;
+  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, observation: 'Uma observação privada.' } }, fetch: endpoint => expired && endpoint.includes('integration=whatsapp-status') ? response({ error: 'status_unauthorized' }, 401) : null });
+  assert.match(app.get('whatsappLast').textContent, /observação privada/);
+  expired = true; app.tick(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.get('dashboardView').hidden, true);
+  assert.equal(app.get('whatsappLast').textContent, '');
+  assert.equal(app.get('whatsappBadge').textContent, 'Por consultar');
 });
