@@ -17,6 +17,10 @@
     status_observation_required: 'Confirme a conta e descreva o vídeo que viu em «O meu estado».',
     status_attempt_mismatch: 'A tentativa já não pertence a este acesso. Atualize o estado.',
     status_publication_not_started: 'Ainda não foi registado o início desta publicação.',
+    status_withdrawal_changed: 'O Estado já não reúne as condições de retirada. Confirme o registo e o stock; não elimine outro Estado.',
+    status_removal_observation_required: 'Identifique sem ambiguidades o Estado nesta conta e registe o que observou antes e depois da eliminação.',
+    status_removal_not_started: 'Ainda não foi registado o início desta retirada.',
+    status_no_live_publications: 'Não há publicações próprias registadas ainda dentro da janela de 24 horas.',
   };
   const endpoint = (action, extra = {}) => `/api/stock?${new URLSearchParams({ integration: 'whatsapp-status', action, ...extra })}`;
   async function api(action, body) {
@@ -32,6 +36,8 @@
   function render(data) {
     if (state?.active?.attemptId !== data.active?.attemptId) {
       $('visible').checked = false; $('observation').value = ''; $('account').value = '';
+      for (const id of ['withdrawalVisible', 'withdrawalUnambiguous', 'withdrawalActionObserved', 'withdrawalAbsent']) $(id).checked = false;
+      for (const id of ['withdrawalBeforeObservation', 'withdrawalAfterObservation', 'withdrawalAccount']) $(id).value = '';
     }
     state = data; $('private').hidden = false; $('login').hidden = true;
     $('adminControls').hidden = data.role !== 'admin';
@@ -40,8 +46,11 @@
     $('device').textContent = !data.device ? 'Ainda sem dispositivo autorizado.' : data.device.revokedAt ? `Acesso revogado em ${format(data.device.revokedAt)}.` : !data.device.valid ? 'A autorização expirou ou foi invalidada.' : `${data.device.thisDevice ? 'Este dispositivo está autorizado' : 'Outro dispositivo está autorizado'} até ${format(data.device.expiresAt)}.`;
     $('claim').hidden = !selected || !data.device?.thisDevice || data.blocked;
     $('plan').disabled = busy || data.blocked;
-    const active = data.active; $('attempt').hidden = !active; $('attemptDetails').replaceChildren();
-    if (active) {
+    $('withdrawalPlan').disabled = busy || data.blocked;
+    const active = data.active; const removing = active?.kind === 'withdrawal';
+    $('attempt').hidden = !active || removing; $('attemptDetails').replaceChildren();
+    $('withdrawalAttempt').hidden = !removing; $('withdrawalDetails').replaceChildren();
+    if (active && !removing) {
       for (const [label, value] of [['Carro', `${active.title} · ${active.price}`], ['Identificador', active.id], ['Tentativa', active.attemptId], ['Estado', { reserved: 'Vídeo reservado; envio ainda não iniciado', publishing: 'Envio iniciado; publicação por confirmar', unknown: 'Resultado incerto; repetição bloqueada' }[active.phase] || 'Por confirmar'], ['Início', format(active.startedAt)]]) {
         const term = document.createElement('dt'); term.textContent = label; const desc = document.createElement('dd'); desc.textContent = value; $('attemptDetails').append(term, desc);
       }
@@ -53,14 +62,27 @@
       $('uncertain').hidden = !own || active.phase === 'unknown';
       $('reconcile').hidden = data.role !== 'admin';
     }
+    if (removing) {
+      const own = data.device?.thisDevice && data.device.id === active.deviceId;
+      for (const [label, value] of [['Carro', `${active.title}${active.price ? ` · ${active.price}` : ''}`], ['Publicação original', `${active.id} · observada em ${format(active.observedAt)}`], ['O que foi observado', active.publicationObservation], ['Motivo', active.reason === 'out_of_stock' ? 'Viatura retirada do stock' : 'Dados ou preço alterados'], ['Retirada', { reserved: 'Retirada reservada; identifique o Estado antes de eliminar', deleting: 'Eliminação iniciada; resultado por confirmar', unknown: 'Resultado incerto; não repetir a eliminação' }[active.phase] || 'Por confirmar']]) {
+        const term = document.createElement('dt'); term.textContent = label; const desc = document.createElement('dd'); desc.textContent = value; $('withdrawalDetails').append(term, desc);
+      }
+      $('withdrawalBefore').hidden = !own || active.phase !== 'reserved';
+      $('withdrawalAfter').hidden = !own || !active.deletionStartedAt;
+      $('withdrawalUncertain').hidden = !own || active.phase === 'unknown';
+      $('withdrawalReconcile').hidden = data.role !== 'admin';
+    }
     const last = data.lastResult;
     $('last').textContent = last ? last.status === 'observed_published' ? `${last.id}: publicação observada em ${format(last.observedAt)}. ${last.observation}` : `${last.id}: tentativa encerrada sem confirmação de publicação, em ${format(last.at)}. Este carro não será repetido.` : 'Ainda sem publicação observada.';
+    const removal = data.lastWithdrawalResult;
+    $('lastWithdrawal').textContent = removal ? removal.status === 'observed_removed' ? `${removal.id}: eliminação observada em ${format(removal.observedAt)}. ${removal.observation}` : `${removal.id}: retirada encerrada sem confirmação de eliminação, em ${format(removal.at)}. Não será repetida automaticamente.` : 'Ainda sem eliminação observada.';
+    $('automationExplanation').textContent = data.automation === 'publication_observed_scheduled_test_pending' ? 'A publicação já foi observada no WhatsApp neste dispositivo. Falta validar a primeira execução agendada; a rotina completa ainda não está confirmada.' : 'A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.';
   }
   async function work(action) {
     if (busy) return; busy = true;
     for (const button of document.querySelectorAll('button')) button.disabled = true;
     $('message').textContent = 'A verificar…';
-    try { await action(); $('message').textContent = 'Registo atualizado. A rotina automática continua a aguardar o teste completo.'; }
+    try { await action(); $('message').textContent = state?.automation === 'publication_observed_scheduled_test_pending' ? 'Registo atualizado. Publicação observada; primeira execução agendada ainda por validar.' : 'Registo atualizado. A rotina automática continua a aguardar o teste completo.'; }
     catch (error) {
       $('message').textContent = errors[error.code] || 'Não foi possível confirmar a operação. Atualize o estado antes de repetir qualquer envio.';
       if (error.status === 401) { $('private').hidden = true; $('login').hidden = false; state = null; selected = null; }
@@ -69,7 +91,7 @@
       if (state) render(state);
     }
   }
-  async function refresh() { selected = null; $('candidate').textContent = 'Verifique o stock para selecionar o próximo vídeo.'; render(await api('status')); }
+  async function refresh() { selected = null; $('candidate').textContent = 'Verifique o stock para selecionar o próximo vídeo.'; $('withdrawalCandidates').replaceChildren(); $('withdrawalPlanResult').textContent = 'Verifique o stock para identificar Estados que precisem de ser retirados.'; render(await api('status')); }
   $('refresh').onclick = () => work(refresh);
   for (const action of ['enroll', 'revoke']) $(action).onclick = () => work(async () => { selected = null; render(await api(action, {})); });
   $('plan').onclick = () => work(async () => {
@@ -88,5 +110,34 @@
       account: $('account').value.replace(/\s/g, ''), observation: $('observation').value.trim(), visibleInMyStatus: $('visible').checked, observedAt: new Date().toISOString() });
     $('visible').checked = false; $('observation').value = ''; render(data);
   });
+  $('withdrawalPlan').onclick = () => work(async () => {
+    const data = await api('withdrawal-plan'); render(data); $('withdrawalCandidates').replaceChildren();
+    $('withdrawalPlanResult').textContent = data.candidates?.length ? `${data.candidates.length} Estado(s) registado(s) precisam de retirada. Confirme a identidade no WhatsApp antes de eliminar.` : errors[data.reason] || 'O stock conferido não indica Estados próprios que precisem de retirada.';
+    $('elapsed').textContent = data.elapsed?.length ? `${data.elapsed.length} publicação(ões) com a janela de 24 horas decorrida. Isto não comprova uma eliminação; não são selecionadas para retirar.` : '';
+    for (const item of data.candidates || []) {
+      const li = document.createElement('li'); const detail = document.createElement('p');
+      detail.textContent = `${item.title}${item.price ? ` · ${item.price}` : ''} · ${item.id} · ${item.reason === 'out_of_stock' ? 'retirado do stock' : 'dados alterados'}. Publicação observada em ${format(item.observedAt)}. ${item.publicationObservation}`;
+      li.append(detail);
+      if (data.device?.thisDevice && data.device.id === item.deviceId) {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Preparar retirada deste Estado';
+        button.onclick = () => work(async () => {
+          const result = await api('withdrawal-claim', { id: item.id, fingerprint: item.fingerprint, publicationAttemptId: item.publicationAttemptId });
+          $('withdrawalCandidates').replaceChildren();
+          for (const id of ['withdrawalBeforeObservation', 'withdrawalAfterObservation']) $(id).value = '';
+          for (const id of ['withdrawalVisible', 'withdrawalUnambiguous', 'withdrawalActionObserved', 'withdrawalAbsent']) $(id).checked = false;
+          render(result);
+        }); li.append(button);
+      } else { const note = document.createElement('small'); note.textContent = 'Esta retirada só pode ser executada pelo dispositivo que registou a publicação.'; li.append(note); }
+      $('withdrawalCandidates').append(li);
+    }
+  });
+  const withdrawalIdentity = () => ({ ...attempt(), account: $('withdrawalAccount').value.replace(/\s/g, ''), id: state?.active?.id,
+    fingerprint: state?.active?.fingerprint, publicationAttemptId: state?.active?.publicationAttemptId, observedAt: new Date().toISOString() });
+  $('withdrawalBegin').onclick = () => work(async () => render(await api('withdrawal-begin', { ...withdrawalIdentity(),
+    visibleInMyStatus: $('withdrawalVisible').checked, identityUnambiguous: $('withdrawalUnambiguous').checked, observation: $('withdrawalBeforeObservation').value.trim() })));
+  $('withdrawalConfirm').onclick = () => work(async () => render(await api('withdrawal-confirm', { ...withdrawalIdentity(),
+    deletionActionObserved: $('withdrawalActionObserved').checked, absentFromMyStatus: $('withdrawalAbsent').checked, observation: $('withdrawalAfterObservation').value.trim() })));
+  $('withdrawalUncertain').onclick = () => work(async () => render(await api('uncertain', attempt())));
+  $('withdrawalClose').onclick = () => work(async () => render(await api('close', { ...attempt(), doNotRepeat: true })));
   work(refresh);
 })();

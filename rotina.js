@@ -44,7 +44,7 @@
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) {
       latestDay = null; searchedDay = null;
-      for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime']) text(id, '');
+      for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
       badge('cycleBadge', 'Por consultar'); badge('catalogBadge', 'Por consultar'); badge('whatsappBadge', 'Por consultar'); $('stepsList').replaceChildren();
     }
@@ -97,25 +97,28 @@
     if (error) {
       badge('whatsappBadge', 'Leitura indisponível', 'error');
       text('whatsappSummary', 'Não foi possível consultar o registo dos Estados. A publicação e o acesso ficam por confirmar.');
-      for (const id of ['whatsappAccess', 'whatsappLast', 'whatsappTime']) text(id, '');
+      for (const id of ['whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       return;
     }
-    const device = data?.device; const active = data?.active; const last = data?.lastResult;
+    const device = data?.device; const active = data?.active; const last = data?.lastResult; const removal = data?.lastWithdrawalResult;
     const observed = last?.status === 'observed_published';
     const closed = last?.status === 'closed_without_publication_confirmation';
     const vehicle = /^ID[A-Za-z0-9]{5,30}$/.test(last?.id || '') ? last.id : 'Viatura';
     let title = 'Ainda sem publicação observada'; let stateKind = 'pending';
     if (active || data?.blocked) {
-      title = ({ reserved: 'Vídeo reservado', publishing: 'Publicação por confirmar', unknown: 'Resultado incerto — não repetir' }[active?.phase] || 'Tentativa por concluir');
+      title = active?.kind === 'withdrawal' ? ({ reserved: 'Retirada reservada', deleting: 'Eliminação por confirmar', unknown: 'Retirada incerta — não repetir' }[active.phase] || 'Retirada por concluir') : ({ reserved: 'Vídeo reservado', publishing: 'Publicação por confirmar', unknown: 'Resultado incerto — não repetir' }[active?.phase] || 'Tentativa por concluir');
       if (active?.phase === 'unknown') stateKind = 'error';
     } else if (!device) title = 'Dispositivo por autorizar';
     else if (!device.valid) { title = device.revokedAt ? 'Acesso aos vídeos revogado' : 'Acesso aos vídeos expirado ou inválido'; stateKind = 'error'; }
+    else if (removal?.status === 'observed_removed') { title = 'Eliminação observada'; stateKind = 'good'; }
+    else if (removal?.status === 'closed_without_removal_confirmation') title = 'Retirada encerrada sem confirmação';
     else if (observed) { title = 'Última publicação observada'; stateKind = 'good'; }
     else if (closed) title = 'Tentativa encerrada sem confirmação';
     badge('whatsappBadge', title, stateKind);
-    text('whatsappSummary', data?.automation === 'pending_end_to_end_test' ? 'Automação ainda em validação: falta concluir o teste no WhatsApp e na execução agendada. Uma publicação observada não comprova que a rotina inteira seja automática.' : 'Estado da automação por confirmar.');
+    text('whatsappSummary', data?.automation === 'publication_observed_scheduled_test_pending' ? 'Publicação observada neste dispositivo. Falta validar a primeira execução agendada; a rotina completa ainda não está confirmada.' : data?.automation === 'pending_end_to_end_test' ? 'Automação ainda em validação: falta concluir o teste no WhatsApp e na execução agendada. Uma publicação observada não comprova que a rotina inteira seja automática.' : 'Estado da automação por confirmar.');
     text('whatsappAccess', !device ? 'Ainda não existe autorização desta aplicação para obter os vídeos.' : device.revokedAt ? `Acesso aos vídeos revogado em ${date(device.revokedAt)}. Isto não termina a sessão no WhatsApp.` : device.valid ? `Acesso aos vídeos válido até ${date(device.expiresAt)}. A sessão ligada no WhatsApp é verificada separadamente.` : `Acesso aos vídeos expirado ou invalidado. Validade registada: ${date(device.expiresAt)}.`);
     text('whatsappLast', observed ? `${vehicle}: publicação observada no WhatsApp Web.${typeof last.observation === 'string' ? ` ${last.observation.slice(0, 300)}` : ''} Não é uma confirmação da API da Meta.` : closed ? `${vehicle}: tentativa encerrada sem confirmação de publicação. Este carro não será repetido automaticamente.` : 'Ainda não existe uma publicação observada neste registo.');
+    text('whatsappWithdrawal', removal?.status === 'observed_removed' ? `Eliminação de ${/^ID[A-Za-z0-9]{5,30}$/.test(removal.id || '') ? removal.id : 'viatura'} observada em ${date(removal.observedAt)}.${typeof removal.observation === 'string' ? ` ${removal.observation.slice(0, 300)}` : ''} Não é uma confirmação da API da Meta.` : removal?.status === 'closed_without_removal_confirmation' ? `Retirada encerrada sem confirmação de eliminação em ${date(removal.at)}. Não será repetida automaticamente.` : 'Ainda sem eliminação observada. O fim da janela de 24 horas não comprova uma eliminação.');
     text('whatsappTime', active?.startedAt ? `Tentativa atual: ${date(active.startedAt)}.${last?.observedAt || last?.at ? ` Último registo: ${date(last.observedAt || last.at)}.` : ''}` : last?.observedAt || last?.at ? `Último registo: ${date(last.observedAt || last.at)}.` : '');
   }
   async function latestCycle(current, day) {

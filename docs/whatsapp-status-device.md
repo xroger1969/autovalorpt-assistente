@@ -1,6 +1,6 @@
 # Dispositivo privado para Estados WhatsApp
 
-Esta preparação não ativa a publicação agendada nem confirma um Estado no WhatsApp. O estado global da rotina permanece pendente até ao teste completo no dispositivo ligado e numa execução agendada.
+Esta preparação não ativa a publicação agendada nem confirma um Estado no WhatsApp. Depois de uma publicação observada no dispositivo atual, o painel distingue esse resultado da primeira execução agendada, ainda por validar. Uma eliminação também exige prova visual própria.
 
 ## Acesso
 
@@ -10,7 +10,7 @@ O cookie `__Host-avpt_wa_status` é opaco, aleatório, `HttpOnly`, `Secure` e `S
 
 Revogar aqui bloqueia apenas os vídeos e registos desta aplicação. Não termina a sessão WhatsApp: para isso, remover o navegador em «Dispositivos associados» no WhatsApp do telemóvel.
 
-O acesso permite consultar um candidato e a própria tentativa, obter o MP4 dessa tentativa e registar a observação da publicação. Não permite administrar o site, aceder ao catálogo, alterar Instagram, renderizar vídeos ou consultar uma lista pública de ficheiros. A troca da chave ou do código administrativo invalida também o acesso do dispositivo.
+O acesso permite consultar um candidato e a própria tentativa, obter o MP4 dessa tentativa e registar a observação da publicação. Permite também preparar e confirmar a retirada das publicações registadas pelo mesmo dispositivo, com as condições abaixo. Não permite administrar o site, aceder ao catálogo, alterar Instagram, renderizar vídeos ou consultar uma lista pública de ficheiros. A troca da chave ou do código administrativo invalida também o acesso do dispositivo.
 
 ## Execução por um operador autorizado
 
@@ -24,18 +24,33 @@ O acesso permite consultar um candidato e a própria tentativa, obter o MP4 dess
 
 Um administrador pode encerrar uma tentativa sem confirmação para libertar os outros carros. Esse encerramento mantém o identificador do carro definitivamente processado e não comprova que tenha sido publicado. Revogar o dispositivo nunca elimina uma tentativa pendente. Uma nova autorização só é permitida depois de a tentativa anterior ser reconciliada ou encerrada.
 
+## Retirada de Estados desatualizados
+
+1. Antes de uma nova publicação, usar «Verificar Estados a retirar». A consulta não altera registos nem elimina conteúdos. Considera apenas publicações observadas desta rotina, pertencentes ao dispositivo autorizado e ainda dentro das 24 horas posteriores ao início de envio registado; registos antigos sem esse marcador usam a data de observação. Um administrador pode consultar registos de outros dispositivos, mas a autorização restrita de um dispositivo não permite operar publicações alheias.
+2. A mesma auditoria completa da Samucar, Stock e Catalogo tem de confirmar a alteração. Para uma saída, exige-se uma linha explicitamente `out of stock` na folha Stock e ausência entre os disponíveis. A simples ausência de uma linha não autoriza eliminar. Para uma alteração de dados/preço, a impressão digital atual tem de diferir da do vídeo publicado. Uma auditoria incompleta, incoerente, vazia ou desatualizada bloqueia a operação.
+3. Preparar a retirada do candidato exato. Isto reserva uma operação com o identificador da publicação original e a sua impressão digital, sem alterar o registo de publicação. Publicações e retiradas usam a mesma exclusão mútua; não podem avançar simultaneamente.
+4. Abrir apenas «O meu estado» da conta indicada, localizar o vídeo exato e comparar carro, preço e prova da publicação original. Se o vídeo não estiver visível, se não for identificável sem ambiguidades ou se houver Estados indistinguíveis, não eliminar nem selecionar outro como alternativa. Registar resultado incerto e pedir revisão quando necessária. Não consultar conversas ou Estados de terceiros para procurar correspondências.
+5. Descrever a identificação e confirmar as duas opções antes de usar «Registar início da eliminação». O servidor volta a validar o stock, a propriedade do registo e a janela de 24 horas. Só eliminar o Estado no WhatsApp depois da confirmação deste marcador. Uma falha da resposta exige consultar o estado; não repetir a eliminação por causa de um timeout.
+6. Eliminar uma vez esse Estado no WhatsApp. Observar a ação concluída e confirmar que o vídeo exato deixou de aparecer em «O meu estado». Só depois usar «Guardar eliminação observada». Ausência isolada, fim da janela de 24 horas ou atualização de um ficheiro não são provas de eliminação.
+
+Um marcador `deleting` encontrado ao retomar uma execução não autoriza outro clique de eliminação: primeiro observar e reconciliar a tentativa existente. Só a primeira resposta confirmada de início, imediatamente seguida da ação no mesmo percurso, permite avançar. Se não for possível determinar se a ação já aconteceu, manter o resultado incerto.
+
+O resultado `observed_removed` conserva a publicação original e acrescenta a observação anterior e posterior da retirada. `providerApiVerified` mantém-se falso. Uma retirada incerta conserva a tentativa e bloqueia repetições. O administrador pode encerrar sem confirmar eliminação; isso não apaga a prova original nem volta a autorizar a mesma retirada.
+
+Quando decorre essa janela de 24 horas, o plano apresenta `window_elapsed`, nunca uma eliminação confirmada, e deixa de selecionar esse Estado. Uma observação tardia após interrupção não prolonga o prazo quando o início de envio está registado. É um limite conservador de seleção, não uma consulta da expiração real no WhatsApp. Uma tentativa já incerta não é automaticamente apagada por este prazo.
+
 ## Persistência e limites
 
 O estado e o acesso ficam juntos em `whatsapp-status/v1/production/state.json`, com ETag e escrita condicional. Assim, uma reserva não pode sobrescrever uma revogação concorrente, nem duas execuções reservar o mesmo trabalho. Resultados ativos ou incertos não expiram para reenvio automático.
 
 A primeira reserva exclui os restantes carros atuais da publicação inicial em massa. Depois disso, apenas identificadores novos são elegíveis; carros já processados, retirados ou reaparecidos não voltam a entrar automaticamente. Há no máximo um início de envio por dia em `Europe/Lisbon`; resultado incerto, revogação ou encerramento manual não libertam essa quota diária. A preparação reutiliza MP4 privados e não altera os históricos Instagram ou consome quota de renderização/publicação Instagram.
 
-Esta primeira implementação impede novos envios de carros retirados ou com dados alterados, mas não reconcilia nem elimina Estados já publicados. Se o stock mudar enquanto o Estado ainda estiver visível, a retirada tem de ser confirmada no WhatsApp. A automação completa de retiradas depende de um passo adicional no executor do navegador e de prova visual da remoção.
+O código prepara e regista publicações e retiradas; a ação real no WhatsApp é efetuada pelo executor autorizado do navegador. Nenhum endpoint chama uma API não documentada, elimina em massa ou aceita ausência/expiração como confirmação. Não se deve afirmar que as retiradas estão automatizadas até esse percurso estar integrado e testado na execução agendada.
 
 As operações usam o router existente `/api/stock?integration=whatsapp-status`, sem aumentar o número de funções Vercel. Consultas são GET; mudanças exigem POST com origem HTTPS igual ao host. A página pública contém apenas a interface, sem dados privados. Os dados e o MP4 exigem autenticação e usam `no-store` e `no-referrer`.
 
-O navegador persistente e a sessão WhatsApp têm de continuar disponíveis ao executor agendado. O código não assegura a disponibilidade da infraestrutura do navegador, não contorna autenticação WhatsApp e não publica por uma API não documentada. Expiração, revogação e ausência de sessão exigem aviso ao proprietário. Até esse fluxo estar testado, `automation` fica `pending_end_to_end_test` e os marcadores da rotina existentes mantêm-se inalterados.
+O navegador persistente e a sessão WhatsApp têm de continuar disponíveis ao executor agendado. O código não assegura a disponibilidade da infraestrutura do navegador, não contorna autenticação WhatsApp e não publica por uma API não documentada. Expiração, revogação e ausência de sessão exigem aviso ao proprietário. Sem uma publicação observada pelo dispositivo atual, `automation` fica `pending_end_to_end_test`; com essa prova, fica `publication_observed_scheduled_test_pending`. Nenhum destes estados comprova a execução agendada. Os marcadores das outras etapas mantêm-se inalterados.
 
 ## Verificação
 
-`node --test tests/whatsapp-status.test.mjs` cobre separação de privilégios, 90 dias/revogação/rotação, origem e métodos, falta de stock válido, alteração de preço, identidade Instagram, concorrência com revogação/reserva, ausência de repetição, registo de observação e limite diário. A suíte existente deve continuar a passar antes da implantação.
+`node --test tests/whatsapp-status.test.mjs` cobre separação de privilégios, 90 dias/revogação/rotação, origem e métodos, falta de stock válido, alteração de preço, identidade Instagram, concorrência com revogação/reserva, ausência de repetição, registo de observação, limite diário, retirada explícita versus ausência, janela decorrida versus eliminação e preservação da prova original. A suíte existente deve continuar a passar antes da implantação.

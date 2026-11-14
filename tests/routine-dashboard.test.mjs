@@ -178,3 +178,22 @@ test('WhatsApp private observation is cleared when authentication expires', asyn
   assert.equal(app.get('whatsappLast').textContent, '');
   assert.equal(app.get('whatsappBadge').textContent, 'Por consultar');
 });
+
+test('observed WhatsApp test reports first scheduled execution still pending', async () => {
+  const app = await dashboard({ whatsapp: { automation: 'publication_observed_scheduled_test_pending', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt } } });
+  assert.match(app.get('whatsappSummary').textContent, /Publicação observada neste dispositivo.*primeira execução agendada/);
+  assert.doesNotMatch(app.get('whatsappSummary').textContent, /falta concluir o teste no WhatsApp/);
+});
+
+test('WhatsApp withdrawal proof and uncertainty remain separate from publication and expiry', async () => {
+  const data = { automation: 'publication_observed_scheduled_test_pending', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt }, lastWithdrawalResult: { status: 'observed_removed', id: 'IDabcde1', observedAt: startedAt, observation: 'Eliminei o vídeo exato e deixou de aparecer.' } };
+  const removed = await dashboard({ whatsapp: data });
+  assert.equal(removed.get('whatsappBadge').textContent, 'Eliminação observada');
+  assert.match(removed.get('whatsappLast').textContent, /publicação observada/);
+  assert.match(removed.get('whatsappWithdrawal').textContent, /Eliminação de IDabcde1 observada.*Não é uma confirmação da API/);
+  const uncertain = await dashboard({ whatsapp: { ...data, active: { kind: 'withdrawal', phase: 'unknown', startedAt }, blocked: true } });
+  assert.equal(uncertain.get('whatsappBadge').textContent, 'Retirada incerta — não repetir');
+  const closed = await dashboard({ whatsapp: { ...data, lastWithdrawalResult: { status: 'closed_without_removal_confirmation', at: startedAt } } });
+  assert.equal(closed.get('whatsappBadge').textContent, 'Retirada encerrada sem confirmação');
+  assert.match(closed.get('whatsappWithdrawal').textContent, /sem confirmação de eliminação/);
+});
