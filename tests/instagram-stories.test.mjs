@@ -127,7 +127,7 @@ function fixture(options = {}) {
     renders.push({ ...item }); assert.ok(settings.deadline > Date.now()); await renderHook?.(item);
     return { buffer: Buffer.alloc(2048, 1), mimeType: 'video/mp4', duration: 30, width: 1080, height: 1920 };
   };
-  const stories = createInstagramStories({ env, storage: memory.storage, fetchImpl, now: () => clock, renderVideo, tokenManager: { resolve: async () => instagramToken }, pause: async () => {}, pollAttempts: 0 });
+  const stories = createInstagramStories({ env, storage: memory.storage, fetchImpl, now: () => clock, renderVideo, tokenManager: { resolve: async () => instagramToken }, pause: async () => {}, ...(options.defaultPolling ? {} : { pollAttempts: 0 }) });
   return { env, memory, calls, renders, stories, publication, publishedStories, getItems: () => items,
     ledger: () => JSON.parse(memory.records.get(ledgerPath).text),
     posts: () => calls.filter(call => call.method === 'POST' && call.url.includes('/media_publish')),
@@ -153,6 +153,27 @@ test('Stories default disabled never reads feed, storage or Meta', async () => {
   const f = fixture({ env: { INSTAGRAM_STORIES_ENABLED: undefined } });
   assert.deepEqual(await f.stories.run(), { ok: true, status: 'disabled', published: 0 });
   assert.equal(f.calls.length, 0); assert.equal(f.memory.calls.length, 0); assert.equal(f.renders.length, 0);
+});
+
+test('processing beyond the first ten polls publishes once without waiting for another cron', async () => {
+  const f = fixture({ defaultPolling: true }); let reads = 0;
+  f.setContainerStatus('IN_PROGRESS');
+  f.setContainerReadHook(() => { if (++reads === 15) f.setContainerStatus('FINISHED'); });
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'published');
+  assert.equal(reads, 15); assert.equal(f.containers().length, 1); assert.equal(f.posts().length, 1);
+});
+
+test('continuing a prepared sample reuses its exact container despite another queued vehicle', async () => {
+  const f = fixture(); f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'preparing');
+  const containerId = f.ledger().active.containerId;
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'busy');
+  f.setItems([...f.getItems(), car('ID8new002')]); f.advance(6 * 60000); f.setContainerStatus('FINISHED');
+  const result = await f.stories.run({ sampleId: 'ID8live01' });
+  assert.equal(result.status, 'published'); assert.equal(result.id, 'ID8live01');
+  assert.equal(f.containers().length, 1); assert.equal(f.posts().length, 1); assert.equal(f.renders.length, 1);
+  assert.equal(new URLSearchParams(f.posts()[0].body).get('creation_id'), containerId);
+  assert.equal(f.ledger().items.ID8new002.status, 'queued');
 });
 
 test('first automatic execution baselines stock without backfilling old vehicles', async () => {
