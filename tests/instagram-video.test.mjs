@@ -37,10 +37,12 @@ test('original music contains precisely thirty seconds, remains below clipping a
   for (let i = 0; i < 30 * 44100; i++) {
     const value = wav.readInt16LE(44 + i * 2); maximum = Math.max(maximum, Math.abs(value));
     if (i >= 15 * 44100 && i < 16 * 44100) middle += value * value;
-    if (i >= 29 * 44100) ending += value * value;
+    if (i >= 29.9 * 44100) ending += value * value;
   }
   assert.ok(maximum > 1000 && maximum < 32000);
-  assert.ok(ending < middle / 8);
+  // The new energetic ending uses a shorter fade; compare mean-square level
+  // in its final 100 ms with the steady one-second reference.
+  assert.ok(ending * 10 < middle / 20);
   assert.equal(wav.readInt16LE(wav.length - 2), 0);
 });
 

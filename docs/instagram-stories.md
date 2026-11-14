@@ -2,7 +2,11 @@
 
 The [morning flow](morning-flow.md), starting from 08:00 Europe/Lisbon, runs the Story stage after catalog reconciliation, retirements and the photo stage. It generates at most one 30-second vertical MP4 for a newly observed, available stock ID and publishes it as an Instagram Story. Initial stock is recorded as a baseline and never backfilled automatically. Existing publication ledgers are preserved; the old independent 10:00 and 11:00 UTC crons are removed.
 
-The renderer uses the current feed photo, exact price and description, three text scenes, and an original synthesized instrumental soundtrack. It preserves image proportions. The current feed supplies one hero photo; the renderer can accept a trusted gallery when a future feed supports it. Videos are 1080×1920, H.264/AAC and stored in private Vercel Blob. Bundled FFmpeg runs natively with a 180-second render deadline inside the 300-second function budget. No external rendering service is required.
+The `energy-128-v2` renderer uses eight short scenes, gentle camera moves and quick beat-aligned transitions with an original 128 BPM electro-pop instrumental (drums, bass, bright plucks and chord stabs). It keeps the exact feed price and factual vehicle details, uses the orange AutoValorPT identity, and closes with the WhatsApp contact. Photographs retain their proportions; no synthetic driving footage, wheel animation, invented car details or spoken voice is generated.
+
+Up to five photographs come from the fixed Samucar dealer inventory, only when the exact advert URL, ID, EUR price and primary-photo identity match the current feed. Ambiguous or unavailable galleries fall back to the verified feed photo. Requests reject redirects, enforce size/time limits and accept only the existing OLX image host. No paid music service or licensed recording download is required.
+
+Videos are 1080×1920, 30 seconds, H.264/AAC and stored in private Vercel Blob. Bundled FFmpeg runs natively with a 180-second render deadline inside the 300-second function budget. The style applies to newly rendered assets. Existing videos, content fingerprints, publication histories and duplicate prevention are preserved; changing the style does not republish old stock.
 
 ## Activation and private verification
 
