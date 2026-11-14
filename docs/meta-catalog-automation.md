@@ -35,7 +35,9 @@ As ações `status`, `check` e `run` exigem autenticação administrativa ou a c
 | `META_CATALOG_USE_EXISTING_FACEBOOK_TOKEN` | Opt-in separado: só permite usar a credencial existente se `catalog_management` estiver efetivamente concedido e os destinos forem validados. Não concede nem amplia permissões. |
 | `META_CATALOG_GRAPH_VERSION` | Versão da Graph API; predefinição `v27.0`. |
 
-Os IDs de destino têm as predefinições acima. Alterações explícitas de `META_CATALOG_ID`, `META_CATALOG_FEED_ID` ou `META_CATALOG_BUSINESS_ID` invalidam a associação do registo anterior e exigem verificação; não são um mecanismo para ignorar um bloqueio.
+Os três IDs de destino estão fixados à associação aprovada pelo proprietário durante a configuração. Qualquer valor diferente em `META_CATALOG_ID`, `META_CATALOG_FEED_ID` ou `META_CATALOG_BUSINESS_ID` bloqueia a operação antes de consultar a origem ou a Graph API. Mudar de negócio, catálogo ou feed exige rever essa associação no código; não basta alterar uma variável.
+
+A credencial usa apenas `catalog_management`. A consulta do catálogo pede `id,name`, sem expandir objetos Business nem exigir `business_management`. O negócio fixado é o contexto de propriedade aprovado na configuração, **não uma nova comprovação de propriedade pela API em cada execução**. A rotina confirma ao vivo o identificador do catálogo, a pertença do feed e a origem dos produtos. Se a resposta incluir inesperadamente `business` ou `owner_business`, um valor incompatível bloqueia a operação.
 
 **Uma flag não concede acesso ao catálogo.** Sem uma credencial com acesso efetivo ao ativo, o resultado é `authorization_required` ou um erro sanitizado do fornecedor. A consulta de permissões isolada nunca consulta produtos nem envia importações. A credencial Instagram Login não é usada nesta integração.
 
@@ -49,7 +51,7 @@ Antes de importar, a auditoria exige:
 - Correspondência dos IDs, preços, títulos, ano, quilometragem, combustível, marca, ligações e fotografia principal.
 - Correspondência exata dos nove campos de `Catalogo` com as linhas `in stock` de `Stock`.
 - Recusa de inventário vazio, parcial, duplicado ou de uma redução superior a metade do último inventário validado.
-- Verificação de que o catálogo pertence ao negócio indicado e de que o feed pertence ao catálogo.
+- Correspondência exata com a associação negócio/catálogo/feed aprovada pelo proprietário e fixada no código; confirmação ao vivo do catálogo e da pertença do feed.
 - Paginação completa e limitada dos produtos. As ligações de paginação do fornecedor não são seguidas; só os cursores são reaplicados ao domínio Graph fixo.
 - Nova validação da origem imediatamente antes de qualquer pedido de importação.
 
@@ -65,7 +67,9 @@ As escritas usam ETag para impedir sobreposição de operações. A intenção d
 
 `meta_catalog_result` e `meta_catalog_failed` registam apenas estado, razão sanitizada e contagens. O registo privado preserva o resultado mesmo depois da retenção de logs da Vercel. Não existem notificações externas novas nem pedidos automáticos de login.
 
-`catalog_matches` confirma os identificadores, a pertença ao feed, os preços, a disponibilidade e os estados de aprovação e publicação devolvidos pela Meta. A comparação remota não inclui título, descrição ou fotografia; a auditoria da origem cobre os nove campos. **A integração não declara visibilidade WhatsApp comprovada apenas por a contagem ou importação coincidir.**
+`catalog_matches` confirma os identificadores, a pertença ao feed, os preços, a disponibilidade, a publicação (`visibility=published`) e a aprovação específica do WhatsApp devolvida pela Meta. A aprovação exige uma única entrada `{key: "WHATSAPP", value: "APPROVED"}` em `capability_to_review_status`. Uma entrada `REJECTED` é apresentada como rejeição; campos ausentes, vazios, ambíguos, malformados ou estados `NO_REVIEW`, `PENDING` e `OUTDATED` continuam por confirmar. A aprovação de outro canal não substitui a do WhatsApp. O antigo `review_status`, que pode ser vazio, não é usado como prova.
+
+A comparação remota não inclui título, descrição ou fotografia; a auditoria da origem cobre os nove campos. **A integração não declara visibilidade WhatsApp comprovada apenas por a contagem, aprovação de canal ou importação coincidir.**
 
 ## Validação
 
@@ -76,5 +80,5 @@ npm test
 
 Os testes novos cobrem integridade da origem, permissões, associação ao destino, paginação, concorrência, importações desconhecidas, proteção dos segredos e autenticação do endpoint. A auditoria pública real de 14/11/2026 confirmou nove viaturas antes de qualquer importação.
 
-Referências primárias: [Feed API e reconciliação](https://github.com/facebookincubator/catalogue-of-api-solutions/blob/main/solutions/catalogue/catalogue-batch-feed-optimiser.md), [ProductFeedUpload no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productfeedupload.py) e [System Users](https://developers.facebook.com/docs/business-management-apis/system-users/).
+Referências primárias: [Feed API e reconciliação](https://github.com/facebookincubator/catalogue-of-api-solutions/blob/main/solutions/catalogue/catalogue-batch-feed-optimiser.md), [ProductFeedUpload no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productfeedupload.py), [ProductItem e estados por capacidade no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productitem.py) e [System Users](https://developers.facebook.com/docs/business-management-apis/system-users/).
 
