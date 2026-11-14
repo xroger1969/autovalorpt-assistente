@@ -323,6 +323,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'meta-catalog') {
+    return (await import('../lib/meta-catalog-handler.js')).default(req, res);
+  }
   if (req.query?.integration === 'instagram-video') {
     return (await import('../lib/instagram-video-access.js')).default(req, res);
   }
