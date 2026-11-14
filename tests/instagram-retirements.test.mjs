@@ -367,14 +367,13 @@ test('an unknown deletion blocks other sold candidates until reconciliation', as
   assert.equal(f.deletes().length, 1);
 });
 
-test('separate daily retirement cron precedes the unchanged Instagram publication cron', () => {
+test('retirements are now coordinated in the morning flow rather than an independent cron', () => {
   const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   const retire = config.crons.filter((entry) => entry.path === '/api/stock?integration=instagram-sync&action=retirement-run');
   const publish = config.crons.filter((entry) => entry.path === '/api/stock?integration=instagram-sync&action=run');
-  assert.equal(retire.length, 1);
-  assert.equal(retire[0].schedule, '0 9 * * *');
-  assert.equal(publish.length, 1);
-  assert.equal(publish[0].schedule, '0 10 * * *');
+  assert.equal(retire.length, 0);
+  assert.equal(publish.length, 0);
+  assert.equal(config.crons.filter(entry => entry.path.includes('integration=morning-flow')).length, 2);
 });
 
 test('one retirement run removes all explicitly sold verified candidates within its batch', async () => {
@@ -420,3 +419,4 @@ test('the shared execution budget stops a batch before claiming another deletion
   assert.equal(ledger.items.ID8sold01.status, 'retired');
   assert.equal(ledger.items.ID8sold02, undefined);
 });
+
