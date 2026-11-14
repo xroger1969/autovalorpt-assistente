@@ -43,6 +43,8 @@ test('requires all nine current vehicles and matching CSV fields; preserves hist
   assert.equal(result.valid, true); assert.equal(result.expectedCount, 9); assert.equal(result.sourceCount, 9);
   assert.equal(result.checkedAt, checkedAt); assert.match(result.feedHash, /^[a-f0-9]{64}$/);
   assert.deepEqual(result.items, f.items); assert.equal(result.items.some((item) => item.availability !== 'in stock'), false);
+  assert.deepEqual(result.outOfStockIds, ['ID8sold01']);
+  assert.deepEqual((await fixture({ stock: f.items }).source.audit()).outOfStockIds, []);
   assert.equal(f.calls.length, 3); assert.ok(f.calls.every((call) => call.method === 'GET'));
 });
 
@@ -63,6 +65,7 @@ test('empty source, missing totals, missing NEXT_DATA and malformed JSON all fai
   for (const body of [html(f.ads, { omitTotal: true }), '<html>9 anúncios <h2>Tesla</h2></html>', '<script id="__NEXT_DATA__">{bad</script>']) {
     const result = await fixture({ html: body }).source.audit();
     assert.equal(result.valid, false); assert.equal('items' in result, false);
+    assert.equal('outOfStockIds' in result, false);
   }
 });
 

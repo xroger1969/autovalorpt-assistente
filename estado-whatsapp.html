@@ -13,7 +13,7 @@
   <header><div><strong>AutoValorPT</strong><a href="/rotina.html">A minha rotina</a></div></header>
   <main>
     <h1>Estados WhatsApp</h1>
-    <p class="muted">Vídeos para o número <strong>+351 965 637 736</strong>. A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.</p>
+    <p class="muted">Vídeos para o número <strong>+351 965 637 736</strong>.</p><p class="muted" id="automationExplanation">A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.</p>
     <p id="message" class="notice" role="status" aria-live="polite">A verificar o acesso…</p>
     <p id="login" hidden><a class="button" href="/rotina.html">Entrar na área privada</a> Depois de entrar, volte a esta página.</p>
     <div id="private" hidden>
@@ -26,7 +26,11 @@
       <section class="card"><h2>Próximo vídeo</h2><p id="candidate">Por consultar.</p><p id="baseline" class="muted"></p>
         <div class="actions"><button id="plan" type="button">Verificar stock e vídeo</button><button id="claim" class="primary" type="button" hidden>Reservar este vídeo</button></div>
         <p class="muted">É reutilizado um vídeo já preparado e publicado no Instagram, com os dados conferidos no stock atual. No máximo um envio iniciado por dia, mesmo quando o resultado fica incerto. Os carros antigos não são publicados em série.</p>
-        <p class="muted">A retirada de Estados já publicados quando um carro sai do stock ainda precisa de ser verificada no WhatsApp. Esta página não elimina esses Estados automaticamente.</p>
+        <p class="muted">Os Estados registados podem ser retirados quando o carro sai do stock ou os dados mudam. A eliminação é executada no WhatsApp e só fica confirmada após observação.</p>
+      </section>
+      <section class="card"><h2>Estados a retirar</h2><p id="withdrawalPlanResult">Verifique o stock para identificar Estados desatualizados.</p>
+        <button id="withdrawalPlan" type="button">Verificar Estados a retirar</button><ul id="withdrawalCandidates"></ul><p id="elapsed" class="muted"></p>
+        <p class="muted">Só são considerados Estados registados por esta rotina e ainda dentro da janela de 24 horas. Identidade ambígua, falta de stock confirmado ou resultado incerto impedem uma nova eliminação.</p>
       </section>
       <section id="attempt" class="card" hidden><h2>Publicação em curso</h2><dl id="attemptDetails"></dl>
         <div class="actions"><a id="download" class="button" hidden>Descarregar vídeo reservado</a><button id="begin" type="button" hidden>Iniciar envio no WhatsApp</button></div>
@@ -40,7 +44,27 @@
         <div class="actions"><button id="uncertain" type="button">Resultado incerto — impedir repetição</button></div>
         <details id="reconcile" hidden><summary>Encerrar tentativa sem a repetir</summary><p>Liberta a rotina para outros carros. Este carro fica excluído de futuras publicações automáticas, mesmo que volte ao stock. A publicação fica por confirmar.</p><button id="close" type="button">Encerrar e nunca repetir este carro</button></details>
       </section>
-      <section class="card"><h2>Último registo</h2><p id="last">Ainda sem publicação observada.</p><small class="muted">O registo confirma uma observação no WhatsApp Web por quem executa a rotina. Não é uma confirmação recebida da API da Meta.</small></section>
+      <section id="withdrawalAttempt" class="card" hidden><h2>Retirada em curso</h2><dl id="withdrawalDetails"></dl>
+        <label for="withdrawalAccount">Número confirmado na conta WhatsApp</label><input id="withdrawalAccount" type="tel" autocomplete="off" placeholder="+351965637736">
+        <div id="withdrawalBefore" hidden>
+          <p>Abra «O meu estado» e identifique o vídeo exato pelo carro, preço e publicação registada. Se houver dúvida ou mais de um Estado indistinguível, pare.</p>
+          <label for="withdrawalBeforeObservation">Como identificou este Estado?</label><textarea id="withdrawalBeforeObservation" maxlength="300" rows="3"></textarea>
+          <label><input id="withdrawalVisible" type="checkbox">Vi este vídeo em «O meu estado» nesta conta.</label>
+          <label><input id="withdrawalUnambiguous" type="checkbox">Identifiquei sem ambiguidades a publicação registada.</label>
+          <button id="withdrawalBegin" type="button">Registar início da eliminação</button>
+          <p class="muted">Só elimine esse Estado no WhatsApp depois de este passo ficar confirmado.</p>
+        </div>
+        <div id="withdrawalAfter" hidden>
+          <label for="withdrawalAfterObservation">O que observou ao eliminar?</label><textarea id="withdrawalAfterObservation" maxlength="300" rows="3"></textarea>
+          <label><input id="withdrawalActionObserved" type="checkbox">Executei e observei a eliminação deste Estado.</label>
+          <label><input id="withdrawalAbsent" type="checkbox">Confirmei que esse vídeo deixou de aparecer em «O meu estado».</label>
+          <button id="withdrawalConfirm" class="primary" type="button">Guardar eliminação observada</button>
+          <p class="muted">O desaparecimento após 24 horas, por si só, não comprova uma eliminação.</p>
+        </div>
+        <div class="actions"><button id="withdrawalUncertain" type="button">Resultado incerto — não repetir</button></div>
+        <details id="withdrawalReconcile" hidden><summary>Encerrar retirada sem confirmação</summary><p>Liberta a rotina, mas não afirma que o Estado foi eliminado e impede repetir esta retirada automaticamente.</p><button id="withdrawalClose" type="button">Encerrar sem confirmar eliminação</button></details>
+      </section>
+      <section class="card"><h2>Últimos registos</h2><p id="last">Ainda sem publicação observada.</p><p id="lastWithdrawal">Ainda sem eliminação observada.</p><small class="muted">O registo confirma uma observação no WhatsApp Web por quem executa a rotina. Não é uma confirmação recebida da API da Meta.</small></section>
     </div>
   </main>
 </body>
