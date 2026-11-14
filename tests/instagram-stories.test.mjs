@@ -181,7 +181,34 @@ test('explicit first sample requires latest confirmed photo publication and is n
   assert.notEqual(f.ledger().items.ID8live01.instagramMediaId, f.ledger().items.ID8live01.facebookMediaId);
   assert.equal(f.posts().length, 1); assert.equal(f.memory.records.get(publicationPath).text, originalPublication);
   for (const sampleId of ['ID8old001', 'ID8absent', '../other', '', null]) await assert.rejects(f.stories.run({ sampleId }));
-  f.advance(49 * 3600_000); await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_test_requires_latest_publication' });
+  f.advance(49 * 3600_000); assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'already_processed');
+});
+
+test('older latest photo can be explicitly tested with current price and no automatic backfill', async () => {
+  const f = fixture(); f.advance(7 * 24 * 3600_000);
+  f.setItems(f.getItems().map(item => item.id === 'ID8live01' ? { ...item, price: '32990.00 EUR' } : item));
+  assert.equal((await f.stories.preview('ID8live01')).status, 'preview_ready');
+  assert.equal(f.renders[0].price, '32990.00 EUR');
+  assert.equal((await f.stories.run()).status, 'no_new_stock');
+  assert.equal(f.posts().length, 0);
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'published');
+  assert.equal(f.posts().length, 1);
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'already_processed');
+});
+
+test('older photo never permits a withdrawn sample or a future-dated confirmation', async () => {
+  for (const mode of ['withdrawn', 'future']) {
+    const f = fixture(); f.advance(7 * 24 * 3600_000);
+    if (mode === 'withdrawn') f.setItems(f.getItems().map(item => item.id === 'ID8live01' ? { ...item, availability: 'out of stock' } : item));
+    else {
+      f.publication.items.ID8live01.updatedAt = '2099-01-01T00:00:00Z';
+      f.memory.records.get(publicationPath).text = JSON.stringify(f.publication);
+    }
+    await assert.rejects(f.stories.preview('ID8live01'), { code: 'story_test_requires_latest_publication' });
+    await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_test_requires_latest_publication' });
+    assert.equal(f.renders.length, 0); assert.equal(f.posts().length, 0);
+    assert.equal(f.memory.records.has(ledgerPath), false);
+  }
 });
 
 test('explicit sample publishes only its ID while a newer queued vehicle stays queued', async () => {

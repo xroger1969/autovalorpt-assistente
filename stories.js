@@ -52,13 +52,13 @@
   }
   function entries() { return Array.isArray(model.status?.items) ? model.status.items.filter((item) => ID.test(item.id)) : []; }
   function entryFor(id) { return entries().find((entry) => entry.id === id); }
-  function candidateRecent() {
+  function candidateValid() {
     const at = Date.parse(model.candidate?.at || '');
-    return ID.test(model.candidate?.id || '') && Number.isFinite(at) && at <= Date.now() && Date.now() - at <= 48 * 3600000;
+    return ID.test(model.candidate?.id || '') && Number.isFinite(at) && at <= Date.now();
   }
   function canPreview() {
     const c = model.status?.configuration;
-    return !model.busy && !model.review && !model.status?.active && candidateRecent() && c?.production === true && c?.videoConfigured === true && !PROCESSED.has(entryFor(model.candidate.id)?.status);
+    return !model.busy && !model.review && !model.status?.active && candidateValid() && c?.production === true && c?.videoConfigured === true && !PROCESSED.has(entryFor(model.candidate.id)?.status);
   }
   function canPublish() {
     const otherCandidates = (model.verification?.candidates || []).some((id) => id !== model.candidate?.id);
@@ -89,7 +89,7 @@
     $('candidateName').textContent = candidate ? `Última viatura publicada em fotografia · ${candidate.id}` : 'Verifique a ligação para encontrar a viatura.';
     $('candidateDetails').textContent = candidate ? date(candidate.at) : '';
     const item = candidate && entryFor(candidate.id);
-    $('candidateState').textContent = !candidate ? '' : PROCESSED.has(item?.status) ? (LABELS[item.status] || 'Já processada') : !candidateRecent() ? 'A publicação tem mais de 48 horas. Não está disponível para este teste.' : model.preview?.id === candidate.id && model.preview.ready ? 'Disponibilidade confirmada ao criar esta pré-visualização. Será confirmada novamente antes de publicar.' : 'Disponibilidade a confirmar na criação da pré-visualização.';
+    $('candidateState').textContent = !candidate ? '' : PROCESSED.has(item?.status) ? (LABELS[item.status] || 'Já processada') : !candidateValid() ? 'A data da fotografia não ficou confirmada. Verifique novamente a ligação.' : model.preview?.id === candidate.id && model.preview.ready ? 'Disponibilidade confirmada ao criar esta pré-visualização. Será confirmada novamente antes de publicar.' : 'Disponibilidade a confirmar na criação da pré-visualização.';
     let help = 'Reveja a pré-visualização antes de publicar. A publicação exige ligação verificada e rotina ativa.';
     if (c && !c.enabled) help = 'A rotina de Stories está desativada. Pode rever um vídeo; a publicação permanece indisponível.';
     else if ((model.verification?.candidates || []).some((id) => id !== candidate?.id)) help = 'Existem outras viaturas na fila. O teste está bloqueado para preservar a ordem das publicações.';

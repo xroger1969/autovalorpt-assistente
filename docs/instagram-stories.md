@@ -20,9 +20,11 @@ All operations use `/api/stock?integration=instagram-sync`:
 | --- | --- | --- |
 | `stories-status` | GET | Read configuration and Story ledger |
 | `stories-dry-run` | GET | Read live stock and verify Meta permissions/account; no media publication |
-| `stories-preview&id=ID…` | POST | Render the latest confirmed photo publication from the last 48 hours; private video only |
+| `stories-preview&id=ID…` | POST | Render the latest confirmed photo publication if the vehicle is currently in stock; private video only |
 | `stories-run` | POST | Run the enabled queue; cron may use GET |
-| `stories-run&sample_id=ID…` | POST | Explicit first test of that latest recent photo publication; still requires enabled=true and all authorization checks |
+| `stories-run&sample_id=ID…` | POST | Explicit first test of that latest confirmed photo publication; still requires enabled=true and all authorization checks |
+
+The age of the photo publication does not expire an explicit sample. Eligibility still requires the latest confirmed photo ID, a valid non-future confirmation timestamp, and current in-stock data. Price and the complete content fingerprint are revalidated after rendering and immediately before publication. This does not change the automatic queue or backfill existing vehicles.
 
 Private previews do not enroll baseline stock in automatic publication, including after a failure or interrupted request. Returned video links expire after two hours and bind the exact stock ID, content hash and expiry using `ADMIN_SESSION_SECRET`. `GET` streams the video; `HEAD` returns metadata. Range is deliberately answered with the complete 200 response. Successful Meta ingestion must be verified in production before declaring Story delivery operational.
 
