@@ -13,7 +13,8 @@ const items = [
   { id: 'ID8Q22222', price: '31990.00 EUR', availability: 'in stock' },
 ];
 const asProduct = (item) => ({ id: item.id === items[0].id ? '111111111111' : '222222222222', retailer_id: item.id,
-  availability: 'in stock', price: item.price, currency: 'EUR', review_status: 'approved', visibility: 'published', product_feed: { id: FEED } });
+  availability: 'in stock', price: item.price, currency: 'EUR', review_status: '',
+  capability_to_review_status: [{ key: 'WHATSAPP', value: 'APPROVED' }], visibility: 'published', product_feed: { id: FEED } });
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
 test('different source and feed counts survive persistence and status reads', async () => {
@@ -63,7 +64,7 @@ test('legacy saved reports without a source count remain unknown', async () => {
 function fixture(options = {}) {
   const blob = options.blob || memoryBlob();
   const calls = [];
-  const remote = { products: items.map(asProduct), uploads: [], granted: true, business: BUSINESS, feeds: [{ id: FEED, name: 'Samucar' }], ...options.remote };
+  const remote = { products: items.map(asProduct), uploads: [], granted: true, catalog: { id: CATALOG, name: 'AutoValorPT' }, feeds: [{ id: FEED, name: 'Samucar' }], ...options.remote };
   const env = { VERCEL_ENV: 'production', META_CATALOG_ACCESS_TOKEN: 'synthetic-catalog-token', META_CATALOG_SYNC_ENABLED: 'true', ...options.env };
   let auditCalls = 0;
   const auditSource = options.auditSource || (async () => { auditCalls++; return { valid: true, expectedCount: items.length, items: structuredClone(items) }; });
@@ -73,7 +74,11 @@ function fixture(options = {}) {
     assert.equal(init.redirect, 'error');
     assert.equal(url.searchParams.has('access_token'), false);
     if (url.pathname.endsWith('/me/permissions')) return json({ data: [{ permission: 'catalog_management', status: remote.granted ? 'granted' : 'declined' }] });
-    if (url.pathname === `/v27.0/${CATALOG}`) return json({ id: CATALOG, name: 'AutoValorPT', business: { id: remote.business } });
+    if (url.pathname === `/v27.0/${CATALOG}`) {
+      // The real catalog_management-only credential cannot expand Business.
+      if (/business/.test(url.searchParams.get('fields') || '')) return json({ error: { code: 100, message: 'Missing Permission' } }, 400);
+      return json(remote.catalog);
+    }
     if (url.pathname.endsWith('/product_feeds')) return json({ data: remote.feeds });
     if (url.pathname.endsWith('/products')) return options.productsResponse ? options.productsResponse(url, init) : json({ data: remote.products });
     if (url.pathname === `/v27.0/${FEED}/uploads` && init.method === 'GET') return json({ data: remote.uploads });
@@ -120,7 +125,7 @@ test('explicit existing-token opt-in still requires granted catalog_management',
   assert.equal(f.calls.length, 1);
 });
 
-test('explicit existing-token opt-in validates permission then exact business/catalog/feed', async () => {
+test('explicit existing-token opt-in validates permission and the pinned catalog/feed binding', async () => {
   const f = fixture({ env: { META_CATALOG_ACCESS_TOKEN: '', META_CATALOG_USE_EXISTING_FACEBOOK_TOKEN: 'true', INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN: 'synthetic-existing-token' } });
   const result = await f.service.check();
   assert.equal(f.calls[0].url.pathname, '/v27.0/me/permissions');
@@ -130,7 +135,7 @@ test('explicit existing-token opt-in validates permission then exact business/ca
   assert.equal(result.catalogConfirmed, true);
 });
 
-test('matching catalog is read-only remotely and never claims WhatsApp visibility', async () => {
+test('least-privilege catalog access confirms WhatsApp approval despite an empty legacy status', async () => {
   const f = fixture();
   f.remote.products[0].price = '€26,990.00';
   f.remote.products[1].price = '31.990,00 €';
@@ -138,13 +143,39 @@ test('matching catalog is read-only remotely and never claims WhatsApp visibilit
   assert.equal(result.status, 'catalog_matches');
   assert.equal(result.actualCount, 2);
   assert.equal(result.whatsappVisibilityVerified, false);
+  assert.equal(result.catalogConfirmed, true);
+  assert.equal(f.calls.find((c) => c.url.pathname === `/v27.0/${CATALOG}`).url.searchParams.get('fields'), 'id,name');
+  const productFields = f.calls.find((c) => c.url.pathname.endsWith('/products')).url.searchParams.get('fields').split(',');
+  assert.ok(productFields.includes('capability_to_review_status'));
+  assert.ok(!productFields.includes('review_status'));
   assert.equal(f.posts().length, 0);
   assert.equal((await f.service.status()).lastResult.status, 'catalog_matches');
   assert.ok(f.blob.calls.filter((c) => c.method === 'put').every((c) => c.options.access === 'private'));
 });
 
-test('wrong business or feed membership prevents product reads and imports', async () => {
-  for (const remote of [{ business: '999999999999' }, { feeds: [{ id: '999999999999' }] }]) {
+test('changing any approved destination ID fails before source or Graph reads', async () => {
+  for (const name of ['META_CATALOG_ID', 'META_CATALOG_FEED_ID', 'META_CATALOG_BUSINESS_ID']) {
+    const f = fixture({ env: { [name]: '999999999999' } });
+    const result = await f.service.run();
+    assert.equal(result.status, 'check_failed');
+    assert.equal(result.reason, 'meta_catalog_configuration_invalid');
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal((await f.service.status()).configuration.valid, false);
+    assert.equal(f.auditCalls(), 0);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test('wrong catalogue, optional owner contradiction or feed membership prevents product reads and imports', async () => {
+  for (const remote of [
+    { catalog: { id: '999999999999' } },
+    { catalog: { id: CATALOG, business: { id: '999999999999' } } },
+    { catalog: { id: CATALOG, owner_business: { id: '999999999999' } } },
+    { catalog: { id: CATALOG, business: { id: BUSINESS }, owner_business: { id: '999999999999' } } },
+    { catalog: { id: CATALOG, owner_business: null } },
+    { feeds: [{ id: '999999999999' }] },
+    { feeds: [{ id: FEED }, { id: FEED }] },
+  ]) {
     const f = fixture({ remote });
     const result = await f.service.run();
     assert.equal(result.status, 'check_failed');
@@ -152,6 +183,13 @@ test('wrong business or feed membership prevents product reads and imports', asy
     assert.equal(result.catalogValidated, false);
     assert.ok(f.calls.every((c) => !c.url.pathname.endsWith('/products')));
     assert.equal(f.posts().length, 0);
+  }
+});
+
+test('an optional matching owner field preserves the least-privilege result', async () => {
+  for (const key of ['business', 'owner_business']) {
+    const f = fixture({ remote: { catalog: { id: CATALOG, [key]: { id: BUSINESS } } } });
+    assert.equal((await f.service.check()).catalogConfirmed, true);
   }
 });
 
@@ -193,12 +231,45 @@ test('foreign-feed products are not removed and expected IDs bound to another fe
 });
 
 test('review rejection is reported separately and does not trigger a reimport of matching data', async () => {
-  const f = fixture(); f.remote.products[1].review_status = 'rejected';
+  const f = fixture(); f.remote.products[1].capability_to_review_status = [{ key: 'WHATSAPP', value: 'REJECTED' }, { key: 'SHOPS', value: 'APPROVED' }];
   const result = await f.service.run();
   assert.equal(result.status, 'products_rejected');
   assert.deepEqual(result.rejectedIds, [items[1].id]);
   assert.equal(result.whatsappVisibilityVerified, false);
   assert.equal(f.posts().length, 0);
+});
+
+test('only one explicit WhatsApp approval can confirm the product, regardless of legacy or other-channel approval', async () => {
+  for (const statuses of [
+    undefined, null, '', [], {}, { WHATSAPP: 'APPROVED' },
+    [{ key: 'SHOPS', value: 'APPROVED' }],
+    [{ key: 'WHATSAPP', value: '' }],
+    [{ key: 'WHATSAPP', value: 'NO_REVIEW' }],
+    [{ key: 'WHATSAPP', value: 'PENDING' }],
+    [{ key: 'WHATSAPP', value: 'OUTDATED' }],
+    [{ key: 'WHATSAPP', value: 'approved' }],
+    [{ key: 'WHATSAPP', value: 'UNRECOGNISED' }],
+    [{ key: 'WHATSAPP' }],
+    [{ key: 'WHATSAPP', value: null }],
+    [{ key: 'WHATSAPP', value: 'APPROVED' }, { key: 'WHATSAPP', value: 'APPROVED' }],
+    [{ key: 'WHATSAPP', value: 'APPROVED' }, { key: 'WHATSAPP', value: 'REJECTED' }],
+    [{ key: 'WHATSAPP', value: 'APPROVED' }, null],
+  ]) {
+    const f = fixture();
+    f.remote.products[0].review_status = 'approved';
+    f.remote.products[0].capability_to_review_status = statuses;
+    const report = await f.service.run();
+    assert.equal(report.status, 'products_pending', JSON.stringify(statuses));
+    assert.equal(report.catalogConfirmed, false);
+    assert.deepEqual(report.pendingReviewIds, [items[0].id]);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('other channels neither confer nor veto an explicit WhatsApp approval', async () => {
+  const f = fixture();
+  f.remote.products[0].capability_to_review_status.push({ key: 'SHOPS', value: 'REJECTED' });
+  assert.equal((await f.service.check()).catalogConfirmed, true);
 });
 
 test('check reports missing entries without importing; pending uploads block run', async () => {
@@ -345,7 +416,7 @@ test('a confirmed matching snapshot can resolve an unknown desired outcome witho
 });
 
 test('unknown product review status and incomplete upload counts cannot confirm success', async () => {
-  const f = fixture(); delete f.remote.products[0].review_status;
+  const f = fixture(); delete f.remote.products[0].capability_to_review_status;
   const first = await f.service.run();
   assert.equal(first.status, 'products_pending');
   assert.equal(first.catalogConfirmed, false);
