@@ -15,7 +15,7 @@ A integração nova não escreve na folha Google nem muda os publicadores de fot
 
 ## Execução sem sessão de navegador
 
-O cron Vercel chama diariamente às **12h00 UTC**:
+A rotina [morning-flow](morning-flow.md), iniciada a partir das **08h00 Europe/Lisbon**, chama esta operação depois de validar Samucar e os dois CSV. O antigo cron independente das 12h00 UTC foi removido:
 
 ```text
 /api/stock?integration=meta-catalog&action=run
@@ -77,3 +77,4 @@ npm test
 Os testes novos cobrem integridade da origem, permissões, associação ao destino, paginação, concorrência, importações desconhecidas, proteção dos segredos e autenticação do endpoint. A auditoria pública real de 14/11/2026 confirmou nove viaturas antes de qualquer importação.
 
 Referências primárias: [Feed API e reconciliação](https://github.com/facebookincubator/catalogue-of-api-solutions/blob/main/solutions/catalogue/catalogue-batch-feed-optimiser.md), [ProductFeedUpload no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productfeedupload.py) e [System Users](https://developers.facebook.com/docs/business-management-apis/system-users/).
+

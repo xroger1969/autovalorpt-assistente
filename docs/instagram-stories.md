@@ -1,6 +1,6 @@
 # Automatic stock videos and Instagram Stories
 
-The daily 11:00 UTC cron generates one 30-second vertical MP4 for a newly observed, available stock ID and publishes it as an Instagram Story. Initial stock is recorded as a baseline and never backfilled automatically. The existing 10:00 photo publisher and its ledger are unchanged.
+The [morning flow](morning-flow.md), starting from 08:00 Europe/Lisbon, runs the Story stage after catalog reconciliation, retirements and the photo stage. It generates at most one 30-second vertical MP4 for a newly observed, available stock ID and publishes it as an Instagram Story. Initial stock is recorded as a baseline and never backfilled automatically. Existing publication ledgers are preserved; the old independent 10:00 and 11:00 UTC crons are removed.
 
 The renderer uses the current feed photo, exact price and description, three text scenes, and an original synthesized instrumental soundtrack. It preserves image proportions. The current feed supplies one hero photo; the renderer can accept a trusted gallery when a future feed supports it. Videos are 1080×1920, H.264/AAC and stored in private Vercel Blob. Bundled FFmpeg runs natively with a 180-second render deadline inside the 300-second function budget. No external rendering service is required.
 
@@ -44,3 +44,4 @@ This implementation does not publish WhatsApp Status. It creates a compatible MP
 ### Processamento demorado
 
 O publicador aguarda o processamento do Instagram dentro do orçamento da função, reservando tempo para confirmar o stock e publicar. Se ainda devolver `preparing`, conserva o identificador do envio. Após seis minutos desde o início, o painel permite **Continuar Story em processamento** para a mesma viatura verificada. A continuação reutiliza o envio existente; não renderiza, cria ou publica outra viatura. Operações `publishing`, `unknown` ou `mapping_pending` continuam bloqueadas para novo envio.
+
