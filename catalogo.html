@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#101c2d">
+  <title>Catálogo AutoValorPT</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17283d;background:#f4f6fa;--orange:#e7752d;--navy:#101c2d;--muted:#5a6b80;--line:#dce3ed}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100svh}header{background:var(--navy);color:white}header>div{max-width:1000px;margin:auto;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{font-weight:850;font-size:21px;letter-spacing:-.04em}.brand span{color:#ffa46e}header a{color:#fff;text-decoration:none;font-size:14px;padding:10px 14px;border:1px solid #5b6a80;border-radius:12px}main{max-width:1000px;margin:auto;padding:36px 24px 60px}h1{font-size:clamp(30px,5vw,42px);letter-spacing:-.045em;line-height:1.08;margin:0}h2{font-size:20px;margin:0 0 14px}.eyebrow{text-transform:uppercase;letter-spacing:.11em;font-size:12px;font-weight:800;color:#9d491b;margin:0 0 12px}.intro{max-width:700px;color:var(--muted);line-height:1.6;margin:16px 0 26px}.card{padding:24px;background:white;border:1px solid var(--line);border-radius:22px;box-shadow:0 8px 28px #20314d05}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}.stat span{font-size:13px;color:var(--muted)}.stat strong{display:block;font-size:38px;letter-spacing:-.05em;margin:8px 0 3px}.stat small{color:var(--muted)}.badge{display:inline-block;background:#eef2f8;color:#334a68;border-radius:50px;padding:8px 13px;font-size:13px;font-weight:750}.badge.good{background:#e8f5ed;color:#1d7047}.badge.pending{background:#fff1e6;color:#8a461e}.status{white-space:pre-line;overflow-wrap:anywhere;line-height:1.6;color:var(--muted);margin:16px 0}.status.error{color:#9c361e}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}button{font:inherit;font-weight:750;min-height:52px;border-radius:13px;border:1px solid #bbc8da;padding:13px 18px;background:#f6f9fd;color:#254c7c;cursor:pointer}button.primary{background:var(--orange);border-color:var(--orange);color:#172536}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,a:focus-visible{outline:3px solid #e7752d;outline-offset:4px}.detail{margin-top:20px;line-height:1.6}.detail ul{margin:0;padding-left:22px}.footnote{font-size:13px;color:var(--muted);line-height:1.6;margin-top:22px}.time{font-size:13px;color:var(--muted)}@media(max-width:640px){header>div{padding:18px 16px}main{padding:28px 16px 44px}.stats{gap:8px}.stat{padding:16px 12px}.stat strong{font-size:31px}.stat span,.stat small{font-size:11px}.card{padding:20px}.actions{flex-direction:column}.actions button{width:100%}}
+  </style>
+  <script src="/catalogo.js" defer></script>
+</head>
+<body>
+  <header><div><div class="brand">AutoValor<span>PT</span></div><a href="/stories.html">Vídeos e Stories</a></div></header>
+  <main>
+    <p class="eyebrow">Área privada · Catálogo</p>
+    <h1>Stock e catálogo, juntos.</h1>
+    <p class="intro">A rotina compara as viaturas disponíveis com o catálogo e acompanha a importação. O trabalho agendado é executado no servidor.</p>
+    <section class="card" id="accessView"><h2>Verificação privada</h2><p class="status" id="accessStatus" role="status">A verificar o acesso existente…</p></section>
+    <section id="dashboard" hidden aria-label="Estado do catálogo">
+      <div class="stats">
+        <div class="card stat"><span>Samucar</span><strong id="sourceCount">—</strong><small>viaturas disponíveis</small></div>
+        <div class="card stat"><span>Ficheiro do catálogo</span><strong id="feedCount">—</strong><small>viaturas validadas</small></div>
+        <div class="card stat"><span>Catálogo Meta</span><strong id="metaCount">—</strong><small>artigos encontrados</small></div>
+      </div>
+      <section class="card" aria-labelledby="stateTitle">
+        <h2 id="stateTitle">Estado da atualização</h2><span class="badge" id="stateBadge">Por verificar</span>
+        <p class="status" id="stateText" role="status" aria-live="polite"></p><p class="time" id="checkedAt"></p>
+        <div class="actions"><button type="button" id="refreshButton">Atualizar estado</button><button class="primary" type="button" id="checkButton">Verificar agora</button><button type="button" id="syncButton" disabled>Sincronizar agora</button></div>
+        <p class="status" id="actionStatus" role="status" aria-live="polite"></p>
+      </section>
+      <section class="card detail" id="differencePanel" hidden><h2>Diferenças encontradas</h2><ul id="differences"></ul></section>
+      <p class="footnote">A contagem da Meta e a conclusão de uma importação não garantem, por si só, que cada artigo esteja visível no WhatsApp. Uma aprovação pendente ou um resultado desconhecido permanece por confirmar.</p>
+    </section>
+    <noscript><p class="card">Ative JavaScript para consultar esta área privada.</p></noscript>
+  </main>
+</body>
+</html>

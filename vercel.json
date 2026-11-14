@@ -15,9 +15,19 @@
     { "path": "/api/notify-lead?action=retry-pending", "schedule": "0 8 * * *" },
     { "path": "/api/stock?integration=instagram-sync&action=retirement-run", "schedule": "0 9 * * *" },
     { "path": "/api/stock?integration=instagram-sync&action=run", "schedule": "0 10 * * *" },
-    { "path": "/api/stock?integration=instagram-sync&action=stories-run", "schedule": "0 11 * * *" }
+    { "path": "/api/stock?integration=instagram-sync&action=stories-run", "schedule": "0 11 * * *" },
+    { "path": "/api/stock?integration=meta-catalog&action=run", "schedule": "0 12 * * *" }
   ],
   "headers": [
+    {
+      "source": "/catalogo.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
