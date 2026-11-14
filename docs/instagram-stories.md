@@ -41,3 +41,6 @@ This implementation does not publish WhatsApp Status. It creates a compatible MP
 ## Verification
 
 `npm test` covers queue baseline, current stock, permissions/account binding, concurrent claims, no duplicate publication, ambiguous outcomes, confirmation-write failures, preview isolation, worker scope and signed streaming. A real local FFmpeg render verifies the 30-second 1080×1920 H.264/AAC output. Production still needs a private render, signed media retrieval and actual Meta ingestion/publication verification before activation is considered complete.
+### Processamento demorado
+
+O publicador aguarda o processamento do Instagram dentro do orçamento da função, reservando tempo para confirmar o stock e publicar. Se ainda devolver `preparing`, conserva o identificador do envio. Após seis minutos desde o início, o painel permite **Continuar Story em processamento** para a mesma viatura verificada. A continuação reutiliza o envio existente; não renderiza, cria ou publica outra viatura. Operações `publishing`, `unknown` ou `mapping_pending` continuam bloqueadas para novo envio.

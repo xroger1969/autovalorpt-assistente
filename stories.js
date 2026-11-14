@@ -60,9 +60,15 @@
     const c = model.status?.configuration;
     return !model.busy && !model.review && !model.status?.active && candidateValid() && c?.production === true && c?.videoConfigured === true && !PROCESSED.has(entryFor(model.candidate.id)?.status);
   }
+  function canResume() {
+    const active = model.status?.active;
+    const started = Date.parse(active?.startedAt || '');
+    return !model.busy && !model.review && candidateValid() && active?.id === model.candidate.id && active.phase === 'preparing' &&
+      Number.isFinite(started) && Date.now() - started >= 6 * 60000 && entryFor(active.id)?.status === 'ready';
+  }
   function canPublish() {
     const otherCandidates = (model.verification?.candidates || []).some((id) => id !== model.candidate?.id);
-    return canPreview() && model.status.configuration.enabled === true && model.verification?.ok !== false && model.verification?.authorization?.ready === true && Date.now() - model.verifiedAt < 10 * 60000 && model.preview?.id === model.candidate.id && model.preview?.ready === true && !otherCandidates && !entries().some((entry) => entry.status === 'mapping_pending');
+    return (canPreview() && !otherCandidates || canResume()) && model.status.configuration.production === true && model.status.configuration.videoConfigured === true && model.status.configuration.enabled === true && model.verification?.ok !== false && model.verification?.authorization?.ready === true && Date.now() - model.verifiedAt < 10 * 60000 && model.preview?.id === model.candidate.id && model.preview?.ready === true && !entries().some((entry) => entry.status === 'mapping_pending');
   }
   function clearVideo() {
     $('videoPlayer').pause(); $('videoPlayer').removeAttribute('src'); $('videoPlayer').load(); $('downloadLink').removeAttribute('href');
@@ -85,6 +91,7 @@
     $('connectionState').textContent = model.verification ? (model.verification.authorization?.ready ? 'Verificada' : 'Por concluir') : 'Por verificar';
     $('refreshButton').disabled = model.busy; $('verifyButton').disabled = model.busy; $('logoutButton').disabled = model.busy;
     $('previewButton').disabled = !canPreview(); $('publishButton').disabled = !canPublish();
+    $('publishButton').textContent = canResume() ? 'Continuar Story em processamento' : 'Publicar Story de teste';
     const candidate = model.candidate;
     $('candidateName').textContent = candidate ? `Última viatura publicada em fotografia · ${candidate.id}` : 'Verifique a ligação para encontrar a viatura.';
     $('candidateDetails').textContent = candidate ? date(candidate.at) : '';
@@ -92,6 +99,7 @@
     $('candidateState').textContent = !candidate ? '' : PROCESSED.has(item?.status) ? (LABELS[item.status] || 'Já processada') : !candidateValid() ? 'A data da fotografia não ficou confirmada. Verifique novamente a ligação.' : model.preview?.id === candidate.id && model.preview.ready ? 'Disponibilidade confirmada ao criar esta pré-visualização. Será confirmada novamente antes de publicar.' : 'Disponibilidade a confirmar na criação da pré-visualização.';
     let help = 'Reveja a pré-visualização antes de publicar. A publicação exige ligação verificada e rotina ativa.';
     if (c && !c.enabled) help = 'A rotina de Stories está desativada. Pode rever um vídeo; a publicação permanece indisponível.';
+    else if (model.status?.active?.phase === 'preparing') help = canResume() ? 'Continue o envio já preparado. Será usado o mesmo vídeo, sem criar outro envio.' : 'O Instagram está a processar o vídeo. Aguarde seis minutos desde o início e atualize o estado para continuar o mesmo envio.';
     else if ((model.verification?.candidates || []).some((id) => id !== candidate?.id)) help = 'Existem outras viaturas na fila. O teste está bloqueado para preservar a ordem das publicações.';
     else if (model.review) help = 'Consulte o estado para confirmar o resultado anterior antes de continuar.';
     $('publishHelp').textContent = help;
@@ -206,7 +214,7 @@
   $('publishButton').addEventListener('click', () => {
     if (!canPublish()) { message('publicationStatus', 'Verifique novamente a ligação e o estado antes de publicar.'); render(); return; }
     model.confirmationId = model.candidate.id;
-    $('confirmText').textContent = `Confirma a publicação de um Story com o vídeo da viatura ${model.confirmationId}, cuja pré-visualização acabou de rever?`;
+    $('confirmText').textContent = canResume() ? `Confirma a continuação do envio já preparado da viatura ${model.confirmationId}? Será usado o mesmo vídeo, sem criar outro envio.` : `Confirma a publicação de um Story com o vídeo da viatura ${model.confirmationId}, cuja pré-visualização acabou de rever?`;
     $('publishDialog').showModal();
   });
   $('cancelPublishButton').addEventListener('click', () => $('publishDialog').close());
