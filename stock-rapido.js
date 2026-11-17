@@ -122,9 +122,9 @@
           (latest?.title ? ' Primeiro anúncio apresentado: ' + latest.title + ' (' + (latest.price || 'preço por confirmar') + ').' : '')
         : 'Inventário da Samucar por confirmar.';
       $('routineInfo').textContent = results[1].status === 'rejected'
-        ? 'A execução habitual das 08h00 não pôde ser consultada.'
-        : 'Rotina das 08h00: ' + (regular?.stalled ? 'precisa de verificação' : regular?.status === 'not_started' ? 'sem execução registada hoje' :
-          regular?.status === 'finished' ? 'terminada' :
+        ? 'O ciclo do servidor das 08h00 não pôde ser consultado.'
+        : 'Ciclo do servidor das 08h00: ' + (regular?.stalled ? 'precisa de verificação' : regular?.status === 'not_started' ? 'sem execução registada hoje' :
+          regular?.status === 'finished' ? 'terminado' :
           regular?.status === 'running' || regular?.status === 'queued' ? 'em curso' :
           regular?.status || 'por confirmar') + '. Agendamento diário mantido.';
       // Resume existing unclaimed work only; never auto-start another cycle.
@@ -160,7 +160,7 @@
       const action = $('runButton').dataset.action === 'resume' ? 'resume&mode=manual' : 'manual-start';
       const data = await api(base + action, { method: 'POST' });
       $('currentStatus').textContent = data.status === 'queued'
-        ? 'Pedido aceite. As verificações e publicações seguem em segurança. Confirme o resultado no painel.'
+        ? 'Pedido aceite. O servidor vai verificar o stock, o catálogo e as publicações Instagram. Confirme os resultados no painel.'
         : data.status === 'finished' ? 'A execução extraordinária de hoje já foi concluída. Não será repetida.'
         : 'Pedido registado. Estado: ' + (data.status || 'por confirmar') + '.';
     } catch (e) {
