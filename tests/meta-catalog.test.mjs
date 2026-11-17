@@ -628,9 +628,53 @@ test('a failed schedule readback blocks catalogue import and does not retry the 
     auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: true }) });
   const report = await f.service.run();
   assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'legacy', update_schedule: 'absent' } });
+  assert.deepEqual((await f.service.status()).lastResult.feedScheduleCheck, report.feedScheduleCheck);
   assert.equal(f.posts().length, 1);
   assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
   assert.equal((await f.service.status()).active, null);
+});
+
+test('schedule readback reports only field names and source classes when cadence or presence changes', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED,
+    schedule: { interval: 'DAILY', hour: 8, minute: 15, timezone: 'Europe/Lisbon', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: (_url, init, remote) => {
+      remote.feed.schedule = { ...JSON.parse(new URLSearchParams(init.body).get('schedule')), hour: 9, minute: 30 };
+      remote.feed.update_schedule = { interval: 'HOURLY', url: META_CATALOG_LATEST_FEED_URL };
+      return json({ success: true });
+    } });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.hour', 'schedule.minute', 'update_schedule.presence'],
+    sources: { schedule: 'server', update_schedule: 'server' } });
+  assert.equal(report.catalogConfirmed, false);
+  assert.equal(f.posts().length, 1);
+  assert.doesNotMatch(JSON.stringify(report.feedScheduleCheck), /https:|Europe|synthetic/);
+});
+
+test('schedule readback identity mismatch is diagnosed without returning the unexpected identifier', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: (_url, _init, remote) => {
+      remote.feed.id = 'untrusted-private-identifier';
+      return json({ success: true });
+    } });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.deepEqual(report.feedScheduleCheck.mismatches, ['feed.id']);
+  assert.doesNotMatch(JSON.stringify(report), /untrusted-private-identifier/);
+  assert.equal(f.posts().length, 1);
+});
+
+test('persisted schedule diagnosis strips unrecognized fields and values', async () => {
+  const f = fixture();
+  await f.service.run();
+  const record = f.blob.records.get(STATE); const state = JSON.parse(record.text);
+  state.lastResult.feedScheduleCheck = { mismatches: ['schedule.url', 'schedule.password', 'sensitive-value', 'schedule.url'],
+    sources: { schedule: 'server', update_schedule: 'https://secret.example/?token=secret', password: 'secret' }, raw: 'secret' };
+  record.text = JSON.stringify(state);
+  const report = (await f.service.status()).lastResult;
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'server' } });
+  assert.doesNotMatch(JSON.stringify(report), /secret|sensitive|password/);
 });
 
 test('latest-snapshot passive uploads can confirm catalogue but cannot reconcile an immutable active import', async () => {
