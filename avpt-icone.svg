@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="AutoValorPT">
+<rect width="192" height="192" rx="44" fill="#102139"/>
+<rect x="19" y="142" width="154" height="13" rx="6" fill="#ed782b"/>
+<text x="96" y="115" text-anchor="middle" fill="#fff" font-family="system-ui,Arial,sans-serif" font-size="78" font-weight="800" letter-spacing="-8">AV</text>
+<circle cx="149" cy="53" r="14" fill="#ed782b"/>
+</svg>
