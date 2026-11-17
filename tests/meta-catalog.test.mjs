@@ -16,6 +16,8 @@ const asProduct = (item) => ({ id: item.id === items[0].id ? '111111111111' : '2
   availability: 'in stock', price: item.price, currency: 'EUR', review_status: '',
   capability_to_review_status: [{ key: 'WHATSAPP', value: 'APPROVED' }], visibility: 'published', product_feed: { id: FEED } });
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+const acknowledgedScheduleWrite = { acknowledged: true, readbackPresent: false, feedIdentityMatches: null,
+  sources: { schedule: 'absent', update_schedule: 'absent' } };
 
 test('different source and feed counts survive persistence and status reads', async () => {
   const f = fixture({ auditSource: async () => ({ valid: false, reason: 'source_feed_mismatch', sourceCount: 9, expectedCount: 7 }) });
@@ -579,6 +581,8 @@ test('production run migrates both known Google schedules and preserves their ca
   assert.equal(report.feedScheduleVerified, true);
   assert.equal(f.posts().length, 1);
   assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
+  assert.equal(f.posts()[0].url.searchParams.get('fields'), 'id,schedule,update_schedule');
+  assert.deepEqual(report.feedScheduleCheck.write, acknowledgedScheduleWrite);
   const payload = Object.fromEntries(new URLSearchParams(f.posts()[0].init.body));
   assert.deepEqual(JSON.parse(payload.schedule), { interval: 'HOURLY', interval_count: 1, minute: 15,
     timezone: 'Europe/Lisbon', url: META_CATALOG_LATEST_FEED_URL });
@@ -628,11 +632,66 @@ test('a failed schedule readback blocks catalogue import and does not retry the 
     auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: true }) });
   const report = await f.service.run();
   assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
-  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'legacy', update_schedule: 'absent' } });
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'legacy', update_schedule: 'absent' },
+    write: acknowledgedScheduleWrite });
   assert.deepEqual((await f.service.status()).lastResult.feedScheduleCheck, report.feedScheduleCheck);
   assert.equal(f.posts().length, 1);
   assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
   assert.equal((await f.service.status()).active, null);
+});
+
+test('an explicit false schedule acknowledgement is rejected even with HTTP 200', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: false, message: 'private-provider-message', token: 'private-token' }) });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_provider_rejected');
+  assert.equal(report.metaStatus, 200);
+  assert.equal(report.catalogConfirmed, false);
+  assert.equal(report.feedScheduleCheck.write.acknowledged, false);
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.calls.filter(call => call.url.pathname === `/v27.0/${FEED}` && call.init.method === 'GET').length, 1);
+  assert.equal((await f.service.status()).active, null);
+  assert.deepEqual((await f.service.status()).lastResult.feedScheduleCheck, report.feedScheduleCheck);
+  assert.doesNotMatch(f.blob.records.get(STATE).text, /private-provider-message|private-token/);
+});
+
+test('an unknown schedule acknowledgement remains unknown and cannot bypass unchanged readback', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: 'true', private: 'not-to-save' }) });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.equal(report.feedScheduleCheck.write.acknowledged, null);
+  assert.equal(report.feedScheduleCheck.write.readbackPresent, false);
+  assert.deepEqual(report.feedScheduleCheck.mismatches, ['schedule.url']);
+  assert.equal(f.posts().length, 1);
+  assert.doesNotMatch(f.blob.records.get(STATE).text, /not-to-save/);
+});
+
+test('POST read-after-write is diagnosed separately and cannot replace the independent GET', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: true, id: FEED,
+      schedule: { interval: 'HOURLY', url: META_CATALOG_LATEST_FEED_URL }, private: 'not-to-save' }) });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'legacy', update_schedule: 'absent' },
+    write: { acknowledged: true, readbackPresent: true, feedIdentityMatches: true, sources: { schedule: 'server', update_schedule: 'absent' } } });
+  assert.equal(report.catalogConfirmed, false);
+  assert.equal(f.posts().length, 1);
+  assert.doesNotMatch(JSON.stringify(report.feedScheduleCheck), /https:|not-to-save/);
+});
+
+test('node-shaped POST read-after-write still requires matching independent schedule verification', async () => {
+  const f = fixture({ remote: { feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: (_url, init, remote) => {
+      remote.feed.schedule = JSON.parse(new URLSearchParams(init.body).get('schedule'));
+      return json(remote.feed);
+    } });
+  const report = await f.service.run();
+  assert.equal(report.catalogConfirmed, true);
+  assert.equal(report.feedScheduleVerified, true);
+  assert.deepEqual(report.feedScheduleCheck.write, { acknowledged: null, readbackPresent: true, feedIdentityMatches: true,
+    sources: { schedule: 'server', update_schedule: 'absent' } });
+  assert.equal(f.calls.filter(call => call.url.pathname === `/v27.0/${FEED}` && call.init.method === 'GET').length, 2);
 });
 
 test('schedule readback reports only field names and source classes when cadence or presence changes', async () => {
@@ -646,7 +705,7 @@ test('schedule readback reports only field names and source classes when cadence
   const report = await f.service.run();
   assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
   assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.hour', 'schedule.minute', 'update_schedule.presence'],
-    sources: { schedule: 'server', update_schedule: 'server' } });
+    sources: { schedule: 'server', update_schedule: 'server' }, write: acknowledgedScheduleWrite });
   assert.equal(report.catalogConfirmed, false);
   assert.equal(f.posts().length, 1);
   assert.doesNotMatch(JSON.stringify(report.feedScheduleCheck), /https:|Europe|synthetic/);
@@ -670,10 +729,13 @@ test('persisted schedule diagnosis strips unrecognized fields and values', async
   await f.service.run();
   const record = f.blob.records.get(STATE); const state = JSON.parse(record.text);
   state.lastResult.feedScheduleCheck = { mismatches: ['schedule.url', 'schedule.password', 'sensitive-value', 'schedule.url'],
-    sources: { schedule: 'server', update_schedule: 'https://secret.example/?token=secret', password: 'secret' }, raw: 'secret' };
+    sources: { schedule: 'server', update_schedule: 'https://secret.example/?token=secret', password: 'secret' }, raw: 'secret',
+    write: { acknowledged: 'secret', readbackPresent: 'secret', feedIdentityMatches: 'secret',
+      sources: { schedule: 'legacy', update_schedule: 'https://secret.example', password: 'secret' }, raw: 'secret' } };
   record.text = JSON.stringify(state);
   const report = (await f.service.status()).lastResult;
-  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'server' } });
+  assert.deepEqual(report.feedScheduleCheck, { mismatches: ['schedule.url'], sources: { schedule: 'server' },
+    write: { acknowledged: null, readbackPresent: false, feedIdentityMatches: null, sources: { schedule: 'legacy' } } });
   assert.doesNotMatch(JSON.stringify(report), /secret|sensitive|password/);
 });
 
