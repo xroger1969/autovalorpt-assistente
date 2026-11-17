@@ -323,6 +323,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'stock-feed') {
+    return (await import('../lib/stock-feed-handler.js')).default(req, res);
+  }
   if (req.query?.integration === 'whatsapp-status') {
     return (await import('../lib/whatsapp-status-handler.js')).default(req, res);
   }
@@ -376,3 +379,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
