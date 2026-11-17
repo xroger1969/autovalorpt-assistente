@@ -1,0 +1,19 @@
+{
+  "name": "AutoValorPT — Atualizar stock",
+  "short_name": "Stock AutoValor",
+  "id": "/stock-rapido.html",
+  "start_url": "/stock-rapido.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fa",
+  "theme_color": "#102139",
+  "lang": "pt-PT",
+  "icons": [
+    {
+      "src": "/avpt-icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
