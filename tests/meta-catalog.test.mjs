@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMetaCatalog, META_CATALOG_FEED_URL } from '../lib/meta-catalog.js';
+import { createMetaCatalog, META_CATALOG_FEED_URL, META_CATALOG_LATEST_FEED_URL } from '../lib/meta-catalog.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const CATALOG = '1817371622874450';
@@ -64,7 +64,7 @@ test('legacy saved reports without a source count remain unknown', async () => {
 function fixture(options = {}) {
   const blob = options.blob || memoryBlob();
   const calls = [];
-  const remote = { products: items.map(asProduct), uploads: [], granted: true, catalog: { id: CATALOG, name: 'AutoValorPT' }, feeds: [{ id: FEED, name: 'Samucar' }], ...options.remote };
+  const remote = { products: items.map(asProduct), uploads: [], granted: true, catalog: { id: CATALOG, name: 'AutoValorPT' }, feeds: [{ id: FEED, name: 'Samucar' }], feed: { id: FEED }, ...options.remote };
   const env = { VERCEL_ENV: 'production', META_CATALOG_ACCESS_TOKEN: 'synthetic-catalog-token', META_CATALOG_SYNC_ENABLED: 'true', ...options.env };
   let auditCalls = 0;
   const auditSource = options.auditSource || (async () => { auditCalls++; return { valid: true, expectedCount: items.length, items: structuredClone(items) }; });
@@ -80,13 +80,23 @@ function fixture(options = {}) {
       return json(remote.catalog);
     }
     if (url.pathname.endsWith('/product_feeds')) return json({ data: remote.feeds });
+    if (url.pathname === `/v27.0/${FEED}`) {
+      if (init.method === 'GET') return json(remote.feed);
+      if (options.schedulePost) return options.schedulePost(url, init, remote);
+      for (const [key, value] of new URLSearchParams(init.body)) {
+        assert.ok(['schedule', 'update_schedule'].includes(key));
+        remote.feed[key] = JSON.parse(value);
+      }
+      return json({ success: true });
+    }
     if (url.pathname.endsWith('/products')) return options.productsResponse ? options.productsResponse(url, init) : json({ data: remote.products });
     if (url.pathname === `/v27.0/${FEED}/uploads` && init.method === 'GET') return json({ data: remote.uploads });
     if (url.pathname === `/v27.0/${FEED}/uploads` && init.method === 'POST') {
       assert.equal(JSON.parse(blob.records.get(STATE).text).active.phase, 'requesting', 'intent is durable before POST');
-      assert.deepEqual(Object.fromEntries(new URLSearchParams(init.body)), { url: META_CATALOG_FEED_URL, update_only: 'false' });
+      const feedUrl = options.feedUrl || META_CATALOG_FEED_URL;
+      assert.deepEqual(Object.fromEntries(new URLSearchParams(init.body)), { url: feedUrl, update_only: 'false' });
       if (options.post) return options.post(url, init, remote);
-      remote.uploads.unshift({ id: '900000000001', start_time: new Date(TIME).toISOString(), url: META_CATALOG_FEED_URL });
+      remote.uploads.unshift({ id: '900000000001', start_time: new Date(TIME).toISOString(), url: feedUrl });
       return json({ id: '900000000001' });
     }
     throw new Error(`Unexpected synthetic request ${url.pathname}`);
@@ -470,3 +480,169 @@ test('pagination stops when the global runtime budget expires', async () => {
   assert.equal(f.calls.filter((c) => c.url.pathname.endsWith('/products')).length, 1);
   assert.equal(f.posts().length, 0);
 });
+
+const SNAPSHOT_HASH = 'a'.repeat(64);
+const SNAPSHOT_URL = `https://autovalorpt-assistente.vercel.app/api/stock?integration=stock-feed&snapshot=${SNAPSHOT_HASH}`;
+const snapshotAudit = (feedUrl = SNAPSHOT_URL) => ({ valid: true, sourceCount: items.length, expectedCount: items.length,
+  items: structuredClone(items), feedHash: SNAPSHOT_HASH, feedUrl });
+
+test('snapshot import uses the exact immutable URL while preserving the existing catalogue binding', async () => {
+  const legacy = fixture();
+  assert.equal((await legacy.service.check()).catalogConfirmed, true);
+  const oldBinding = JSON.parse(legacy.blob.records.get(STATE).text).binding;
+  const current = fixture({ blob: legacy.blob, remote: { products: [] }, feedUrl: SNAPSHOT_URL,
+    auditSource: async () => snapshotAudit() });
+  assert.equal((await current.service.run()).status, 'import_requested');
+  const state = JSON.parse(current.blob.records.get(STATE).text);
+  assert.equal(state.binding, oldBinding);
+  assert.equal(state.active.feedUrl, SNAPSHOT_URL);
+  assert.equal(state.active.fingerprint, SNAPSHOT_HASH);
+  assert.equal(state.lastValidSource.feedUrl, SNAPSHOT_URL);
+  assert.equal(current.posts().length, 1);
+  current.remote.uploads[0] = { ...current.remote.uploads[0], end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 };
+  current.remote.products = items.map(asProduct);
+  assert.equal((await current.service.check()).catalogConfirmed, true);
+  assert.equal((await current.service.status()).active, null);
+  assert.equal(current.posts().length, 1);
+});
+
+test('forged, mutable or mismatched snapshot URLs fail before Graph or an import intent', async () => {
+  for (const feedUrl of [null, '', SNAPSHOT_URL.replace('https:', 'http:'),
+    SNAPSHOT_URL.replace('.vercel.app', '.evil.test'), `${SNAPSHOT_URL}&extra=1`, `${SNAPSHOT_URL}#fragment`,
+    SNAPSHOT_URL.replace(SNAPSHOT_HASH, 'b'.repeat(64)), SNAPSHOT_URL.replace(SNAPSHOT_HASH, 'A'.repeat(64)),
+    SNAPSHOT_URL.replace('?integration=stock-feed&snapshot=', '?snapshot=')]) {
+    const f = fixture({ remote: { products: [] }, auditSource: async () => snapshotAudit(feedUrl) });
+    const result = await f.service.run();
+    assert.equal(result.status, 'source_invalid', String(feedUrl));
+    assert.equal(result.reason, 'source_feed_url_invalid');
+    assert.equal(f.calls.length, 0);
+    assert.equal((await f.service.status()).active, null);
+  }
+});
+
+test('transport changes during revalidation prevent an import even with the same fingerprint', async () => {
+  let audits = 0;
+  const f = fixture({ remote: { products: [] }, auditSource: async () => snapshotAudit(++audits === 1 ? META_CATALOG_FEED_URL : SNAPSHOT_URL) });
+  assert.equal((await f.service.run()).status, 'source_changed');
+  assert.equal(f.posts().length, 0);
+  assert.equal((await f.service.status()).active, null);
+});
+
+test('an unrelated URL cannot reconcile a known snapshot import even if the upload ID matches', async () => {
+  for (const wrongUrl of [undefined, META_CATALOG_FEED_URL, SNAPSHOT_URL.replace(SNAPSHOT_HASH, 'b'.repeat(64)), 'https://evil.test/feed.csv']) {
+    const f = fixture({ remote: { products: [] }, feedUrl: SNAPSHOT_URL, auditSource: async () => snapshotAudit() });
+    await f.service.run();
+    f.remote.uploads[0] = { ...f.remote.uploads[0], url: wrongUrl, end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 };
+    f.remote.products = items.map(asProduct);
+    assert.equal((await f.service.run()).status, 'import_pending', String(wrongUrl));
+    assert.equal((await f.service.status()).active.uploadId, '900000000001');
+    assert.equal(f.posts().length, 1);
+  }
+});
+
+test('an old Google import reconciles by its original URL after switching source providers', async () => {
+  const legacy = fixture({ remote: { products: [] } });
+  await legacy.service.run();
+  const stored = legacy.blob.records.get(STATE);
+  const state = JSON.parse(stored.text);
+  delete state.active.feedUrl; // Version-1 records created before transport support.
+  stored.text = JSON.stringify(state);
+  legacy.remote.uploads[0] = { ...legacy.remote.uploads[0], end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 };
+  legacy.remote.products = items.map(asProduct);
+  const current = fixture({ blob: legacy.blob, remote: legacy.remote, feedUrl: SNAPSHOT_URL,
+    auditSource: async () => snapshotAudit() });
+  const report = await current.service.check();
+  assert.equal(report.catalogConfirmed, true);
+  assert.equal((await current.service.status()).active, null);
+  assert.equal(JSON.parse(stored.text).binding, state.binding);
+  assert.equal(current.posts().length, 0);
+});
+
+test('unknown legacy imports stay blocked when a different snapshot becomes current', async () => {
+  const legacy = fixture({ remote: { products: [] }, post: async () => { throw new Error('interrupted'); } });
+  await legacy.service.run();
+  const current = fixture({ blob: legacy.blob, remote: { products: items.map(asProduct) }, feedUrl: SNAPSHOT_URL,
+    auditSource: async () => snapshotAudit() });
+  assert.equal((await current.service.run()).status, 'import_unknown');
+  assert.equal((await current.service.status()).active.phase, 'unknown');
+  assert.equal(current.posts().length, 0);
+});
+
+test('production run migrates both known Google schedules and preserves their cadence', async () => {
+  const schedule = { id: '123456789', interval: 'HOURLY', interval_count: 1, minute: 15,
+    timezone: 'Europe/Lisbon', url: META_CATALOG_FEED_URL };
+  const update = { interval: 'DAILY', hour: 8, minute: 0, url: META_CATALOG_FEED_URL };
+  const f = fixture({ remote: { feed: { id: FEED, schedule, update_schedule: update } },
+    auditSource: async () => snapshotAudit() });
+  const report = await f.service.run();
+  assert.equal(report.catalogConfirmed, true);
+  assert.equal(report.feedScheduleVerified, true);
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
+  const payload = Object.fromEntries(new URLSearchParams(f.posts()[0].init.body));
+  assert.deepEqual(JSON.parse(payload.schedule), { interval: 'HOURLY', interval_count: 1, minute: 15,
+    timezone: 'Europe/Lisbon', url: META_CATALOG_LATEST_FEED_URL });
+  assert.deepEqual(JSON.parse(payload.update_schedule), { ...update, url: META_CATALOG_LATEST_FEED_URL });
+  assert.equal(f.calls.filter(call => call.url.pathname === `/v27.0/${FEED}` && call.init.method === 'GET').length, 2);
+  assert.equal((await f.service.run()).feedScheduleVerified, true);
+  assert.equal(f.posts().length, 1, 'readback prevents an unnecessary repeated migration');
+});
+
+test('already migrated and absent schedules require no write', async () => {
+  for (const feed of [{ id: FEED }, { id: FEED, schedule: null, update_schedule: {} },
+    { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_LATEST_FEED_URL } }]) {
+    const f = fixture({ remote: { feed }, auditSource: async () => snapshotAudit() });
+    assert.equal((await f.service.run()).feedScheduleVerified, true);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('foreign or malformed schedules fail closed before any import or schedule update', async () => {
+  for (const schedule of [
+    { interval: 'HOURLY', url: 'https://foreign.example/feed.csv' },
+    { interval: 'HOURLY', url: META_CATALOG_FEED_URL, username: 'private-user' },
+    { interval: 'HOURLY', url: META_CATALOG_FEED_URL, password: 'not-to-send' },
+    { interval: 'HOURLY', url: META_CATALOG_FEED_URL, minute: 90 },
+    { interval: 'UNRECOGNIZED', url: META_CATALOG_FEED_URL },
+  ]) {
+    const f = fixture({ remote: { products: [], feed: { id: FEED, schedule } }, auditSource: async () => snapshotAudit() });
+    const report = await f.service.run();
+    assert.equal(report.status, 'check_failed'); assert.equal(report.reason, 'meta_catalog_schedule_invalid');
+    assert.equal(f.posts().length, 0); assert.equal((await f.service.status()).active, null);
+    assert.doesNotMatch(f.blob.records.get(STATE).text, /not-to-send|private-user|foreign.example/);
+  }
+});
+
+test('check and non-production or disabled runs cannot change an existing schedule', async () => {
+  for (const variant of [{ check: true }, { env: { VERCEL_ENV: 'preview' } }, { env: { META_CATALOG_SYNC_ENABLED: 'false' } }]) {
+    const f = fixture({ env: variant.env, remote: { feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+      auditSource: async () => snapshotAudit() });
+    await (variant.check ? f.service.check() : f.service.run());
+    assert.equal(f.posts().length, 0);
+    assert.equal(f.remote.feed.schedule.url, META_CATALOG_FEED_URL);
+  }
+});
+
+test('a failed schedule readback blocks catalogue import and does not retry the write within the run', async () => {
+  const f = fixture({ remote: { products: [], feed: { id: FEED, schedule: { interval: 'HOURLY', url: META_CATALOG_FEED_URL } } },
+    auditSource: async () => snapshotAudit(), schedulePost: () => json({ success: true }) });
+  const report = await f.service.run();
+  assert.equal(report.reason, 'meta_catalog_schedule_unconfirmed');
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
+  assert.equal((await f.service.status()).active, null);
+});
+
+test('latest-snapshot passive uploads can confirm catalogue but cannot reconcile an immutable active import', async () => {
+  const f = fixture({ remote: { products: [] }, feedUrl: SNAPSHOT_URL, auditSource: async () => snapshotAudit() });
+  await f.service.run();
+  f.remote.uploads[0] = { ...f.remote.uploads[0], url: META_CATALOG_LATEST_FEED_URL,
+    end_time: new Date(TIME + 1000).toISOString(), error_count: 0, num_invalid_items: 0 };
+  f.remote.products = items.map(asProduct);
+  assert.equal((await f.service.run()).status, 'import_pending');
+  assert.equal(f.posts().length, 1);
+  const passive = fixture({ remote: { uploads: f.remote.uploads }, auditSource: async () => snapshotAudit() });
+  assert.equal((await passive.service.check()).catalogConfirmed, true);
+  assert.equal(passive.posts().length, 0);
+});
+

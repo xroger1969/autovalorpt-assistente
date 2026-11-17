@@ -73,16 +73,16 @@ test('repeated same-day manual taps and delivery callbacks never start an extra 
   assert.equal((await f.manual.status()).status, 'finished');
 });
 
-test('morning and on-demand cycles preserve the one-photo and one-Story daily limits', async () => {
+test('manual cycle can publish new stock after the daily publication; scheduled cycle retains its daily limit', async () => {
   const f = fixture();
   f.setTime('2026-11-17T08:00:00Z');
   await f.start(f.daily); await f.drain();
   f.setTime('2026-11-17T16:00:00Z');
   await f.start(f.manual); await f.drain();
-  assert.equal((await f.manual.status()).results.photo.status, 'daily_limit_reached');
-  assert.equal((await f.manual.status()).results.story.status, 'daily_limit_reached');
-  assert.equal(f.operations.filter(step => step === 'photo').length, 1);
-  assert.equal(f.operations.filter(step => step === 'story').length, 1);
+  assert.equal((await f.manual.status()).results.photo.status, 'published');
+  assert.equal((await f.manual.status()).results.story.status, 'published');
+  assert.equal(f.operations.filter(step => step === 'photo').length, 2);
+  assert.equal(f.operations.filter(step => step === 'story').length, 2);
 
   const g = fixture();
   g.setTime('2026-11-17T07:00:00Z');
@@ -155,4 +155,33 @@ test('iPhone shortcut has its own installable manifest and no embedded access cr
   assert.doesNotMatch(script, /localStorage|sessionStorage|Authorization:|innerHTML/);
   const policy = config.headers.find(entry => entry.source === '/stock-rapido.html');
   assert.match(policy.headers.find(h => h.key === 'Content-Security-Policy').value, /frame-ancestors 'none'/);
+});
+
+
+test('expired queued daily step cannot prevent an explicit extra cycle, while a running mutation remains protected', async () => {
+  for (const running of [false, true]) {
+    const f = fixture();
+    f.setTime('2026-11-17T08:00:00Z');
+    await f.start(f.daily);
+    while (f.queue.length) {
+      const entry = f.queue.shift();
+      if ((await f.daily.status()).step === 'photo') {
+        if (running) await f.daily.claim(entry.day, entry.ticket);
+        break;
+      }
+      const record = await f.daily.claim(entry.day, entry.ticket);
+      if (record) await f.daily.execute(record);
+    }
+    f.setTime('2026-11-17T16:00:00Z');
+    await f.start(f.manual); await f.drain();
+    assert.equal((await f.manual.status()).results.photo.status, running ? 'other_cycle_in_progress' : 'published');
+  }
+});
+
+test('coordinator synchronizes authoritative stock before any publication', async () => {
+  const f = fixture();
+  f.services.source.sync = async () => { f.operations.push('sync'); return { valid: true, sourceCount: 9, expectedCount: 9 }; };
+  await f.start(f.manual); await f.drain();
+  assert.equal(f.operations[0], 'sync');
+  assert.equal(f.operations.includes('source'), false);
 });

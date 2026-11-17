@@ -5,6 +5,7 @@
   let signedIn = false;
   let updating = false;
   let generation = 0;
+  let lastResumeAt = 0;
   const safeDate = value => {
     const date = new Date(value || '');
     return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('pt-PT', {
@@ -50,7 +51,7 @@
     const status = data.status;
     const step = data.step || '';
     const steps = {
-      source: 'verificar Standvirtual e folha',
+      source: 'atualizar o stock a partir do Standvirtual',
       catalog: 'sincronizar catálogo Meta/WhatsApp',
       retirements: 'verificar retiradas',
       photo: 'publicar fotografia Instagram',
@@ -58,18 +59,23 @@
       verify: 'confirmar os resultados'
     };
     if (status === 'not_started') return 'Ainda não houve execução extraordinária hoje.';
+    if (status === 'blocked' || status === 'interrupted' || data.stalled)
+      return 'A execução precisa de verificação. Não será repetida automaticamente para evitar publicações duplicadas.';
     if (status === 'queued' || status === 'running')
       return 'Rotina ' + (status === 'queued' ? 'em fila' : 'em curso') + ': ' + (steps[step] || 'a verificar') +
         '. Início: ' + safeDate(data.startedAt) + '.';
-    if (status === 'blocked' || status === 'interrupted' || data.stalled)
-      return 'A execução precisa de verificação. Não será repetida automaticamente para evitar publicações duplicadas.';
     if (status === 'finished') {
       const results = data.results || {};
       const parts = [];
-      if (results.catalog) parts.push('Catálogo: ' + results.catalog.status);
-      if (results.photo) parts.push('Fotografias: ' + results.photo.status);
-      if (results.story) parts.push('Stories: ' + results.story.status);
-      if (results.verify) parts.push('Verificação: ' + results.verify.status);
+      const describe = result => result?.published > 0 ? 'publicação confirmada' :
+        result?.status === 'no_new_stock' ? 'sem viaturas novas para publicar' :
+        result?.status === 'daily_limit_reached' ? 'limite da rotina diária atingido' :
+        result?.status === 'other_cycle_in_progress' ? 'outra execução por concluir' :
+        result?.status === 'disabled' ? 'desativado' : 'por verificar no painel';
+      if (results.catalog) parts.push('Catálogo: ' +
+        (data.verification?.catalog?.catalogConfirmed === true ? 'confirmado' : 'por confirmar'));
+      if (results.photo) parts.push('Fotografia: ' + describe(results.photo));
+      if (results.story) parts.push('Story: ' + describe(results.story));
       return 'Ciclo do servidor terminado em ' + safeDate(data.updatedAt) +
         '. ' + (parts.length ? parts.join(' · ') + '.' : 'Resultados de destino por confirmar.');
     }
@@ -93,14 +99,18 @@
       const regular = results[1].status === 'fulfilled' ? results[1].value : null;
       const stock = results[2].status === 'fulfilled' ? results[2].value : null;
       const state = manual?.status || 'unavailable';
-      const available = state === 'not_started';
+      const resumable = state === 'queued' && manual?.stalled &&
+        Date.now() - Date.parse(manual.startedAt) < 3600000;
+      const available = state === 'not_started' || resumable;
       $('runButton').disabled = !available;
+      $('runButton').textContent = resumable ? 'Continuar verificação' : 'Atualizar agora';
+      $('runButton').dataset.action = resumable ? 'resume' : 'manual-start';
       setBadge(
         state === 'not_started' ? 'Pronto para atualizar' :
-          state === 'finished' ? 'Ciclo extraordinário registado' :
+          manual?.stalled ? 'Precisa de verificação' : state === 'finished' ? 'Consultar resultados' :
             ['queued', 'running'].includes(state) ? 'Atualização em curso' : 'Por confirmar',
         state === 'not_started',
-        state === 'blocked' || state === 'interrupted' || state === 'unavailable'
+        state === 'blocked' || state === 'interrupted' || state === 'unavailable' || manual?.stalled
       );
       $('currentStatus').textContent = results[0].status === 'rejected'
         ? 'Não foi possível verificar o histórico. Não inicie uma nova operação sem confirmação.'
@@ -113,10 +123,16 @@
         : 'Inventário da Samucar por confirmar.';
       $('routineInfo').textContent = results[1].status === 'rejected'
         ? 'A execução habitual das 08h00 não pôde ser consultada.'
-        : 'Rotina das 08h00: ' + (regular?.status === 'not_started' ? 'sem execução registada hoje' :
+        : 'Rotina das 08h00: ' + (regular?.stalled ? 'precisa de verificação' : regular?.status === 'not_started' ? 'sem execução registada hoje' :
           regular?.status === 'finished' ? 'terminada' :
           regular?.status === 'running' || regular?.status === 'queued' ? 'em curso' :
           regular?.status || 'por confirmar') + '. Agendamento diário mantido.';
+      // Resume existing unclaimed work only; never auto-start another cycle.
+      if (state === 'queued' && Date.now() - Date.parse(manual.updatedAt) > 60000 &&
+          Date.now() - Date.parse(manual.startedAt) < 3600000 && Date.now() - lastResumeAt > 90000) {
+        lastResumeAt = Date.now();
+        await api(base + 'resume&mode=manual', { method: 'POST' }).catch(() => {});
+      }
     } finally { if (version === generation) updating = false; }
   }
   $('loginForm').addEventListener('submit', async event => {
@@ -141,7 +157,8 @@
     setBadge('A iniciar…');
     $('currentStatus').textContent = 'A registar a execução extraordinária. Não feche nem repita o pedido.';
     try {
-      const data = await api(base + 'manual-start', { method: 'POST' });
+      const action = $('runButton').dataset.action === 'resume' ? 'resume&mode=manual' : 'manual-start';
+      const data = await api(base + action, { method: 'POST' });
       $('currentStatus').textContent = data.status === 'queued'
         ? 'Pedido aceite. As verificações e publicações seguem em segurança. Confirme o resultado no painel.'
         : data.status === 'finished' ? 'A execução extraordinária de hoje já foi concluída. Não será repetida.'

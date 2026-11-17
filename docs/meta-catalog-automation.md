@@ -1,6 +1,6 @@
 # AutoValorPT: verificação e importação do catálogo Meta
 
-O ficheiro filtrado de Google Sheets continua a ser a origem do catálogo. Esta integração verifica o inventário completo da Samucar, os dois CSV e os produtos da Meta. Quando encontra uma diferença corrigível, pode pedir uma importação do mesmo feed. Não cria outro catálogo, não altera a origem nem o agendamento de importação da Meta.
+A produção usa snapshots validados do inventário completo Standvirtual. A Google Sheets mantém-se como espelho diário e como semente única do histórico. O catálogo e o feed existentes são preservados. Cada importação manual usa o URL imutável correspondente ao hash auditado; a importação periódica da Meta é migrada para o último snapshot confirmado, preservando o seu intervalo.
 
 ## Destinos preservados
 
@@ -8,14 +8,14 @@ O ficheiro filtrado de Google Sheets continua a ser a origem do catálogo. Esta 
 - Catálogo: `1817371622874450`.
 - Feed: `1117326544352704`.
 - Google Sheets: `1RENDbmN9Inyd2fr0FQJJmbe1jMpJl4Psevlawc92uVs`.
-- `Catalogo`, gid `1511112026`: só disponíveis, usado pela Meta.
-- `Stock`, gid `2105479537`: histórico, usado pelos publicadores Instagram.
+- `Catalogo`, gid `1511112026`: espelho só de viaturas disponíveis.
+- `Stock`, gid `2105479537`: espelho histórico e semente única do novo inventário.
 
-A integração nova não escreve na folha Google nem muda os publicadores de fotografias, retiradas ou Stories.
+A integração não escreve na folha Google. Os publicadores usam o novo inventário através de um fornecedor interno, mantendo exatamente a identidade do URL antigo e os históricos de publicações.
 
 ## Execução sem sessão de navegador
 
-A rotina [morning-flow](morning-flow.md), iniciada a partir das **08h00 Europe/Lisbon**, chama esta operação depois de validar Samucar e os dois CSV. O antigo cron independente das 12h00 UTC foi removido:
+A rotina [morning-flow](morning-flow.md), iniciada a partir das **08h00 Europe/Lisbon**, chama esta operação depois de sincronizar e validar o inventário completo Samucar. O antigo cron independente das 12h00 UTC foi removido:
 
 ```text
 /api/stock?integration=meta-catalog&action=run
@@ -49,7 +49,7 @@ Antes de importar, a auditoria exige:
 
 - Inventário atual completo, com total anunciado, total JSON, quantidade e IDs distintos coincidentes.
 - Correspondência dos IDs, preços, títulos, ano, quilometragem, combustível, marca, ligações e fotografia principal.
-- Correspondência exata dos nove campos de `Catalogo` com as linhas `in stock` de `Stock`.
+- Correspondência exata do snapshot persistido com o inventário atual; CSV imutável com hash dos bytes.
 - Recusa de inventário vazio, parcial, duplicado ou de uma redução superior a metade do último inventário validado.
 - Correspondência exata com a associação negócio/catálogo/feed aprovada pelo proprietário e fixada no código; confirmação ao vivo do catálogo e da pertença do feed.
 - Paginação completa e limitada dos produtos. As ligações de paginação do fornecedor não são seguidas; só os cursores são reaplicados ao domínio Graph fixo.
@@ -81,4 +81,5 @@ npm test
 Os testes novos cobrem integridade da origem, permissões, associação ao destino, paginação, concorrência, importações desconhecidas, proteção dos segredos e autenticação do endpoint. A auditoria pública real de 14/11/2026 confirmou nove viaturas antes de qualquer importação.
 
 Referências primárias: [Feed API e reconciliação](https://github.com/facebookincubator/catalogue-of-api-solutions/blob/main/solutions/catalogue/catalogue-batch-feed-optimiser.md), [ProductFeedUpload no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productfeedupload.py), [ProductItem e estados por capacidade no SDK Meta](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/productitem.py) e [System Users](https://developers.facebook.com/docs/business-management-apis/system-users/).
+
 
