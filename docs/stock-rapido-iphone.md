@@ -8,7 +8,7 @@ No iPhone, abrir no **Safari** (não num navegador interno de outra aplicação)
 
 A etapa inicial sincroniza diretamente o inventário completo Standvirtual num registo privado. O histórico da folha Stock é importado apenas na primeira sincronização, preservando viaturas vendidas. Nas seguintes, não é necessária escrita na Google Sheets. A tarefa ChatGPT diária continua a atualizar a folha para consulta. Inventários vazios, parciais ou com quedas suspeitas não autorizam alterações nem publicações.
 
-O catálogo Meta recebe um CSV imutável, identificado pelo hash exato. A importação periódica do mesmo feed passa a consultar o último snapshot confirmado, sem alterar o intervalo existente. O endpoint público só devolve os dados comerciais; não pode atualizar stock nem iniciar publicações.
+O catálogo Meta recebe um CSV imutável, identificado pelo hash exato. A importação periódica do mesmo feed só passa a consultar o último snapshot depois de a Meta confirmar a alteração da ligação, sem mudar o intervalo existente. Se a Meta continuar a devolver a ligação antiga da folha, a migração permanece por confirmar e novas importações ficam bloqueadas; não se considera essa dependência resolvida. O endpoint público só devolve os dados comerciais; não pode atualizar stock nem iniciar publicações.
 
 ## Operação
 1. Publicar a viatura na conta Samucar Premium do Standvirtual e aguardar que o anúncio esteja visível na origem.
