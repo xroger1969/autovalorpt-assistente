@@ -327,6 +327,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'catalog-image') {
+    return (await import('../lib/catalog-image-handler.js')).default(req, res);
+  }
   if (req.query?.integration === 'stock-feed') {
     return (await import('../lib/stock-feed-handler.js')).default(req, res);
   }

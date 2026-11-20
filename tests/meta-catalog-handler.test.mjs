@@ -86,3 +86,22 @@ test('catalogue failures never leak provider responses or secret values', async 
   assert.equal(JSON.stringify([result, logs]).includes(secret), false);
   assert.equal(result.body.inspectStatusBeforeRetry, true);
 });
+
+test('private sync prepares photos after raw validation and before the catalogue import, while status and check stay read-only', async () => {
+  const calls = []; let valid = true;
+  const source = { sync: async () => { calls.push('stock'); return { valid }; } };
+  const catalogSource = { prepare: async () => { calls.push('photos'); return { valid: true }; } };
+  const catalog = Object.fromEntries(['status', 'check', 'run'].map(action => [action, async () => {
+    calls.push(action); return { status: 'catalog_matches' }; } ]));
+  const handler = createMetaCatalogHandler({ env: { CRON_SECRET: secret }, source, catalogSource, catalog, log() {} });
+  const invoke = async action => { const res = response(); await handler({ method: 'GET', query: { action },
+    headers: { authorization: `Bearer ${secret}` } }, res); return res; };
+  await invoke('status'); await invoke('check'); assert.deepEqual(calls, ['status', 'check']);
+  calls.length = 0; await invoke('run'); assert.deepEqual(calls, ['stock', 'photos', 'run']);
+  calls.length = 0; valid = false; assert.equal((await invoke('run')).body.status, 'source_invalid');
+  assert.deepEqual(calls, ['stock']);
+  calls.length = 0; valid = true;
+  catalogSource.prepare = async () => { calls.push('photos'); return { valid: false, reason: 'catalog_source_changed' }; };
+  assert.equal((await invoke('run')).body.reason, 'catalog_source_changed');
+  assert.deepEqual(calls, ['stock', 'photos']);
+});
