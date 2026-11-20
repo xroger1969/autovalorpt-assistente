@@ -41,9 +41,34 @@
     {
       "path": "/api/stock?integration=morning-flow&action=start&season=winter",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/stock?integration=editorial&action=run&season=summer",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/stock?integration=editorial&action=run&season=winter",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/stock?integration=editorial&action=run&season=summer&recovery=1",
+      "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/stock?integration=editorial&action=run&season=winter&recovery=1",
+      "schedule": "0 20 * * *"
     }
   ],
   "headers": [
+    {
+      "source": "/editorial.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self'; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
     {
       "source": "/stock-rapido.html",
       "headers": [

@@ -339,6 +339,25 @@ export default async function handler(req, res) {
   if (req.query?.integration === 'morning-flow') {
     return (await import('../lib/morning-flow-handler.js')).default(req, res);
   }
+  if (req.query?.integration === 'editorial') {
+    return (await import('../lib/instagram-editorial-handler.js')).default(req, res);
+  }
+  if (req.query?.integration === 'editorial-image') {
+    return (await import('../lib/editorial-image-handler.js')).default(req, res);
+  }
+  if (req.query?.integration === 'editorial-post') {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'method_not_allowed' });
+    const date = req.query?.date;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(404).json({ ok: false, error: 'post_not_found' });
+    try {
+      const { createInstagramEditorial } = await import('../lib/instagram-editorial.js');
+      const url = await createInstagramEditorial().postLink(date);
+      if (!url) return res.status(404).json({ ok: false, error: 'post_not_found' });
+      res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
+      return res.status(200).json({ ok: true, date, url });
+    } catch { return res.status(503).json({ ok: false, error: 'post_link_unavailable' }); }
+  }
   if (req.query?.integration === 'meta-catalog') {
     return (await import('../lib/meta-catalog-handler.js')).default(req, res);
   }

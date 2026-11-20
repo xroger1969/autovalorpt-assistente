@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#101c2d">
+  <title>Publicações criativas · AutoValorPT</title>
+  <link rel="stylesheet" href="/editorial.css">
+  <script src="/editorial.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/rotina.html" aria-label="AutoValorPT — a minha rotina">AutoValor<span>PT</span><small>ALMADA</small></a>
+      <nav id="privateNav" aria-label="Área privada" hidden>
+        <a href="/rotina.html">A minha rotina</a>
+        <button id="logoutButton" type="button">Sair</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="loginView" class="card login" aria-labelledby="loginTitle">
+      <p class="eyebrow">Área privada</p>
+      <h1 id="loginTitle">Publicações<br>criativas.</h1>
+      <p class="muted">Acompanha o conteúdo diário da AutoValorPT, também no iPhone.</p>
+      <form id="loginForm">
+        <label for="accessCode">Código de acesso privado</label>
+        <input id="accessCode" name="password" type="password" autocomplete="current-password" maxlength="160" required>
+        <button id="loginButton" class="button primary" type="submit" disabled>Entrar</button>
+      </form>
+      <p id="loginStatus" class="message" role="status" aria-live="polite">A verificar a sessão…</p>
+      <p class="small muted">Usa o mesmo código da tua área privada AutoValorPT.</p>
+    </section>
+
+    <section id="dashboardView" aria-labelledby="pageTitle" hidden>
+      <div class="page-heading">
+        <div><p class="eyebrow">AutoValorPT · Instagram</p><h1 id="pageTitle">Publicações criativas.</h1></div>
+        <button id="refreshButton" class="button quiet" type="button">Atualizar estado</button>
+      </div>
+      <p class="intro muted">A rotina corre no servidor. Podes acompanhá-la aqui no iPhone, sem teres o Mac ligado.</p>
+      <p id="dashboardStatus" class="message notice" role="status" aria-live="polite"></p>
+
+      <section class="schedule-card" aria-labelledby="scheduleTitle">
+        <div class="schedule-main">
+          <span id="routineBadge" class="badge">A consultar</span>
+          <h2 id="scheduleTitle">Um conteúdo por dia.</h2>
+          <p class="schedule-time">A partir das <strong>19:00</strong><span>hora de Lisboa</span></p>
+          <p id="routineDescription" class="schedule-description">A consultar a configuração da rotina…</p>
+        </div>
+        <div class="schedule-control">
+          <span class="mini-label">Próxima execução prevista</span>
+          <p id="nextRun" class="next-run">Por confirmar</p>
+          <p id="connectionStatus" class="connection-status">Ligação ao Instagram por consultar.</p>
+          <button id="toggleButton" class="button gold" type="button" disabled>Por consultar</button>
+          <p class="control-note">Pausar afeta as próximas publicações criativas.</p>
+        </div>
+      </section>
+
+      <div class="content-grid">
+        <section class="card preview-card" aria-labelledby="previewTitle">
+          <div class="section-heading"><div><p class="eyebrow">O próximo conteúdo</p><h2 id="previewTitle">A consultar…</h2></div><span id="formatBadge" class="tag" hidden></span></div>
+          <p id="previewDate" class="small muted"></p>
+          <p id="previewEmpty" class="empty">A pré-visualização aparece depois de consultarmos a rotina.</p>
+          <div id="previewContent" hidden>
+            <div id="imageFrame" class="image-frame"><img id="previewImage" alt="" width="1080" height="1350" decoding="async"></div>
+            <div id="videoFrame" class="video-frame" hidden><video id="previewVideo" controls playsinline preload="metadata" width="1080" height="1920" aria-label="Pré-visualização do próximo Reel">O teu navegador não consegue reproduzir este vídeo.</video></div>
+            <div id="slideControls" class="slide-controls" hidden>
+              <button id="previousSlide" class="button quiet" type="button" aria-label="Ver imagem anterior">← Anterior</button>
+              <span id="slidePosition" class="small" aria-live="polite"></span>
+              <button id="nextSlide" class="button quiet" type="button" aria-label="Ver imagem seguinte">Seguinte →</button>
+            </div>
+            <p id="imageStatus" class="small muted" role="status"></p>
+            <details class="caption-details" open>
+              <summary>Legenda preparada</summary>
+              <p id="captionText" class="caption"></p>
+              <button id="copyCaption" class="button quiet" type="button">Copiar legenda</button>
+              <p id="copyStatus" class="small muted" role="status" aria-live="polite"></p>
+            </details>
+          </div>
+          <p class="small muted preview-note">Esta pré-visualização mostra o conteúdo preparado. A publicação só fica confirmada quando surge no histórico.</p>
+        </section>
+
+        <div class="side-stack">
+          <section class="card" aria-labelledby="resultTitle">
+            <p class="eyebrow">Acompanhamento</p><h2 id="resultTitle">Último resultado</h2>
+            <span id="resultBadge" class="badge light">Por consultar</span>
+            <p id="resultDescription" class="result-description muted"></p>
+            <p id="resultTime" class="small muted"></p>
+            <a id="lastPostLink" class="button quiet" target="_blank" rel="noopener noreferrer" hidden>Ver no Instagram ↗</a>
+          </section>
+          <section class="card" aria-labelledby="historyTitle">
+            <div class="section-heading"><h2 id="historyTitle">Histórico recente</h2><span id="historyCount" class="tag" hidden></span></div>
+            <p id="historyEmpty" class="empty">Ainda sem resultados consultados.</p>
+            <ol id="historyList" class="history-list"></ol>
+          </section>
+          <section class="note-card" aria-labelledby="varietyTitle">
+            <p class="eyebrow">A linha editorial</p><h2 id="varietyTitle">Ideias úteis.<br>Temas variados.</h2>
+            <p>Listas para guardar, perguntas sobre a tua rotina e sugestões para escolher o próximo carro com mais informação.</p>
+            <p class="small">As publicações de viaturas e a rotina do stock continuam a ser acompanhadas em <a href="/rotina.html">A minha rotina</a>.</p>
+          </section>
+        </div>
+      </div>
+      <footer class="page-footer"><p id="readAt"></p><p>O estado atualiza-se enquanto este painel está aberto. Sair do painel não pausa a rotina.</p></footer>
+    </section>
+    <noscript><p class="card">Ativa JavaScript para consultar esta área privada.</p></noscript>
+  </main>
+</body>
+</html>
