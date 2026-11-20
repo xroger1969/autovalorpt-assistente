@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMetaCatalogSource, auditMetaCatalogSource, META_CATALOG_SOURCE_URLS as URLS } from '../lib/meta-catalog-source.js';
+import { createMetaCatalogSource, auditMetaCatalogSource, readStockInventories, META_CATALOG_SOURCE_URLS as URLS } from '../lib/meta-catalog-source.js';
+import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
+
+const AUTOVALORPT = STOCK_INVENTORIES.find(source => source.id === 'autovalorpt').url;
 
 const columns = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand'];
 const checkedAt = '2026-11-14T11:35:00.000Z';
@@ -26,14 +29,16 @@ function fixture(options = {}) {
   const items = options.items || Array.from({ length: 9 }, (_, i) => car(`ID8stock0${i}`));
   const stock = options.stock || [...items, car('ID8sold01', { availability: 'out of stock' })];
   const ads = options.ads || items.map(advert); const calls = [];
-  const bodies = { [URLS.inventory]: options.html ?? html(ads, options), [URLS.catalog]: options.catalogCsv ?? csv(items), [URLS.stock]: options.stockCsv ?? csv(stock) };
+  const bodies = { [URLS.inventory]: options.html ?? html(ads, options),
+    [AUTOVALORPT]: options.autovalorptHtml ?? html(options.autovalorptAds ?? ads),
+    [URLS.catalog]: options.catalogCsv ?? csv(items), [URLS.stock]: options.stockCsv ?? csv(stock) };
   const fetchImpl = async (url, init) => {
     calls.push({ url, method: init.method, redirect: init.redirect, signal: init.signal });
     assert.equal(init.method, 'GET'); assert.ok(init.signal instanceof AbortSignal);
     const override = options.respond?.(url, init, calls);
     if (override) return override;
     assert.ok(Object.hasOwn(bodies, url), `Unexpected URL: ${url}`);
-    return new Response(bodies[url], { headers: { 'content-type': url === URLS.inventory ? 'text/html; charset=utf-8' : 'text/csv; charset=utf-8' } });
+    return new Response(bodies[url], { headers: { 'content-type': STOCK_INVENTORIES.some(source => source.url === url) ? 'text/html; charset=utf-8' : 'text/csv; charset=utf-8' } });
   };
   return { calls, items, ads, stock, fetchImpl, source: createMetaCatalogSource({ fetchImpl, now: () => Date.parse(checkedAt), ...options.sourceOptions }) };
 }
@@ -45,7 +50,7 @@ test('requires all nine current vehicles and matching CSV fields; preserves hist
   assert.deepEqual(result.items, f.items); assert.equal(result.items.some((item) => item.availability !== 'in stock'), false);
   assert.deepEqual(result.outOfStockIds, ['ID8sold01']);
   assert.deepEqual((await fixture({ stock: f.items }).source.audit()).outOfStockIds, []);
-  assert.equal(f.calls.length, 3); assert.ok(f.calls.every((call) => call.method === 'GET'));
+  assert.equal(f.calls.length, 4); assert.ok(f.calls.every((call) => call.method === 'GET'));
 });
 
 test('row order does not change the feed fingerprint', async () => {
@@ -132,7 +137,7 @@ test('inventory is bounded even without content-length and arbitrary error messa
 test('only fixed source URLs are fetched; untrusted photo and advert hosts are rejected', async () => {
   const f = fixture({ sourceOptions: { inventoryUrl: 'http://127.0.0.1/admin', feedUrl: 'https://example.com/private' } });
   assert.equal((await f.source.audit()).valid, true);
-  assert.deepEqual(new Set(f.calls.map((call) => call.url)), new Set(Object.values(URLS)));
+  assert.deepEqual(new Set(f.calls.map((call) => call.url)), new Set([...Object.values(URLS), AUTOVALORPT]));
   for (const override of [{ photos: ['http://127.0.0.1/photo'] }, { url: 'https://standvirtual.com.attacker.invalid/carros/anuncio/tesla-ID8stock00.html' }]) {
     const ads = f.ads.map((ad, i) => i === 0 ? { ...ad, ...override } : ad);
     assert.equal((await fixture({ ads }).source.audit()).reason, 'source_invalid_vehicle');
@@ -156,7 +161,7 @@ test('legitimate Google Sheets CDN redirects remain compatible with public expor
     if (url === target) return new Response(csv(initial.items), { headers: { 'content-type': 'text/csv' } });
   } });
   assert.equal((await f.source.audit()).valid, true);
-  assert.ok(f.calls.filter((call) => call.url !== URLS.inventory).every((call) => call.redirect === 'manual'));
+  assert.ok(f.calls.filter((call) => !STOCK_INVENTORIES.some(source => source.url === call.url)).every((call) => call.redirect === 'manual'));
 });
 
 test('wrapper accepts injected fetch/time and a timed-out source returns a safe failure', async () => {
@@ -165,4 +170,61 @@ test('wrapper accepts injected fetch/time and a timed-out source returns a safe 
   const timeout = fixture({ respond: (url) => { if (url === URLS.inventory) throw new DOMException('provider location must stay private', 'TimeoutError'); } });
   const result = await timeout.source.audit();
   assert.equal(result.reason, 'source_timeout'); assert.equal(JSON.stringify(result).includes('private'), false);
+});
+
+test('reads both fixed inventories concurrently and returns their distinct union and source membership', { timeout: 2000 }, async () => {
+  const samucar = [car('ID8samuc1'), car('ID8samuc2')];
+  const auto = [car('ID8auto01'), car('ID8auto02')];
+  const waiting = []; const calls = [];
+  const fetchImpl = (url, init) => new Promise(resolve => {
+    calls.push(url); assert.equal(init.redirect, 'error');
+    assert.equal(init.method, 'GET'); assert.ok(init.signal instanceof AbortSignal);
+    waiting.push(() => resolve(new Response(html((url === URLS.inventory ? samucar : auto).map(advert)), {
+      headers: { 'content-type': 'text/html' },
+    })));
+    if (waiting.length === 2) waiting.forEach(finish => finish());
+  });
+  const result = await readStockInventories({ fetchImpl, now: () => Date.parse(checkedAt),
+    inventoryUrl: 'https://attacker.invalid/ignored' });
+  assert.equal(result.count, 4);
+  assert.deepEqual(new Set(calls), new Set(STOCK_INVENTORIES.map(source => source.url)));
+  assert.deepEqual(result.sources.map(source => [source.id, source.count]), [['samucar', 2], ['autovalorpt', 2]]);
+  assert.deepEqual(result.sources[1].ids, ['ID8auto01', 'ID8auto02']);
+  assert.deepEqual(Object.keys(result.items[0]), ['id', 'title', 'year', 'mileage', 'brand', 'fuel', 'price', 'link', 'image']);
+});
+
+test('legacy feed auditing requires the union of both inventories and rejects a Samucar-only export', async () => {
+  const samucar = [car('ID8samuc1'), car('ID8samuc2')];
+  const auto = [car('ID8auto01')];
+  const f = fixture({ items: [...samucar, ...auto], ads: samucar.map(advert), autovalorptAds: auto.map(advert) });
+  const result = await f.source.audit();
+  assert.equal(result.valid, true); assert.equal(result.sourceCount, 3);
+  assert.deepEqual(result.sources.map(source => source.count), [2, 1]);
+  const old = fixture({ items: samucar, ads: samucar.map(advert), autovalorptAds: auto.map(advert) });
+  assert.equal((await old.source.audit()).reason, 'source_ids_mismatch');
+});
+
+test('only identical data with the same listing ID is deduplicated across inventories', async () => {
+  const shared = car('ID8share1');
+  const another = car('ID8share2'); // Same model, year, mileage and price is still a separate car.
+  const f = fixture({ items: [shared, another], ads: [advert(shared)], autovalorptAds: [advert(shared), advert(another)] });
+  const result = await f.source.audit();
+  assert.equal(result.valid, true); assert.equal(result.sourceCount, 2);
+  assert.deepEqual(result.sources.map(source => source.count), [1, 2]);
+  const conflicting = fixture({ items: [shared], ads: [advert(shared)],
+    autovalorptAds: [advert({ ...shared, price: '29990.00 EUR' })] });
+  assert.equal((await conflicting.source.audit()).reason, 'source_conflicting_vehicle');
+});
+
+test('a partial, empty or failed second inventory cannot be treated as an empty addition', async () => {
+  for (const body of [html([]), html([advert(car('ID8auto01'))], { count: 2, total: 2 }), '<html>Offline</html>']) {
+    const f = fixture({ autovalorptHtml: body });
+    await assert.rejects(() => readStockInventories({ fetchImpl: f.fetchImpl }), error => {
+      assert.equal(error.sourceId, 'autovalorpt'); assert.match(error.code, /^source_/); return true;
+    });
+    const result = await f.source.audit();
+    assert.equal(result.valid, false); assert.equal('items' in result, false); assert.equal('outOfStockIds' in result, false);
+  }
+  const f = fixture({ respond: url => url === AUTOVALORPT ? new Response('Error', { status: 503, headers: { 'content-type': 'text/html' } }) : null });
+  assert.equal((await f.source.audit()).reason, 'source_unavailable');
 });

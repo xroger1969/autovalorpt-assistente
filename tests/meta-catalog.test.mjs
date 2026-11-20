@@ -581,7 +581,7 @@ test('production run migrates both known Google schedules and preserves their ca
   assert.equal(report.feedScheduleVerified, true);
   assert.equal(f.posts().length, 1);
   assert.equal(f.posts()[0].url.pathname, `/v27.0/${FEED}`);
-  assert.equal(f.posts()[0].url.searchParams.get('fields'), 'id,schedule,update_schedule');
+  assert.equal(f.posts()[0].url.searchParams.has('fields'), false, 'schedule confirmation uses the independent GET');
   assert.deepEqual(report.feedScheduleCheck.write, acknowledgedScheduleWrite);
   const payload = Object.fromEntries(new URLSearchParams(f.posts()[0].init.body));
   assert.deepEqual(JSON.parse(payload.schedule), { interval: 'HOURLY', interval_count: 1, minute: 15,

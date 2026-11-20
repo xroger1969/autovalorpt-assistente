@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createStockSource, stockFeedCsv, stockSnapshotUrl } from '../lib/stock-source.js';
 import { META_CATALOG_SOURCE_URLS as URLS } from '../lib/meta-catalog-source.js';
+import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const STATE = 'stock-source/v1/production/state.json';
+const AUTOVALORPT = STOCK_INVENTORIES.find(source => source.id === 'autovalorpt').url;
 const env = { VERCEL_ENV: 'production' };
 const now = () => Date.parse('2026-11-17T18:00:00Z');
 const car = (id, fields = {}) => ({ id, title: 'Tesla Model 3 | 2022 | 138 000 km',
@@ -26,6 +28,7 @@ const html = (items, count = items.length) => `<script id="__NEXT_DATA__" type="
 function fixture(options = {}) {
   const blob = options.blob || memoryBlob(); const calls = [];
   const data = { items: options.items || [car('ID8stock1'), car('ID8stock2')], body: undefined,
+    autovalorptItems: options.autovalorptItems, autovalorptBody: undefined,
     seed: options.seed || [car('ID8stock1'), car('ID8stock2'), car('ID8sold01', { availability: 'out of stock' })] };
   const fetchImpl = async (url, init) => {
     calls.push({ url, init });
@@ -33,12 +36,176 @@ function fixture(options = {}) {
     const response = options.respond?.(url, init);
     if (response) return response;
     if (url === URLS.inventory) return new Response(data.body ?? html(data.items), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    // Existing single-set scenarios deliberately exercise an identical listing
+    // in both origins. Multi-source scenarios provide distinct AutoValorPT rows.
+    if (url === AUTOVALORPT) return new Response(data.autovalorptBody ?? html(data.autovalorptItems ?? data.items), { headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (url === URLS.stock) return new Response(stockFeedCsv(data.seed), { headers: { 'content-type': 'text/csv' } });
     throw new Error(`Unexpected URL ${url}`);
   };
   const source = createStockSource({ env: options.env || env, storage: options.storage || blob.storage, now, fetchImpl });
   return { source, blob, calls, data, fetchImpl };
 }
+
+function legacyState(blob, items) {
+  const active = items.filter(item => item.availability === 'in stock').sort((a, b) => a.id.localeCompare(b.id));
+  const csv = stockFeedCsv(active); const feedHash = createHash('sha256').update(csv).digest('hex');
+  const state = { version: 1, inventoryUrl: URLS.inventory, seedUrl: URLS.stock,
+    initializedAt: '2026-11-10T08:00:00.000Z', checkedAt: '2026-11-16T08:00:00.000Z',
+    sourceCount: active.length, feedHash, items };
+  blob.records.set(STATE, { text: JSON.stringify(state), etag: 'legacy-state' });
+  blob.records.set(`stock-source/v1/production/snapshots/${feedHash}.csv`, { text: csv, etag: 'legacy-snapshot' });
+  return state;
+}
+
+test('migrates Samucar v1 state to both inventories while retaining IDs, sold history and immutable snapshots', async () => {
+  const auto = [car('ID8auto01'), car('ID8auto02')];
+  const f = fixture({ autovalorptItems: auto });
+  const legacy = legacyState(f.blob, f.data.seed);
+  const before = f.blob.records.get(STATE).text;
+  assert.equal((await f.source.feed('latest')).fingerprint, legacy.feedHash);
+  assert.equal((await f.source.audit()).reason, 'stock_source_changed');
+  assert.equal(f.blob.records.get(STATE).text, before);
+  assert.equal(f.blob.calls.some(call => call.method === 'put'), false);
+  const result = await f.source.sync();
+  assert.equal(result.valid, true); assert.equal(result.sourceCount, 4);
+  assert.deepEqual(result.sources.map(source => [source.id, source.count]), [['samucar', 2], ['autovalorpt', 2]]);
+  assert.deepEqual(new Set(result.items.map(item => item.id)), new Set(['ID8stock1', 'ID8stock2', 'ID8auto01', 'ID8auto02']));
+  assert.deepEqual(result.outOfStockIds, ['ID8sold01']);
+  const saved = JSON.parse(f.blob.records.get(STATE).text);
+  assert.equal(saved.version, 2); assert.equal(saved.initializedAt, legacy.initializedAt);
+  assert.deepEqual(saved.itemSources.ID8sold01, ['samucar']);
+  assert.deepEqual(saved.itemSources.ID8auto01, ['autovalorpt']);
+  assert.equal(saved.items.find(item => item.id === 'ID8stock1').link, legacy.items[0].link);
+  assert.equal(f.calls.some(call => call.url === URLS.stock), false);
+  assert.equal((await f.source.feed(legacy.feedHash)).count, 2);
+  assert.equal((await f.source.feed('latest')).fingerprint, result.feedHash);
+  assert.equal((await f.source.audit()).valid, true);
+});
+
+test('new AutoValorPT listings cannot conceal a suspicious Samucar drop during v1 migration', async () => {
+  const seven = Array.from({ length: 7 }, (_, i) => car(`ID8samuc${i}`));
+  const auto = Array.from({ length: 5 }, (_, i) => car(`ID8auto0${i}`));
+  const f = fixture({ items: seven.slice(0, 3), seed: seven, autovalorptItems: auto });
+  legacyState(f.blob, seven);
+  const before = f.blob.records.get(STATE).text;
+  const result = await f.source.sync();
+  assert.equal(result.reason, 'source_suspicious_drop'); assert.equal(result.sourceId, 'samucar');
+  assert.equal(f.blob.records.get(STATE).text, before);
+  assert.equal(f.blob.calls.some(call => call.method === 'put'), false);
+  assert.equal((await f.source.audit()).reason, 'source_suspicious_drop');
+});
+
+test('per-source drop protection also catches a lost AutoValorPT majority despite healthy combined totals', async () => {
+  const seven = Array.from({ length: 7 }, (_, i) => car(`ID8samuc${i}`));
+  const auto = Array.from({ length: 5 }, (_, i) => car(`ID8auto0${i}`));
+  const f = fixture({ items: seven, seed: seven, autovalorptItems: auto });
+  assert.equal((await f.source.sync()).valid, true);
+  const before = f.blob.records.get(STATE).text;
+  const writes = f.blob.calls.filter(call => call.method === 'put').length;
+  f.data.autovalorptItems = auto.slice(0, 1);
+  const result = await f.source.sync();
+  assert.equal(result.reason, 'source_suspicious_drop'); assert.equal(result.sourceId, 'autovalorpt');
+  assert.equal(f.blob.records.get(STATE).text, before);
+  assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes);
+  assert.equal((await f.source.audit()).reason, 'source_suspicious_drop');
+});
+
+test('retiring a listing in either source preserves the other source and all historical rows', async () => {
+  const auto = [car('ID8auto01'), car('ID8auto02')];
+  const f = fixture({ autovalorptItems: auto });
+  assert.equal((await f.source.sync()).valid, true);
+  f.data.items = [car('ID8stock2')];
+  const samucarSale = await f.source.sync();
+  assert.equal(samucarSale.valid, true);
+  assert.deepEqual(samucarSale.outOfStockIds, ['ID8sold01', 'ID8stock1']);
+  assert.ok(auto.every(item => samucarSale.items.some(current => current.id === item.id)));
+  f.data.autovalorptItems = [car('ID8auto02')];
+  const autoSale = await f.source.sync();
+  assert.equal(autoSale.valid, true);
+  assert.deepEqual(autoSale.items.map(item => item.id), ['ID8auto02', 'ID8stock2']);
+  assert.deepEqual(autoSale.outOfStockIds, ['ID8auto01', 'ID8sold01', 'ID8stock1']);
+  const history = await f.source.loadFeed();
+  assert.equal(history.length, 5);
+  const saved = JSON.parse(f.blob.records.get(STATE).text);
+  assert.deepEqual(saved.itemSources.ID8auto01, ['autovalorpt']);
+  assert.deepEqual(saved.itemSources.ID8stock1, ['samucar']);
+});
+
+test('the same ID in both sources is one item and remains available until absent from both', async () => {
+  const shared = car('ID8share1');
+  const f = fixture({ items: [shared, car('ID8stock1')], seed: [shared, car('ID8stock1')],
+    autovalorptItems: [shared, car('ID8auto01')] });
+  const first = await f.source.sync();
+  assert.equal(first.valid, true); assert.equal(first.sourceCount, 3);
+  assert.deepEqual(first.sources.map(source => source.count), [2, 2]);
+  const originalHash = first.feedHash;
+  f.data.items = [car('ID8stock1')];
+  assert.equal((await f.source.audit()).reason, 'stock_source_changed');
+  const second = await f.source.sync();
+  assert.equal(second.valid, true); assert.equal(second.feedHash, originalHash);
+  assert.equal(second.outOfStockIds.includes(shared.id), false);
+  const state = JSON.parse(f.blob.records.get(STATE).text);
+  assert.deepEqual(state.itemSources[shared.id], ['samucar', 'autovalorpt']);
+  assert.equal(state.sources[0].ids.includes(shared.id), false);
+  assert.equal(state.sources[1].ids.includes(shared.id), true);
+  assert.equal((await f.source.audit()).valid, true);
+  f.data.autovalorptItems = [car('ID8auto01')];
+  const third = await f.source.sync();
+  assert.equal(third.valid, true); assert.deepEqual(third.outOfStockIds, [shared.id]);
+});
+
+test('the same ID with conflicting data cannot create or replace a snapshot', async () => {
+  const f = fixture({ autovalorptItems: [car('ID8stock1', { price: '30000.00 EUR' })] });
+  assert.equal((await f.source.sync()).reason, 'source_conflicting_vehicle');
+  assert.equal(f.blob.records.size, 0);
+  f.data.autovalorptItems = [car('ID8stock1')];
+  assert.equal((await f.source.sync()).valid, true);
+  const before = f.blob.records.get(STATE).text; const size = f.blob.records.size;
+  f.data.autovalorptItems[0].price = '30000.00 EUR';
+  assert.equal((await f.source.sync()).reason, 'source_conflicting_vehicle');
+  assert.equal(f.blob.records.get(STATE).text, before); assert.equal(f.blob.records.size, size);
+});
+
+test('an empty, partial, malformed or timed-out AutoValorPT origin never removes its cars', async () => {
+  let timeout = false;
+  const f = fixture({ autovalorptItems: [car('ID8auto01'), car('ID8auto02')],
+    respond: url => { if (timeout && url === AUTOVALORPT) throw new DOMException('private location', 'TimeoutError'); } });
+  const first = await f.source.sync(); assert.equal(first.valid, true);
+  const before = f.blob.records.get(STATE).text;
+  const writes = f.blob.calls.filter(call => call.method === 'put').length;
+  for (const body of [html([]), html([car('ID8auto01')], 2), '<html>Temporary error</html>']) {
+    f.data.autovalorptBody = body;
+    const result = await f.source.sync();
+    assert.equal(result.valid, false); assert.equal(result.sourceId, 'autovalorpt');
+    assert.equal(f.blob.records.get(STATE).text, before);
+    assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes);
+    assert.equal((await f.source.feed('latest')).fingerprint, first.feedHash);
+  }
+  f.data.autovalorptBody = undefined; timeout = true;
+  const timedOut = await f.source.sync();
+  assert.equal(timedOut.reason, 'source_timeout'); assert.equal(timedOut.sourceId, 'autovalorpt');
+  assert.equal(JSON.stringify(timedOut).includes('private'), false);
+  assert.equal(f.blob.records.get(STATE).text, before);
+  assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes);
+});
+
+test('invalid provenance, source identities and source counts fail closed before any inventory request', async () => {
+  const f = fixture({ autovalorptItems: [car('ID8auto01')] });
+  assert.equal((await f.source.sync()).valid, true);
+  const original = f.blob.records.get(STATE); const requests = f.calls.length;
+  for (const mutate of [
+    state => { state.sources[1].url = 'https://attacker.invalid/inventory'; },
+    state => { state.sources[1].count = 2; },
+    state => { delete state.itemSources.ID8auto01; },
+    state => { state.itemSources.ID8auto01 = ['samucar']; },
+    state => { state.sources[1].ids = ['ID8stock1']; },
+  ]) {
+    const state = JSON.parse(original.text); mutate(state);
+    f.blob.records.set(STATE, { ...original, text: JSON.stringify(state) });
+    assert.equal((await f.source.sync()).reason, 'stock_state_invalid');
+    assert.equal(f.calls.length, requests);
+  }
+});
 
 test('seeds history once, appends new IDs and retains sold cars without reading Sheets again', async () => {
   const f = fixture(); const first = await f.source.sync();
@@ -155,7 +322,7 @@ test('production-only and malformed seeds do not initialize or publish a new bas
 test('seed redirects are restricted to Google export and secrets never enter diagnostics', async () => {
   const f = fixture({ respond: url => url === URLS.stock ? new Response('', { status: 302, headers: { location: 'https://attacker.example/export' } }) : null });
   assert.equal((await f.source.sync()).reason, 'feed_redirect_not_allowed');
-  assert.ok(f.calls.every(call => [URLS.stock, URLS.inventory].includes(call.url)));
+  assert.ok(f.calls.every(call => [URLS.stock, ...STOCK_INVENTORIES.map(source => source.url)].includes(call.url)));
   const broken = createStockSource({ env, storage: memoryBlob().storage, now,
     fetchImpl: async () => { throw new Error('bearer-secret-provider-detail'); } });
   const result = await broken.sync(); assert.equal(result.valid, false); assert.equal(JSON.stringify(result).includes('bearer'), false);

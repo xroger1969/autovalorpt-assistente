@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { instagramGalleryFromInventory, fetchInstagramGallery } from '../lib/instagram-video-gallery.js';
+import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
 
 const photo = name => `https://ireland.apollo.olxcdn.com/v1/files/${name}/image`;
 const item = { id: 'ID8Q1myC', price: '26990.00 EUR', link: 'https://www.standvirtual.com/carros/anuncio/tesla-model-3-ID8Q1myC.html', image_link: `${photo('hero')};q=100;s=600x0` };
@@ -25,12 +26,51 @@ test('ambiguous, missing or malformed gallery is not trusted', () => {
 test('gallery never fetches user-selected destinations or follows redirects', async () => {
   let calls = 0;
   const fetchImpl = async (url, init) => {
-    calls++; assert.equal(url, 'https://spremium.standvirtual.com/inventory'); assert.equal(init.redirect, 'error');
+    calls++; assert.ok(STOCK_INVENTORIES.some(inventory => inventory.url === url)); assert.equal(init.redirect, 'error');
     return new Response(html([advert]), { headers: { 'content-type': 'text/html' } });
   };
   assert.deepEqual(await fetchInstagramGallery({ ...item, link: 'https://localhost/private' }, fetchImpl), []);
   assert.equal(calls, 0);
   assert.equal((await fetchInstagramGallery(item, fetchImpl)).length, 3);
+  assert.equal(calls, 2);
+});
+
+test('gallery finds AutoValorPT vehicles in their own inventory without using Samucar photographs', async () => {
+  const privateItem = { ...item, id: 'ID8Q1lYB', link: 'https://www.standvirtual.com/carros/anuncio/bmw-x1-ID8Q1lYB.html', price: '22990.00 EUR', image_link: photo('bmw-hero') };
+  const privateAdvert = { url: privateItem.link, price: { grossMinorAmount: 2299000, currencyCode: 'EUR' }, photos: [photo('bmw-hero'), photo('bmw-interior')] };
+  const visited = [];
+  const photos = await fetchInstagramGallery(privateItem, async url => {
+    visited.push(url);
+    return new Response(html(url === STOCK_INVENTORIES.find(source => source.id === 'autovalorpt').url ? [privateAdvert] : [advert]), { headers: { 'content-type': 'text/html' } });
+  });
+  assert.deepEqual(visited.sort(), STOCK_INVENTORIES.map(source => source.url).sort());
+  assert.deepEqual(photos, privateAdvert.photos.map(p => `${p};s=1440x0`));
+});
+
+test('two source galleries must agree for the same advert and any unreadable source triggers the feed fallback', async () => {
+  for (const conflictingAdvert of [
+    { ...advert, photos: [photo('hero'), photo('other')] },
+    { ...advert, price: { grossMinorAmount: 2299000, currencyCode: 'EUR' } },
+    { ...advert, url: advert.url.replace('tesla-model-3-', 'another-slug-') }
+  ]) {
+    assert.deepEqual(await fetchInstagramGallery(item, async url => new Response(html([
+      url === STOCK_INVENTORIES[0].url ? advert : conflictingAdvert
+    ]), { headers: { 'content-type': 'text/html' } })), []);
+  }
+  assert.deepEqual(await fetchInstagramGallery(item, async url => url === STOCK_INVENTORIES[0].url
+    ? new Response(html([advert]), { headers: { 'content-type': 'text/html' } })
+    : new Response('temporarily unavailable', { status: 503 })), []);
+  assert.deepEqual(await fetchInstagramGallery(item, async url => url === STOCK_INVENTORIES[0].url
+    ? new Response(html([advert]), { headers: { 'content-type': 'text/html' } })
+    : new Response('<script id="__NEXT_DATA__">{bad}</script>', { headers: { 'content-type': 'text/html' } })), []);
+});
+
+test('gallery rejects a redirected response even if the transport returns an otherwise matching inventory', async () => {
+  assert.deepEqual(await fetchInstagramGallery(item, async () => {
+    const response = new Response(html([advert]), { headers: { 'content-type': 'text/html' } });
+    Object.defineProperty(response, 'url', { value: 'https://unrelated.example/inventory' });
+    return response;
+  }), []);
 });
 
 test('missing, excessive and unavailable gallery safely falls back to feed photograph', async () => {
