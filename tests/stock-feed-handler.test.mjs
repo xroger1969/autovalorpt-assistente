@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStockFeedHandler } from '../lib/stock-feed-handler.js';
+import { createStockFeedHandler, createPublicCatalogFeed } from '../lib/stock-feed-handler.js';
 
 function response() {
   return { headers: {}, code: 200, setHeader(key, value) { this.headers[key] = value; },
@@ -30,4 +30,20 @@ test('unavailable snapshot returns an error rather than an empty replacement cat
   const res = response(); await handler({ method: 'GET', query: { snapshot: 'a'.repeat(64) } }, res);
   assert.equal(res.code, 503); assert.equal(JSON.stringify(res.body).includes('private diagnostic'), false);
   assert.notEqual(res.headers['Content-Type'], 'text/csv; charset=utf-8');
+});
+
+test('prepared feed wins, while only confirmed absence permits a historical raw snapshot', async () => {
+  const calls = []; let code;
+  const reader = createPublicCatalogFeed({
+    stockSource: { feed: async key => { calls.push(['raw', key]); return { csv: 'raw' }; } },
+    catalogSource: { feed: async key => { calls.push(['prepared', key]);
+      if (code) throw Object.assign(new Error('private'), { code }); return { csv: 'prepared' }; } },
+  });
+  assert.equal((await reader.feed('latest')).csv, 'prepared');
+  code = 'catalog_snapshot_not_found';
+  assert.equal((await reader.feed('b'.repeat(64))).csv, 'raw');
+  for (const failure of ['catalog_snapshot_invalid', 'catalog_storage_unavailable']) {
+    code = failure; await assert.rejects(reader.feed('latest'), { code: failure });
+  }
+  assert.equal(calls.filter(([type]) => type === 'raw').length, 1);
 });

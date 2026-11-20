@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createMetaCatalog, META_CATALOG_FEED_URL, META_CATALOG_LATEST_FEED_URL } from '../lib/meta-catalog.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
@@ -18,6 +19,15 @@ const asProduct = (item) => ({ id: item.id === items[0].id ? '111111111111' : '2
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const acknowledgedScheduleWrite = { acknowledged: true, readbackPresent: false, feedIdentityMatches: null,
   sources: { schedule: 'absent', update_schedule: 'absent' } };
+const originalImages = items.map((_, index) => `https://ireland.apollo.olxcdn.com/v1/files/test-photo-${index}/image`);
+const catalogImage = (id, asset = 'b'.repeat(64)) => `https://autovalorpt-assistente.vercel.app/api/stock?integration=catalog-image&id=${id}&asset=${asset}`;
+function imageAudit(images = [catalogImage(items[0].id), originalImages[1]], extra = {}) {
+  const imageItems = items.map((item, index) => ({ ...item, image_link: images[index] }));
+  const expectedImages = Object.fromEntries(imageItems.map(item => [item.id, item.image_link]));
+  const imageRevision = createHash('sha256').update(JSON.stringify(Object.entries(expectedImages).sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
+  return { valid: true, sourceCount: items.length, expectedCount: items.length, items: imageItems, expectedImages, imageRevision, ...extra };
+}
+const imageProducts = audit => audit.items.map(item => ({ ...asProduct(item), image_url: item.image_link, image_fetch_status: 'FETCHED' }));
 
 test('different source and feed counts survive persistence and status reads', async () => {
   const f = fixture({ auditSource: async () => ({ valid: false, reason: 'source_feed_mismatch', sourceCount: 9, expectedCount: 7 }) });
@@ -103,7 +113,8 @@ function fixture(options = {}) {
     }
     throw new Error(`Unexpected synthetic request ${url.pathname}`);
   };
-  const service = createMetaCatalog({ env, storage: blob.storage, fetchImpl, now: () => TIME, auditSource, ...(options.runtimeNow ? { runtimeNow: options.runtimeNow } : {}) });
+  const service = createMetaCatalog({ env, storage: blob.storage, fetchImpl, now: options.now || (() => TIME), auditSource,
+    runBudgetMs: options.runBudgetMs, ...(options.runtimeNow ? { runtimeNow: options.runtimeNow } : {}) });
   return { service, blob, calls, remote, env, auditCalls: () => auditCalls, posts: () => calls.filter((c) => c.init.method === 'POST') };
 }
 
@@ -159,10 +170,197 @@ test('least-privilege catalog access confirms WhatsApp approval despite an empty
   assert.equal(f.calls.find((c) => c.url.pathname === `/v27.0/${CATALOG}`).url.searchParams.get('fields'), 'id,name');
   const productFields = f.calls.find((c) => c.url.pathname.endsWith('/products')).url.searchParams.get('fields').split(',');
   assert.ok(productFields.includes('capability_to_review_status'));
+  assert.ok(productFields.includes('image_url'));
+  assert.ok(productFields.includes('image_fetch_status'));
   assert.ok(!productFields.includes('review_status'));
   assert.equal(f.posts().length, 0);
   assert.equal((await f.service.status()).lastResult.status, 'catalog_matches');
   assert.ok(f.blob.calls.filter((c) => c.method === 'put').every((c) => c.options.access === 'private'));
+});
+
+test('an image-only change requests one import with matching IDs and prices', async () => {
+  const audit = imageAudit();
+  const products = imageProducts(audit);
+  products[0].image_url = originalImages[0];
+  const f = fixture({ auditSource: async () => structuredClone(audit), remote: { products } });
+  const checked = await f.service.check();
+  assert.equal(checked.status, 'catalog_mismatch');
+  assert.deepEqual(checked.missingIds, []);
+  assert.deepEqual(checked.priceMismatchIds, []);
+  assert.deepEqual(checked.imageMismatchIds, [items[0].id]);
+  assert.equal(checked.imagesVerified, false);
+  assert.equal(checked.catalogConfirmed, false);
+  assert.equal(f.posts().length, 0);
+  assert.equal((await f.service.run()).status, 'import_requested');
+  assert.equal((await f.service.run()).status, 'import_pending');
+  assert.equal(f.posts().length, 1);
+  const saved = (await f.service.status()).lastResult;
+  assert.deepEqual(saved.imageMismatchIds, [items[0].id]);
+  assert.equal(saved.imageRevision, audit.imageRevision);
+  assert.equal(saved.imagesVerified, false);
+});
+
+test('completed image imports await FETCHED without reimporting the same image', async () => {
+  const audit = imageAudit();
+  const products = imageProducts(audit);
+  products[0].image_url = originalImages[0];
+  const f = fixture({ auditSource: async () => structuredClone(audit), remote: { products } });
+  assert.equal((await f.service.run()).status, 'import_requested');
+  Object.assign(f.remote.uploads[0], { end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 });
+  f.remote.products[0].image_url = audit.items[0].image_link;
+  for (const status of [undefined, 'NO_STATUS', 'DIRECT_UPLOAD', 'FETCH_FAILED', 'OUTDATED', 'PARTIAL_FETCH', 'UNRECOGNISED']) {
+    f.remote.products[0].image_fetch_status = status;
+    const result = await f.service.run();
+    assert.equal(result.status, 'images_pending', String(status));
+    assert.deepEqual(result.imageMismatchIds, []);
+    assert.deepEqual(result.imagePendingIds, [items[0].id]);
+    assert.equal(result.imagesVerified, false);
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal((await f.service.status()).active, null);
+    assert.equal(f.posts().length, 1);
+  }
+  f.remote.products[0].image_fetch_status = 'FETCHED';
+  const result = await f.service.check();
+  assert.equal(result.status, 'catalog_matches');
+  assert.equal(result.imagesVerified, true);
+  assert.equal(result.catalogConfirmed, true);
+  assert.equal((await f.service.status()).lastResult.imagesVerified, true);
+  assert.equal(f.posts().length, 1);
+});
+
+test('missing remote image URLs require review instead of claiming or forcing an image update', async () => {
+  for (const value of [undefined, null, '', '   ', {}]) {
+    const audit = imageAudit();
+    const products = imageProducts(audit);
+    products[0].image_url = value;
+    const f = fixture({ auditSource: async () => audit, remote: { products } });
+    const result = await f.service.run();
+    assert.equal(result.status, 'review_required');
+    assert.equal(result.reason, 'product_image_unverified');
+    assert.deepEqual(result.imageUnverifiedIds, [items[0].id]);
+    assert.equal(result.imagesVerified, false);
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('expected image maps must cover every item and exactly match the audited feed', async () => {
+  const valid = imageAudit();
+  for (const expectedImages of [null, [], {},
+    { [items[0].id]: valid.expectedImages[items[0].id] },
+    { ...valid.expectedImages, ID8Q33333: originalImages[0] },
+    { ...valid.expectedImages, [items[0].id]: originalImages[0] }]) {
+    const f = fixture({ auditSource: async () => ({ ...valid, expectedImages }) });
+    const result = await f.service.run();
+    assert.equal(result.status, 'source_invalid');
+    assert.equal(result.reason, 'source_images_invalid');
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal(f.calls.length, 0);
+    assert.equal((await f.service.status()).active, null);
+  }
+});
+
+test('unapproved image hosts, wrong vehicle IDs and modified asset URLs fail before Graph reads', async () => {
+  const valid = catalogImage(items[0].id);
+  for (const image of [catalogImage(items[1].id), `${valid}&extra=1`, `${valid}#fragment`,
+    valid.replace('https:', 'http:'), valid.replace('.vercel.app', '.evil.test'),
+    catalogImage(items[0].id, 'B'.repeat(64)), catalogImage(items[0].id, 'b'.repeat(63)),
+    'https://ireland.apollo.olxcdn.com.evil.test/v1/files/photo/image',
+    'https://ireland.apollo.olxcdn.com/v1/files/photo/image#fragment',
+    'https://ireland.apollo.olxcdn.com/v1/files/photo/not-an-image']) {
+    const f = fixture({ auditSource: async () => imageAudit([image, originalImages[1]]) });
+    const result = await f.service.run();
+    assert.equal(result.status, 'source_invalid', image);
+    assert.equal(result.reason, 'source_images_invalid');
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test('only OLX resize variants share an identity; catalogue asset queries and fragments remain exact', async () => {
+  const audit = imageAudit(originalImages);
+  const products = imageProducts(audit);
+  products[0].image_url += ';w=1920;h=1080;s=1';
+  const sameOriginal = fixture({ auditSource: async () => audit, remote: { products } });
+  assert.equal((await sameOriginal.service.check()).catalogConfirmed, true);
+  assert.equal(sameOriginal.posts().length, 0);
+  const derived = imageAudit();
+  for (const remoteImage of [catalogImage(items[0].id, 'c'.repeat(64)), `${derived.items[0].image_link}&extra=1`,
+    `${derived.items[0].image_link}#fragment`]) {
+    const remote = imageProducts(derived);
+    remote[0].image_url = remoteImage;
+    const f = fixture({ auditSource: async () => derived, remote: { products: remote } });
+    const result = await f.service.check();
+    assert.equal(result.status, 'catalog_mismatch', remoteImage);
+    assert.deepEqual(result.imageMismatchIds, [items[0].id]);
+    assert.equal(result.imagesVerified, false);
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('saved reports without a fresh image marker remain unconfirmed until checked again', async () => {
+  const f = fixture();
+  const first = await f.service.check();
+  assert.equal(first.catalogConfirmed, true, 'legacy injected audits still support a fresh comparison');
+  assert.equal(first.imagesVerified, true);
+  const record = f.blob.records.get(STATE);
+  const state = JSON.parse(record.text);
+  delete state.lastResult.imagesVerified;
+  record.text = JSON.stringify(state);
+  const old = (await f.service.status()).lastResult;
+  assert.equal(old.status, 'catalog_matches');
+  assert.equal(old.imagesVerified, false);
+  assert.equal(old.catalogConfirmed, false);
+  assert.equal((await f.service.check()).catalogConfirmed, true);
+});
+
+test('image revision must match the expected map and changes during revalidation prevent import', async () => {
+  const invalid = fixture({ auditSource: async () => imageAudit(undefined, { imageRevision: 'f'.repeat(64) }) });
+  assert.equal((await invalid.service.run()).reason, 'source_images_invalid');
+  assert.equal(invalid.calls.length, 0);
+  let calls = 0;
+  const f = fixture({ remote: { products: imageProducts(imageAudit(originalImages)) }, auditSource: async () => {
+    const asset = ++calls === 1 ? 'b'.repeat(64) : 'c'.repeat(64);
+    return imageAudit([catalogImage(items[0].id, asset), originalImages[1]], { feedHash: 'd'.repeat(64) });
+  } });
+  const result = await f.service.run();
+  assert.equal(result.status, 'source_changed');
+  assert.equal(f.posts().length, 0);
+  assert.equal((await f.service.status()).active, null);
+});
+
+test('unknown upload outcomes reconcile only after the expected images have been fetched', async () => {
+  const audit = imageAudit();
+  const f = fixture({ auditSource: async () => audit, remote: { products: imageProducts(imageAudit(originalImages)) },
+    post: async () => { throw new Error('interrupted'); } });
+  assert.equal((await f.service.run()).status, 'import_unknown');
+  f.remote.products = imageProducts(audit);
+  f.remote.products[0].image_fetch_status = 'NO_STATUS';
+  assert.equal((await f.service.run()).status, 'import_unknown');
+  assert.equal((await f.service.status()).active.phase, 'unknown');
+  assert.equal(f.posts().length, 1);
+  f.remote.products[0].image_fetch_status = 'FETCHED';
+  const result = await f.service.check();
+  assert.equal(result.catalogConfirmed, true);
+  assert.equal((await f.service.status()).active, null);
+  assert.equal(f.posts().length, 1);
+});
+
+test('image diagnostics retain only valid IDs, known states and simple reason codes through persistence', async () => {
+  const diagnostics = [
+    { id: items[0].id, status: 'prepared', reason: 'image_prepared', token: 'private-token', url: 'https://private.example' },
+    { id: items[1].id, status: 'pending', reason: 'https://private.example/?token=private-token' },
+    { id: 'invalid-id', status: 'prepared' }, { id: items[0].id, status: 'unknown' }, null,
+  ];
+  const expected = [{ id: items[0].id, status: 'prepared', reason: 'image_prepared' }, { id: items[1].id, status: 'pending' }];
+  for (const valid of [true, false]) {
+    const audit = imageAudit(undefined, { valid, reason: valid ? undefined : 'image_review_required', imageDiagnostics: diagnostics });
+    const f = fixture({ auditSource: async () => audit, remote: { products: imageProducts(audit) } });
+    const result = await f.service.check();
+    assert.deepEqual(result.imageDiagnostics, expected);
+    assert.deepEqual((await f.service.status()).lastResult.imageDiagnostics, expected);
+    assert.doesNotMatch(f.blob.records.get(STATE).text, /private-token|private\.example|invalid-id/);
+  }
 });
 
 test('changing any approved destination ID fails before source or Graph reads', async () => {
@@ -449,6 +647,30 @@ test('an old incomplete upload does not outweigh a newer completed upload', asyn
   assert.equal(result.status, 'catalog_matches');
   assert.equal(result.catalogConfirmed, true);
   assert.equal(f.posts().length, 0);
+});
+
+test('a low remaining budget persists a fresh deferred result without reading the source or Meta', async () => {
+  for (const [action, runBudgetMs] of [['run', 1], ['check', 29999]]) {
+    const previous = fixture();
+    assert.equal((await previous.service.check()).catalogConfirmed, true);
+    const before = JSON.parse(previous.blob.records.get(STATE).text);
+    const checkedAt = TIME + 5 * 60_000;
+    const f = fixture({ blob: previous.blob, runBudgetMs, now: () => checkedAt, runtimeNow: () => 0 });
+    const result = await f.service[action]();
+    assert.equal(result.status, 'check_deferred');
+    assert.equal(result.reason, 'meta_catalog_budget_exhausted');
+    assert.equal(result.checkedAt, new Date(checkedAt).toISOString());
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal(result.imagesVerified, false);
+    assert.equal(result.sourceValid, false);
+    assert.equal(f.auditCalls(), 0);
+    assert.equal(f.calls.length, 0);
+    const saved = JSON.parse(f.blob.records.get(STATE).text);
+    assert.deepEqual(saved.lastResult, result);
+    assert.deepEqual(saved.lastValidSource, before.lastValidSource);
+    assert.equal(saved.active, null);
+    assert.deepEqual((await f.service.status()).lastResult, result);
+  }
 });
 
 test('insufficient budget before revalidation defers without a durable upload intent', async () => {

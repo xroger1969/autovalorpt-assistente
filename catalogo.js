@@ -4,7 +4,10 @@
   const count = n => Number.isSafeInteger(n) && n >= 0 && n <= 5000 ? String(n) : '—';
   let busy = false; let configuration = null; let report = null;
   const labels = {
-    catalog_matches: ['Stock e preços confirmados na Meta', 'Foram conferidos os identificadores, a origem, os preços, a disponibilidade e os estados de aprovação e publicação. A apresentação no WhatsApp continua por confirmar.'],
+    catalog_matches: ['Stock, preços e imagens confirmados na Meta', 'Foram conferidas as viaturas, a origem, os preços, as imagens, a disponibilidade e os estados de aprovação e publicação. A apresentação no WhatsApp continua por confirmar.'],
+    catalog_matches_legacy: ['Stock e preços confirmados na Meta', 'Os dados do catálogo foram confirmados numa verificação anterior. As imagens precisam de uma nova verificação. A apresentação no WhatsApp continua por confirmar.'],
+    images_pending: ['Imagens por confirmar na Meta', 'Falta confirmar que a Meta recebeu as fotografias corretas. A rotina acompanha o resultado sem repetir a importação.'],
+    images_not_checked: ['Imagens por verificar', 'O resultado anterior ainda não inclui a verificação das imagens. Selecione Verificar agora para conferir o catálogo completo.'],
     matched: ['Catálogo conferido', 'Os artigos encontrados correspondem ao ficheiro validado.'],
     synced: ['Catálogo conferido', 'A importação e os artigos do catálogo foram verificados.'],
     authorization_required: ['Autorização do catálogo pendente', 'A ligação atual ainda não permite consultar e sincronizar este catálogo. As restantes rotinas continuam a funcionar.'],
@@ -31,13 +34,20 @@
     disabled: ['Correção automática desativada', 'Pode consultar o resultado da verificação. A correção automática ainda não está ativa.'],
     busy: ['Verificação em curso', 'Já existe uma operação em curso. Atualize o estado para consultar o resultado.'],
   };
+  const photoLabels = {
+    prepared: 'Preparadas com o cenário Samucar',
+    unchanged: 'Mantidas sem alteração',
+    pending: 'A aguardar preparação',
+    review_required: 'A aguardar revisão',
+    failed: 'Não preparadas nesta tentativa',
+  };
   function setBusy(value) {
     busy = value;
     $('refreshButton').disabled = value; $('checkButton').disabled = value;
     $('syncButton').disabled = value || configuration?.enabled !== true || report?.authorization?.ready !== true;
   }
   async function api(action, method = 'GET') {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 150000);
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 280000);
     try {
       const response = await fetch(`/api/stock?integration=meta-catalog&action=${action}`, {
         method, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal, headers: { Accept: 'application/json' },
@@ -50,6 +60,24 @@
       return data;
     } finally { clearTimeout(timer); }
   }
+  function showPhotos(r) {
+    const diagnostics = Array.isArray(r.imageDiagnostics) ? r.imageDiagnostics.filter(entry =>
+      entry && typeof entry.id === 'string' && /^ID[A-Za-z0-9]{5,30}$/.test(entry.id) && Object.hasOwn(photoLabels, entry.status)) : [];
+    const byVehicle = new Map(diagnostics.map(entry => [entry.id, entry.status]));
+    const totals = Object.fromEntries(Object.keys(photoLabels).map(status => [status, 0]));
+    for (const status of byVehicle.values()) totals[status]++;
+    const list = $('photoCounts'); list.replaceChildren();
+    for (const [status, label] of Object.entries(photoLabels)) {
+      if (!totals[status]) continue;
+      const li = document.createElement('li'); li.textContent = `${label}: ${totals[status]}.`; list.appendChild(li);
+    }
+    $('photoStatus').textContent = byVehicle.size
+      ? 'Resultado das fotografias da AutoValorPT nesta verificação.'
+      : 'Ainda sem resultados da preparação de fotografias.';
+    $('photoNote').textContent = totals.review_required || totals.failed
+      ? 'As fotografias originais foram conservadas. As versões por rever ou com falha na preparação não são utilizadas no catálogo.'
+      : 'As fotografias originais são conservadas. As fotografias com o novo cenário só são utilizadas após validação.';
+  }
   function show(data) {
     configuration = data.configuration || configuration;
     report = data.lastResult || data.report || (data.status ? data : null);
@@ -57,7 +85,10 @@
     $('sourceCount').textContent = count(r.sourceCount);
     $('feedCount').textContent = count(r.expectedCount);
     $('metaCount').textContent = count(r.actualCount);
-    const known = labels[r.status];
+    const known = r.status === 'catalog_matches'
+      ? r.catalogConfirmed === true ? labels[r.imagesVerified === true ? 'catalog_matches' : 'catalog_matches_legacy']
+        : labels[r.imagesVerified === true ? 'review_required' : 'images_not_checked']
+      : labels[r.status];
     const authRequired = r.authorization?.ready === false || /authorization|permission|credential/.test(r.reason || r.error || r.status || '');
     const selected = known || (authRequired ? labels.authorization_required : ['Por confirmar', 'Aguardamos uma verificação concluída do catálogo.']);
     $('stateBadge').textContent = selected[0];
@@ -67,16 +98,21 @@
     const date = new Date(checked || '');
     $('checkedAt').textContent = Number.isFinite(date.getTime()) ? `Última verificação: ${new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Lisbon' }).format(date)}.` : 'Ainda sem verificação registada.';
     const list = $('differences'); list.replaceChildren();
-    for (const [key, text] of [['missingIds', 'Viaturas do ficheiro ainda não encontradas no catálogo'], ['extraIds', 'Artigos do catálogo ausentes do ficheiro'], ['priceMismatchIds', 'Artigos com diferença de preço']]) {
+    for (const [key, text] of [['missingIds', 'Viaturas do ficheiro ainda não encontradas no catálogo'], ['extraIds', 'Artigos do catálogo ausentes do ficheiro'], ['priceMismatchIds', 'Artigos com diferença de preço'],
+      ['imageMismatchIds', 'Viaturas com uma fotografia diferente na Meta'], ['imageUnverifiedIds', 'Viaturas cuja fotografia não pôde ser verificada'],
+      ['imagePendingIds', 'Viaturas com fotografia por confirmar na Meta']]) {
       const values = Array.isArray(r[key]) ? r[key].filter(id => /^ID[A-Za-z0-9]{5,30}$/.test(id)) : [];
       if (values.length) { const li = document.createElement('li'); li.textContent = `${text}: ${values.length}.`; list.appendChild(li); }
     }
     $('differencePanel').hidden = !list.children.length;
+    showPhotos(r);
     $('accessView').hidden = true; $('dashboard').hidden = false;
     setBusy(busy);
   }
   async function perform(action) {
-    if (busy) return; setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…' : 'A comparar a origem, o ficheiro e o catálogo…';
+    if (busy) return; setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…'
+      : action === 'run' ? 'A atualizar as viaturas, preparar as fotografias e sincronizar o catálogo…'
+        : 'A comparar as viaturas, os preços e as imagens do catálogo…';
     try {
       const data = await api(action, action === 'status' ? 'GET' : 'POST');
       const sourceBlocked = action === 'run' && data.status === 'source_invalid';

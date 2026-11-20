@@ -2,4 +2,6 @@ node_modules/
 .env*
 .vercel/
 *.log
+assets/models/u2netp.onnx
+assets/models/u2netp.onnx.*.tmp
 

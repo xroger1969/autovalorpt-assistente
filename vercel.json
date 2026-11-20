@@ -25,7 +25,8 @@
     },
     "api/stock.js": {
       "maxDuration": 300,
-      "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/fonts/**}"
+      "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/{fonts/**,catalog-backgrounds/*.jpg,models/u2netp.onnx},node_modules/onnxruntime-web/dist/{ort.node.min.mjs,ort-wasm-simd-threaded.{mjs,wasm}}}",
+      "excludeFiles": "node_modules/onnxruntime-web/dist/{*.map,*jsep*,*jspi*,*asyncify*,ort.all*,ort.webgl*,ort.webgpu*,ort.wasm*}"
     }
   },
   "crons": [
