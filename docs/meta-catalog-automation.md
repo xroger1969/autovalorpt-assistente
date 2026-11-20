@@ -1,6 +1,19 @@
 # AutoValorPT: verificação e importação do catálogo Meta
 
-A produção usa snapshots validados do inventário completo Standvirtual. A Google Sheets mantém-se como espelho diário e como semente única do histórico. O catálogo e o feed existentes são preservados. Cada importação manual usa o URL imutável correspondente ao hash auditado; a importação periódica da Meta é migrada para o último snapshot confirmado, preservando o seu intervalo.
+A produção usa snapshots validados da união dos inventários completos Standvirtual da Samucar Premium e da AutoValorPT. A Google Sheets mantém-se como espelho diário e como semente única do histórico. O catálogo e o feed existentes são preservados. Cada importação manual usa o URL imutável correspondente ao hash auditado; a importação periódica da Meta é migrada para o último snapshot confirmado, preservando o seu intervalo.
+
+## Contas Standvirtual incluídas
+
+| Origem | Montra pública |
+| --- | --- |
+| Samucar Premium | https://spremium.standvirtual.com/inventory |
+| AutoValorPT | https://abigailbrito.standvirtual.com/inventory |
+
+A lista de origens é fixa no servidor. O pedido do Tino acrescenta a sua conta AutoValorPT à origem Samucar existente. Os dois inventários são lidos e validados antes de atualizar o catálogo; uma falha, leitura parcial ou queda suspeita numa das contas conserva o último snapshot completo. A migração preserva os identificadores e históricos existentes.
+
+Um anúncio com o mesmo ID e dados coincidentes nas duas contas aparece uma única vez. Dados incompatíveis para o mesmo ID bloqueiam a atualização. Dois anúncios com IDs diferentes não são fundidos apenas por terem a mesma marca, modelo ou ano; identificar o mesmo automóvel nesse caso exige matrícula, VIN ou associação explícita.
+
+As galerias de vídeo consultam apenas estas duas montras. Cada fotografia adicional tem de pertencer ao anúncio exato, com preço e fotografia principal coincidentes com o feed. Resultados contraditórios ou uma origem ilegível fazem usar a fotografia do feed, sem misturar imagens de carros.
 
 ## Destinos preservados
 
@@ -15,7 +28,7 @@ A integração não escreve na folha Google. Os publicadores usam o novo invent�
 
 ## Execução sem sessão de navegador
 
-A rotina [morning-flow](morning-flow.md), iniciada a partir das **08h00 Europe/Lisbon**, chama esta operação depois de sincronizar e validar o inventário completo Samucar. O antigo cron independente das 12h00 UTC foi removido:
+A rotina [morning-flow](morning-flow.md), iniciada a partir das **08h00 Europe/Lisbon**, chama esta operação depois de sincronizar e validar os inventários completos Samucar e AutoValorPT. O antigo cron independente das 12h00 UTC foi removido:
 
 ```text
 /api/stock?integration=meta-catalog&action=run
@@ -47,10 +60,10 @@ Configure qualquer autorização nova diretamente no fornecedor e no armazenamen
 
 Antes de importar, a auditoria exige:
 
-- Inventário atual completo, com total anunciado, total JSON, quantidade e IDs distintos coincidentes.
+- Cada inventário atual completo, com total anunciado, total JSON, quantidade e IDs distintos coincidentes. A união das duas contas é validada antes de qualquer alteração.
 - Correspondência dos IDs, preços, títulos, ano, quilometragem, combustível, marca, ligações e fotografia principal.
 - Correspondência exata do snapshot persistido com o inventário atual; CSV imutável com hash dos bytes.
-- Recusa de inventário vazio, parcial, duplicado ou de uma redução superior a metade do último inventário validado.
+- Recusa de inventário vazio, parcial, duplicado ou de uma redução superior a metade do último inventário validado, também por origem. Uma falha numa conta conserva o último catálogo completo e bloqueia a nova importação.
 - Correspondência exata com a associação negócio/catálogo/feed aprovada pelo proprietário e fixada no código; confirmação ao vivo do catálogo e da pertença do feed.
 - Paginação completa e limitada dos produtos. As ligações de paginação do fornecedor não são seguidas; só os cursores são reaplicados ao domínio Graph fixo.
 - Nova validação da origem imediatamente antes de qualquer pedido de importação.

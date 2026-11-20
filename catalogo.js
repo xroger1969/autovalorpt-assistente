@@ -17,8 +17,8 @@
     upload_unknown: ['Resultado por confirmar', 'O pedido anterior ficou sem confirmação. A rotina consulta o estado antes de tentar novamente.'],
     mismatch: ['Diferença encontrada', 'O ficheiro e o catálogo ainda não coincidem. A sincronização depende da validação da origem e do acesso ao catálogo.'],
     catalog_mismatch: ['Diferença encontrada', 'O ficheiro e o catálogo ainda não coincidem.'],
-    source_invalid: ['Origem por confirmar', 'A leitura da origem ou do ficheiro não passou na validação. O último catálogo válido foi preservado.'],
-    source_blocked: ['Origem por confirmar', 'A leitura da origem ou do ficheiro não passou na validação. Nenhuma importação foi iniciada.'],
+    source_invalid: ['Origem por confirmar', 'A leitura de uma das contas Standvirtual ou do ficheiro não passou na validação. O último catálogo válido foi preservado.'],
+    source_blocked: ['Origem por confirmar', 'A leitura de uma das contas Standvirtual ou do ficheiro não passou na validação. Nenhuma importação foi iniciada.'],
     source_changed: ['Origem alterada durante a leitura', 'O inventário ou o ficheiro mudou durante a verificação. A próxima execução volta a comparar os dados antes de importar.'],
     products_rejected: ['Artigos rejeitados pela Meta', 'A Meta assinalou artigos rejeitados. Repetir a importação não confirma a sua aprovação.'],
     products_pending: ['Artigos ainda por publicar', 'Há artigos com aprovação ou publicação pendente. A contagem no catálogo não confirma a apresentação no WhatsApp.'],
@@ -78,9 +78,16 @@
   async function perform(action) {
     if (busy) return; setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…' : 'A comparar a origem, o ficheiro e o catálogo…';
     try {
-      const data = await api(action, action === 'status' ? 'GET' : 'POST'); show(data);
-      $('actionStatus').textContent = action === 'status' ? '' : 'Resultado registado. Consulte o estado acima.';
-      if (action !== 'status') show(await api('status'));
+      const data = await api(action, action === 'status' ? 'GET' : 'POST');
+      const sourceBlocked = action === 'run' && data.status === 'source_invalid';
+      // A stock refresh can fail before the catalogue audit is persisted. Keep
+      // that current failure visible instead of replacing it with an older
+      // successful status. It does not invalidate previously confirmed access.
+      show(sourceBlocked && data.authorization === undefined ? { ...data, authorization: report?.authorization } : data);
+      $('actionStatus').textContent = sourceBlocked
+        ? 'Atualização suspensa. O último catálogo válido foi preservado.'
+        : action === 'status' ? '' : 'Resultado registado. Consulte o estado acima.';
+      if (action !== 'status' && !sourceBlocked) show(await api('status'));
     } catch (error) {
       const text = error.name === 'AbortError' ? 'O pedido ficou sem resposta e pode continuar em processamento. Atualize o estado antes de repetir.' : error.message;
       $('actionStatus').textContent = text;

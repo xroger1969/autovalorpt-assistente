@@ -1,4 +1,9 @@
-const STOCK_URL = process.env.STOCK_URL || 'https://spremium.standvirtual.com/inventory';
+import { readStockInventories } from '../lib/meta-catalog-source.js';
+import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
+
+// Keep the original response field and URL base for existing consumers. The
+// actual inventory is the validated union of both authorised dealer accounts.
+const STOCK_URL = STOCK_INVENTORIES[0].url;
 const CACHE_MS = 60 * 1000;
 const SOURCE_TIMEOUT_MS = 8500;
 const ENRICH_TIMEOUT_MS = 2200;
@@ -306,20 +311,19 @@ async function loadStock() {
   const cachedItems = memoryCache.items;
   if (Date.now() - memoryCache.at < CACHE_MS && cachedItems.length) return { items: cachedItems, stale: false };
 
-  let html = '';
   try {
-    html = await fetchText(STOCK_URL, SOURCE_TIMEOUT_MS);
+    const inventory = await readStockInventories({ timeoutMs: SOURCE_TIMEOUT_MS });
+    const base = inventory.items.map(item => ({
+      title: item.title, url: item.link, image: item.image, price: formatPrice(item.price),
+      year: String(item.year), mileage: formatMileage(item.mileage), fuel: item.fuel
+    }));
+    const enriched = await enrichWithinBudget(base);
+    memoryCache = { at: Date.now(), items: enriched };
+    return { items: enriched, stale: false };
   } catch (error) {
-    console.warn('stock_source_unreachable', error?.message || error);
+    console.warn('stock_source_unreachable', /^[a-z_]{1,70}$/.test(error?.code || '') ? error.code : 'source_unavailable');
+    return { items: cachedItems, stale: true };
   }
-
-  if (!html) return { items: cachedItems, stale: Boolean(cachedItems.length) };
-  const base = extractInventory(html);
-  if (!base.length) return { items: cachedItems, stale: Boolean(cachedItems.length) };
-
-  const enriched = await enrichWithinBudget(base);
-  memoryCache = { at: Date.now(), items: enriched };
-  return { items: enriched, stale: false };
 }
 
 export default async function handler(req, res) {
@@ -365,8 +369,11 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
     return res.status(200).json({
       source: STOCK_URL,
+      sources: STOCK_INVENTORIES.map(({ name, url }) => ({ name, url })),
       results: items,
-      ...(stale ? { warning: 'Foi apresentada a última versão disponível do stock enquanto a origem é atualizada.' } : {})
+      ...(stale ? { warning: items.length
+        ? 'Foi apresentada a última versão completa disponível enquanto se confirmam as duas contas do Standvirtual.'
+        : 'Não foi possível confirmar o stock das duas contas neste momento.' } : {})
     });
   } catch (error) {
     console.error('Falha ao consultar stock', error?.message);
