@@ -35,11 +35,11 @@
     busy: ['Verificação em curso', 'Já existe uma operação em curso. Atualize o estado para consultar o resultado.'],
   };
   const photoLabels = {
-    prepared: 'Preparadas com o cenário Samucar',
+    prepared: 'Capas antigas editadas (desativadas)',
     unchanged: 'Mantidas sem alteração',
     pending: 'A aguardar preparação',
     review_required: 'A aguardar revisão',
-    failed: 'Não preparadas nesta tentativa',
+    failed: 'Fotos de origem indisponíveis',
   };
   function setBusy(value) {
     busy = value;
@@ -73,10 +73,10 @@
     }
     $('photoStatus').textContent = byVehicle.size
       ? 'Resultado das fotografias da AutoValorPT nesta verificação.'
-      : 'Ainda sem resultados da preparação de fotografias.';
+      : 'Ainda sem verificação das fotografias originais.';
     $('photoNote').textContent = totals.review_required || totals.failed
-      ? 'As fotografias originais foram conservadas. As versões por rever ou com falha na preparação não são utilizadas no catálogo.'
-      : 'As fotografias originais são conservadas. As fotografias com o novo cenário só são utilizadas após validação.';
+      ? 'O catálogo utiliza apenas fotografias originais, sem alterações de fundo. Confirme os elementos pendentes antes de importar.'
+      : 'O catálogo utiliza exclusivamente fotografias originais do Standvirtual, sem adicionar fundos ou modificar imagens.';
   }
   function show(data) {
     configuration = data.configuration || configuration;
@@ -111,7 +111,7 @@
   }
   async function perform(action) {
     if (busy) return; setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…'
-      : action === 'run' ? 'A atualizar as viaturas, preparar as fotografias e sincronizar o catálogo…'
+      : action === 'run' ? 'A atualizar as duas contas, verificar as fotos originais e sincronizar o catálogo…'
         : 'A comparar as viaturas, os preços e as imagens do catálogo…';
     try {
       const data = await api(action, action === 'status' ? 'GET' : 'POST');
