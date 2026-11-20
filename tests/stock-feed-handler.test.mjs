@@ -32,18 +32,21 @@ test('unavailable snapshot returns an error rather than an empty replacement cat
   assert.notEqual(res.headers['Content-Type'], 'text/csv; charset=utf-8');
 });
 
-test('prepared feed wins, while only confirmed absence permits a historical raw snapshot', async () => {
+test('live feed always has original photos; historical prepared snapshots remain immutable', async () => {
   const calls = []; let code;
   const reader = createPublicCatalogFeed({
     stockSource: { feed: async key => { calls.push(['raw', key]); return { csv: 'raw' }; } },
     catalogSource: { feed: async key => { calls.push(['prepared', key]);
       if (code) throw Object.assign(new Error('private'), { code }); return { csv: 'prepared' }; } },
   });
-  assert.equal((await reader.feed('latest')).csv, 'prepared');
+  assert.equal((await reader.feed('latest')).csv, 'raw');
+  assert.deepEqual(calls, [['raw', 'latest']]);
+  const historical = 'b'.repeat(64);
+  assert.equal((await reader.feed(historical)).csv, 'prepared');
   code = 'catalog_snapshot_not_found';
-  assert.equal((await reader.feed('b'.repeat(64))).csv, 'raw');
+  assert.equal((await reader.feed(historical)).csv, 'raw');
   for (const failure of ['catalog_snapshot_invalid', 'catalog_storage_unavailable']) {
-    code = failure; await assert.rejects(reader.feed('latest'), { code: failure });
+    code = failure; await assert.rejects(reader.feed(historical), { code: failure });
   }
-  assert.equal(calls.filter(([type]) => type === 'raw').length, 1);
+  assert.equal(calls.filter(([type]) => type === 'raw').length, 2);
 });
