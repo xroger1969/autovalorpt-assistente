@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { BlobAccessError, BlobError } from '@vercel/blob';
 import { createStockSource, stockFeedCsv, stockSnapshotUrl } from '../lib/stock-source.js';
 import { META_CATALOG_SOURCE_URLS as URLS } from '../lib/meta-catalog-source.js';
 import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
@@ -238,6 +239,92 @@ test('immutable CSV has exact hash and reads never fetch or write; older snapsho
   assert.equal(f.blob.records.get(`stock-source/v1/production/snapshots/${first.feedHash}.csv`).text, csv);
   await assert.rejects(() => f.source.feed('../state'), { code: 'stock_snapshot_invalid' });
   await assert.rejects(() => f.source.feed('0'.repeat(64)), { code: 'stock_snapshot_not_found' });
+});
+
+test('unchanged sync reuses the verified snapshot instead of issuing a duplicate SDK PUT', async () => {
+  const blob = memoryBlob(); let snapshotPuts = 0;
+  const storage = { ...blob.storage, async put(path, value, options) {
+    if (path.includes('/snapshots/')) {
+      snapshotPuts++;
+      if (blob.records.has(path)) throw new BlobError('The blob already exists');
+    }
+    return blob.storage.put(path, value, options);
+  } };
+  const f = fixture({ blob, storage });
+  const first = await f.source.sync(); assert.equal(first.valid, true);
+  const path = `stock-source/v1/production/snapshots/${first.feedHash}.csv`;
+  const original = blob.records.get(path);
+  const second = await f.source.sync();
+  assert.equal(second.valid, true); assert.equal(second.feedHash, first.feedHash);
+  assert.equal(snapshotPuts, 1); assert.deepEqual(blob.records.get(path), original);
+  const states = blob.calls.filter(call => call.method === 'put' && call.path === STATE);
+  assert.equal(states.length, 2); assert.equal(states[0].options.allowOverwrite, false);
+  assert.equal(states[1].options.allowOverwrite, true); assert.ok(states[1].options.ifMatch);
+});
+
+test('a plain SDK BlobError after a concurrent identical snapshot is accepted only after readback', async () => {
+  const blob = memoryBlob(); let raced = false;
+  const duplicate = new BlobError('The blob already exists');
+  assert.equal(duplicate.name, 'Error'); assert.equal(duplicate.status, undefined); assert.equal(duplicate.code, undefined);
+  const storage = { ...blob.storage, async put(path, value, options) {
+    if (path.includes('/snapshots/')) {
+      raced = true; assert.equal(options.allowOverwrite, false); assert.equal(options.ifMatch, undefined);
+      // The pre-read saw no object; another writer committed these exact bytes.
+      await blob.storage.put(path, value, options);
+      throw duplicate;
+    }
+    return blob.storage.put(path, value, options);
+  } };
+  const f = fixture({ blob, storage }); const result = await f.source.sync();
+  assert.equal(result.valid, true); assert.equal(raced, true);
+  const path = `stock-source/v1/production/snapshots/${result.feedHash}.csv`;
+  assert.equal(blob.calls.filter(call => call.method === 'get' && call.path === path).length, 2);
+  assert.equal(blob.records.get(path).text, stockFeedCsv(result.items));
+  assert.equal(JSON.parse(blob.records.get(STATE).text).feedHash, result.feedHash);
+});
+
+test('a failed snapshot PUT is never accepted without exact bytes or for unrelated storage errors', async () => {
+  for (const mode of ['missing', 'corrupt', 'unrelated', 'forbidden']) {
+    const blob = memoryBlob();
+    const storage = { ...blob.storage, async put(path, value, options) {
+      if (!path.includes('/snapshots/')) return blob.storage.put(path, value, options);
+      if (mode !== 'missing') await blob.storage.put(path, mode === 'corrupt' ? value.replace('31990', '29990') : value, options);
+      if (mode === 'unrelated') throw new Error('Unrelated storage fault');
+      if (mode === 'forbidden') throw new BlobAccessError();
+      throw new BlobError('The blob already exists');
+    } };
+    const f = fixture({ blob, storage }); const result = await f.source.sync();
+    assert.equal(result.valid, false, mode);
+    assert.equal(result.reason, mode === 'corrupt' ? 'stock_snapshot_invalid' : 'stock_source_unavailable', mode);
+    assert.equal(blob.records.has(STATE), false, mode);
+    assert.equal(blob.calls.some(call => call.method === 'put' && call.path === STATE), false, mode);
+    assert.ok(blob.calls.filter(call => call.method === 'put').every(call => call.options.allowOverwrite === false));
+  }
+});
+
+test('snapshot pre-read failures and hidden byte changes never become permission to create or overwrite', async () => {
+  for (const mode of ['read-error', 'etag-mismatch', 'byte-order-mark']) {
+    const f = fixture(); const first = await f.source.sync(); assert.equal(first.valid, true);
+    const before = f.blob.records.get(STATE).text;
+    const writes = f.blob.calls.filter(call => call.method === 'put').length;
+    const path = `stock-source/v1/production/snapshots/${first.feedHash}.csv`;
+    const storage = { ...f.blob.storage };
+    if (mode === 'read-error') storage.get = async (requested, options) => {
+      if (requested === path) throw new Error('Storage unavailable');
+      return f.blob.storage.get(requested, options);
+    };
+    if (mode === 'etag-mismatch') storage.head = async requested => requested === path ? { etag: 'unexpected-version' } : f.blob.storage.head(requested);
+    if (mode === 'byte-order-mark') {
+      const record = f.blob.records.get(path);
+      f.blob.records.set(path, { ...record, text: '\uFEFF' + record.text });
+    }
+    const retry = fixture({ blob: f.blob, storage });
+    const result = await retry.source.sync();
+    assert.equal(result.valid, false, mode);
+    assert.equal(result.reason, mode === 'byte-order-mark' ? 'stock_snapshot_invalid' : 'stock_source_unavailable', mode);
+    assert.equal(f.blob.records.get(STATE).text, before, mode);
+    assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes, mode);
+  }
 });
 
 test('latest resolves only the committed immutable snapshot and never fetches inventory or writes', async () => {
