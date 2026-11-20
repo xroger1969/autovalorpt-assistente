@@ -25,7 +25,7 @@
     },
     "api/stock.js": {
       "maxDuration": 300,
-      "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/fonts/**,assets/catalog-backgrounds/*.jpg,assets/models/u2netp.onnx,node_modules/onnxruntime-web/dist/ort.node.min.mjs,node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs,node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm}",
+      "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/{fonts/**,catalog-backgrounds/*.jpg,models/u2netp.onnx},node_modules/onnxruntime-web/dist/{ort.node.min.mjs,ort-wasm-simd-threaded.{mjs,wasm}}}",
       "excludeFiles": "node_modules/onnxruntime-web/dist/{*.map,*jsep*,*jspi*,*asyncify*,ort.all*,ort.webgl*,ort.webgpu*,ort.wasm*}"
     }
   },
