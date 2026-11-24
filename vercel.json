@@ -1,6 +1,13 @@
 {
   "cleanUrls": false,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/stock-rapido.html",
+      "destination": "/rotina.html#atalho",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/chat",

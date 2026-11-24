@@ -3,15 +3,23 @@
   const $ = id => document.getElementById(id);
   const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Retirada de viaturas'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
-  Object.assign(LABELS, { no_retirements: 'Sem retiradas pendentes', partial: 'Concluído parcialmente', failed: 'Operação não concluída', upload_unknown: 'Importação por confirmar' });
+  Object.assign(LABELS, { daily_limit_reached: 'Limite diário atingido', other_cycle_in_progress: 'Outra atualização em curso', no_retirements: 'Sem retiradas pendentes', partial: 'Concluído parcialmente', failed: 'Operação não concluída', upload_unknown: 'Importação por confirmar' });
   const GOOD = new Set(['source_matches', 'catalog_matches', 'matched', 'synced', 'published', 'mapped', 'no_new_stock', 'retired', 'canceled', 'expired']);
   const ISSUES = new Set(['review_required', 'source_invalid', 'source_blocked', 'mismatch', 'catalog_mismatch', 'check_failed', 'unknown', 'publish_unknown', 'import_unknown', 'products_rejected']);
   GOOD.add('no_retirements'); for (const code of ['partial', 'failed', 'upload_unknown', 'unverified']) ISSUES.add(code);
   const ERRORS = { story_state_invalid: 'O histórico das Stories precisa de verificação. Não foi possível consultar o resultado.', story_provider_binding_changed: 'A ligação das Stories precisa de verificação.', morning_flow_unavailable: 'Não foi possível consultar esta execução.', catalog_permission_required: 'Falta acesso de servidor ao catálogo.' };
-  let authenticated = false; let busy = false; let generation = 0; let latestDay = null; let searchedDay = null; let followingToday = true;
+  let authenticated = false; let busy = false; let closing = false; let generation = 0; let followingToday = true;
+  let manualRead = 0; let manualAction = ''; let submitting = false; let acceptedDay = '';
+  let followRequest = false; let lastResume = 0;
+  let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
+  const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
   const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
-  function today() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+  const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' });
+  function today() {
+    const parts = Object.fromEntries(dayFormat.formatToParts(new Date()).map(part => [part.type, part.value]));
+    return [parts.year, parts.month, parts.day].join('-');
+  }
   function date(value) { const d = new Date(value || ''); return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'medium', timeStyle: 'short' }).format(d) : 'Data não registada'; }
   function text(id, value) { $(id).textContent = value; }
   function badge(id, value, kind = 'pending') { text(id, value); $(id).className = `badge ${kind}`; }
@@ -43,13 +51,98 @@
     $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) {
-      latestDay = null; searchedDay = null;
+      viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
+      manualRead++; manualAction = ''; acceptedDay = ''; submitting = false; followRequest = false; lastResume = 0;
+      $('runNow').disabled = true; text('runNow', 'Atualizar stock agora'); text('manualStatus', ''); text('manualOutcome', '');
+      badge('instagramBrief', 'Por consultar'); $('historyPanel').open = false;
       for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
       badge('cycleBadge', 'Por consultar'); badge('catalogBadge', 'Por consultar'); badge('whatsappBadge', 'Por consultar'); $('stepsList').replaceChildren();
     }
   }
-  function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay', 'logoutButton']) $(id).disabled = value; }
+  function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
+  const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A verificar viaturas retiradas.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
+  function renderManual(data, message = '') {
+    manualAction = '';
+    const state = data?.status;
+    const age = Date.now() - Date.parse(data?.startedAt);
+    const idle = Date.now() - Date.parse(data?.updatedAt);
+    const resumable = state === 'queued' && age >= 0 && age < 3600000 && (data.stalled || idle > 60000);
+    let title = 'Atualizar stock agora';
+    let hint = 'Não foi possível ler a atualização extra. Toca em «Consultar estado» para voltar a verificar.';
+    let result = '';
+    if (state === 'not_started' && acceptedDay !== today()) {
+      manualAction = 'manual-start';
+      hint = 'Podes pedir uma atualização extra por dia. O Estado do WhatsApp é tratado à parte.';
+    } else if (resumable) {
+      manualAction = 'resume'; title = 'Continuar atualização';
+      hint = 'O pedido ficou em fila. Podes continuar a partir da etapa onde parou.';
+    } else if (state === 'blocked' || state === 'interrupted' || data?.stalled || state === 'queued' && age >= 3600000) {
+      title = 'Atualização por verificar';
+      hint = 'A atualização parou antes de ser confirmada. Consulta os resultados abaixo antes de repetir qualquer publicação.';
+    } else if (['queued', 'running', 'already_started'].includes(state) || state === 'not_started' && acceptedDay === today()) {
+      title = 'Atualização em curso'; hint = progressText[data?.step] || 'Pedido registado. O painel acompanha o progresso.';
+    } else if (state === 'finished') {
+      title = 'Atualização extra já utilizada';
+      hint = 'O pedido de hoje terminou. A próxima rotina está prevista para as 08h00.';
+      const catalog = data.verification?.catalog;
+      const confirmed = catalog?.catalogConfirmed === true && !catalog.active && !ISSUES.has(catalog.status);
+      const detail = [['photo', 'Fotografia'], ['story', 'Story']].map(([key, name]) => {
+        const value = data.results?.[key];
+        const status = value?.ok === false && GOOD.has(value.status) ? 'Por confirmar' : value ? label(value) : 'Por confirmar';
+        return name + ' · ' + status;
+      });
+      result = ['Catálogo · ' + (confirmed ? 'Confirmado na Meta' : 'Por confirmar'), ...detail].join('\n');
+    } else if (state === 'production_only') {
+      hint = 'A atualização só está disponível no painel de produção.';
+    }
+    text('runNow', title); $('runNow').disabled = !manualAction || submitting;
+    text('manualStatus', message || hint); text('manualOutcome', result);
+  }
+  async function refreshManual() {
+    if (!authenticated || submitting) return;
+    const request = ++manualRead;
+    const version = generation;
+    try {
+      const data = await api(url('morning-flow', 'status') + '&mode=manual');
+      if (request !== manualRead || version !== generation) return;
+      renderManual(data);
+      // The installed shortcut and an explicitly started request can continue an
+      // existing unclaimed step. Opening the regular dashboard only reads.
+      if ((fromShortcut || followRequest) && manualAction === 'resume' && Date.now() - lastResume > 90000) {
+        await submitManual();
+      }
+    } catch (error) {
+      if (request !== manualRead || version !== generation) return;
+      if (error.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar.');
+      else renderManual(null);
+    }
+  }
+  async function submitManual() {
+    if (!authenticated || submitting || !manualAction || $('runNow').disabled) return;
+    const version = generation;
+    const action = manualAction;
+    manualRead++; manualAction = ''; submitting = true; $('runNow').disabled = true;
+    if (action === 'resume') lastResume = Date.now();
+    text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
+    try {
+      const endpoint = url('morning-flow', action) + (action === 'resume' ? '&mode=manual' : '');
+      const result = await api(endpoint, { method: 'POST' });
+      if (version !== generation) return;
+      if (['queued', 'running', 'finished', 'already_started', 'blocked', 'interrupted'].includes(result.status)) {
+        acceptedDay = validDay(result.day) ? result.day : today();
+        followRequest = true;
+      }
+      renderManual(result);
+    } catch (error) {
+      if (version !== generation) return;
+      if (error.status === 401) { sessionView(false, 'A sessão terminou. Volta a entrar.'); return; }
+      followRequest = false;
+      renderManual(null, 'O pedido ficou sem confirmação. Toca em «Consultar estado» para saber se chegou ao servidor.');
+      return;
+    } finally { if (version === generation) submitting = false; }
+    if (authenticated) await refreshAll();
+  }
   function showCycle(data, error) {
     const list = $('stepsList'); list.replaceChildren();
     const verificationIssues = error ? [] : finalIssues(data);
@@ -59,6 +152,7 @@
       const title = data.stalled ? 'Execução sem avanço confirmado' : ({ not_started: 'Ainda não iniciada', queued: 'Próxima etapa em fila', running: 'Em execução', finished: pending ? 'Terminada com pendências' : 'Etapas do servidor terminadas', blocked: 'Execução bloqueada', interrupted: 'Execução interrompida', production_only: 'Disponível em produção' }[data.status] || 'Resultado por confirmar');
       badge('cycleBadge', title, ['blocked', 'interrupted'].includes(data.status) || data.stalled ? 'error' : 'pending');
       text('cycleSummary', data.status === 'not_started' ? 'Não há uma execução registada para este dia. O horário previsto não comprova que a rotina tenha começado.' : data.status === 'finished' ? 'Consulte o resultado de cada etapa. Os Estados WhatsApp são acompanhados separadamente.' : data.stalled ? 'É necessário confirmar a operação antes de repetir qualquer publicação.' : `Dia da execução: ${data.day || $('cycleDay').value}.`);
+      if (data.status === 'finished' && !pending) badge('cycleBadge', title, 'good');
       text('cycleTime', data.startedAt ? `Início: ${date(data.startedAt)} · Último registo: ${date(data.updatedAt)}.` : '');
     }
     for (const [key, name] of STEPS) {
@@ -82,7 +176,8 @@
     const r = data?.lastResult || {};
     const active = !error && data?.active;
     for (const [id, key] of [['sourceCount', 'sourceCount'], ['feedCount', 'expectedCount'], ['metaCount', 'actualCount']]) text(id, error ? '—' : count(r[key]));
-    badge('catalogBadge', error ? 'Leitura indisponível' : active ? 'Operação por confirmar' : r.catalogConfirmed === true ? 'Dados conferidos na Meta' : label(r), error ? 'error' : active ? 'pending' : r.catalogConfirmed === true ? 'good' : ISSUES.has(r.status) ? 'error' : 'pending');
+    const unconfirmedMatch = ['catalog_matches', 'matched', 'synced'].includes(r.status) && r.catalogConfirmed !== true;
+    badge('catalogBadge', error ? 'Leitura indisponível' : active ? 'Operação por confirmar' : r.catalogConfirmed === true ? 'Dados conferidos na Meta' : unconfirmedMatch ? 'Catálogo por confirmar' : label(r), error ? 'error' : active ? 'pending' : r.catalogConfirmed === true ? 'good' : ISSUES.has(r.status) ? 'error' : 'pending');
     text('catalogSummary', error ? errorText(error) : active ? `Existe uma operação iniciada em ${date(active.startedAt)} ainda sem conclusão confirmada. As contagens apresentadas pertencem ao último diagnóstico, não ao resultado desta operação.` : r.catalogConfirmed === true ? 'Identificadores, preços e disponibilidade conferidos na Meta. A apresentação no WhatsApp é uma verificação separada.' : r.authorization?.ready === false ? 'A verificação e correção pelo servidor aguardam acesso ao catálogo. A importação horária configurada na Meta pode continuar a funcionar.' : 'O diagnóstico ainda não confirma a correspondência do catálogo com o ficheiro.');
     text('catalogTime', r.checkedAt || r.at ? `Diagnóstico: ${date(r.checkedAt || r.at)}.` : 'Ainda sem diagnóstico datado.');
     text('catalogAccess', error ? 'Acesso e configuração por confirmar.' : `Correção automática: ${data?.configuration?.enabled === true ? 'ativa' : 'desativada ou ainda não configurada'}. Acesso de servidor: ${r.authorization?.ready === true ? 'validado no diagnóstico' : 'por confirmar'}.`);
@@ -121,23 +216,50 @@
     text('whatsappWithdrawal', removal?.status === 'observed_removed' ? `Eliminação de ${/^ID[A-Za-z0-9]{5,30}$/.test(removal.id || '') ? removal.id : 'viatura'} observada em ${date(removal.observedAt)}.${typeof removal.observation === 'string' ? ` ${removal.observation.slice(0, 300)}` : ''} Não é uma confirmação da API da Meta.` : removal?.status === 'closed_without_removal_confirmation' ? `Retirada encerrada sem confirmação de eliminação em ${date(removal.at)}. Não será repetida automaticamente.` : 'Ainda sem eliminação observada. O fim da janela de 24 horas não comprova uma eliminação.');
     text('whatsappTime', active?.startedAt ? `Tentativa atual: ${date(active.startedAt)}.${last?.observedAt || last?.at ? ` Último registo: ${date(last.observedAt || last.at)}.` : ''}` : last?.observedAt || last?.at ? `Último registo: ${date(last.observedAt || last.at)}.` : '');
   }
-  async function latestCycle(current, day) {
-    if (day !== today()) return 'Está a consultar um dia anterior; os restantes cartões mostram o diagnóstico mais recente de cada serviço.';
-    if (current?.startedAt) { latestDay = day; return `Última execução encontrada: ${date(current.startedAt)}.`; }
-    if (searchedDay !== day) {
-      latestDay = null;
-      for (let offset = 1; offset <= 7; offset++) {
-        const prior = new Date(`${day}T12:00:00Z`); prior.setUTCDate(prior.getUTCDate() - offset);
-        const candidate = prior.toISOString().slice(0, 10);
-        const value = await api(url('morning-flow', 'status', candidate));
-        if (value.startedAt) { searchedDay = day; latestDay = candidate; return `Última execução encontrada: ${date(value.startedAt)}. Selecione ${candidate} para ver as etapas.`; }
-      }
-      searchedDay = day;
-    } else if (latestDay && latestDay !== day) {
-      const value = await api(url('morning-flow', 'status', latestDay));
-      if (value.startedAt) return `Última execução encontrada: ${date(value.startedAt)}. Selecione ${latestDay} para ver as etapas.`;
+  async function loadHistory() {
+    if (!authenticated || !$('historyPanel').open || !viewedCycle) return;
+    const { day, current } = viewedCycle;
+    const currentDay = today();
+    if (day !== currentDay || !current || current.startedAt) {
+      text('latestCycle', day !== currentDay ? 'Os outros resultados mostram a verificação mais recente de cada canal.'
+        : current?.startedAt ? 'Última execução encontrada: ' + date(current.startedAt) + '.' : 'Última execução por confirmar.');
+      return;
     }
-    return 'Não foi encontrado um ciclo nos últimos 7 dias. Os cartões mostram os últimos diagnósticos disponíveis.';
+    if (lastSearch?.day === day) { text('latestCycle', lastSearch.message); return; }
+    const version = ++historyVersion;
+    const session = generation;
+    const relevant = () => session === generation && version === historyVersion && viewedCycle?.day === day && $('historyPanel').open;
+    let message = 'A procurar a última execução…';
+    lastSearch = { day, message }; text('latestCycle', message);
+    try {
+      message = 'Sem execução registada nos últimos sete dias.';
+      for (let offset = 1; offset <= 7; offset++) {
+        const prior = new Date(day + 'T12:00:00Z'); prior.setUTCDate(prior.getUTCDate() - offset);
+        const previousDay = prior.toISOString().slice(0, 10);
+        const previous = await api(url('morning-flow', 'status', previousDay));
+        if (!relevant()) return;
+        if (previous.startedAt) { message = 'Última execução encontrada: ' + date(previous.startedAt) + '. Escolhe ' + previousDay + ' para ver as etapas.'; break; }
+      }
+      lastSearch = { day, message }; text('latestCycle', message);
+    } catch (error) {
+      if (!relevant()) return;
+      lastSearch = null;
+      if (error.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar.');
+      else text('latestCycle', 'A procura do último dia ficou indisponível. Podes voltar a consultar.');
+    }
+  }
+  function showInstagram(photos, stories, photoError, storyError) {
+    const services = [photos, stories];
+    if (photoError || storyError) { badge('instagramBrief', 'Leitura incompleta', 'error'); return; }
+    if (services.some(s => s?.authorization?.expired || s?.authorization?.lastError)) { badge('instagramBrief', 'Rever acesso ao Instagram', 'error'); return; }
+    if (services.some(s => s?.active)) { badge('instagramBrief', 'Publicação em curso'); return; }
+    if (services.some(s => ISSUES.has(s?.lastResult?.status) || s?.lastResult?.ok === false && !GOOD.has(s?.lastResult?.status))) {
+      badge('instagramBrief', 'Verificar publicações', 'error'); return;
+    }
+    const short = s => s?.configuration?.enabled !== true ? 'por configurar'
+      : ['published', 'mapped'].includes(s?.lastResult?.status) ? 'publicada'
+      : s?.lastResult?.status === 'no_new_stock' ? 'sem novidades' : s?.lastResult ? label(s.lastResult).toLowerCase() : 'por confirmar';
+    badge('instagramBrief', 'Foto ' + short(photos) + ' · Story ' + short(stories));
   }
   async function refresh() {
     if (!authenticated || busy) return;
@@ -151,33 +273,44 @@
       const value = index => results[index].status === 'fulfilled' ? results[index].value : null;
       const error = index => results[index].status === 'rejected' ? results[index].reason : null;
       showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
-      text('readAt', `Consulta efetuada: ${date(new Date().toISOString())}.`);
+      showInstagram(value(2), value(3), error(2), error(3));
+      text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
       text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
-      try { const latest = error(0) ? 'Última execução por confirmar.' : await latestCycle(value(0), day); if (version === generation) text('latestCycle', latest); }
-      catch (error) { if (version === generation) { if (error.status === 401) sessionView(false, 'A sessão terminou. Volte a entrar.'); else text('latestCycle', 'Não foi possível procurar a última execução.'); } }
+      if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {
+        historyVersion++; lastSearch = null; text('latestCycle', '');
+      }
+      viewedCycle = { day, current: value(0) };
+      void loadHistory();
     } finally { if (version === generation || !authenticated) setBusy(false); }
   }
+  function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
+  $('runNow').addEventListener('click', submitManual);
+  $('historyPanel').addEventListener('toggle', () => {
+    if ($('historyPanel').open) void loadHistory();
+    else { historyVersion++; lastSearch = null; }
+  });
   $('loginForm').addEventListener('submit', async event => {
     event.preventDefault(); const access = $('accessCode').value.trim(); if (!access) return;
     $('loginButton').disabled = true; text('loginStatus', 'A verificar o acesso…');
-    try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ access }) }); sessionView(true); await refresh(); }
+    try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ access }) }); sessionView(true); await refreshAll(); }
     catch (error) { $('accessCode').value = ''; text('loginStatus', error.status === 401 ? 'Código de acesso inválido.' : error.status === 429 ? 'Demasiadas tentativas. Aguarde antes de voltar a tentar.' : 'Não foi possível entrar. Tente novamente.'); }
     finally { $('loginButton').disabled = false; }
   });
   $('logoutButton').addEventListener('click', async () => {
-    if (busy) return; setBusy(true);
+    if (closing) return; closing = true; $('logoutButton').disabled = true;
     try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) }); sessionView(false, 'Sessão terminada.'); }
     catch { text('dashboardStatus', 'Não foi possível terminar a sessão. Tente novamente.'); }
-    finally { setBusy(false); }
+    finally { closing = false; $('logoutButton').disabled = false; }
   });
-  $('refreshButton').addEventListener('click', refresh);
+  $('refreshButton').addEventListener('click', refreshAll);
   $('cycleDay').value = today(); $('cycleDay').max = today();
   $('cycleDay').addEventListener('change', () => { followingToday = false; refresh(); });
   $('todayButton').addEventListener('click', () => { followingToday = true; refresh(); });
-  setInterval(() => { if ($('autoRefresh').checked && !document.hidden) refresh(); }, 30000);
+  document.addEventListener?.('visibilitychange', () => { if (!document.hidden) void refreshAll(); });
+  setInterval(() => { if (!document.hidden) void refreshAll(); }, 30000);
   api('/api/admin-session').then(async session => {
     sessionView(session.authenticated === true, session.configured === false ? 'O acesso privado ainda está a ser configurado.' : '');
     if (session.configured === false) $('loginButton').disabled = true;
-    if (authenticated) await refresh();
+    if (authenticated) await refreshAll();
   }).catch(() => sessionView(false, 'Não foi possível verificar a sessão. Tente entrar novamente.'));
 })();

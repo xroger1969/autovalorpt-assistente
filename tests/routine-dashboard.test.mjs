@@ -23,7 +23,7 @@ async function dashboard(options = {}) {
     if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
     return response({ configuration: { enabled: true }, lastResult: { status: 'no_new_stock', at: startedAt, published: 0 } });
   };
-  vm.runInNewContext(script, { document, fetch, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
+  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '' }, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
   await new Promise(resolve => setImmediate(resolve));
   return { get: id => document.getElementById(id), calls, document, tick: () => interval() };
 }
@@ -72,10 +72,14 @@ test('expired access hides and clears results rather than leaving stale private 
 test('last cycle search stops at a recorded day and never marks today started', async () => {
   let dayReads = 0;
   const app = await dashboard({ fetch: endpoint => {
-    if (!endpoint.includes('morning-flow')) return null;
+    if (!endpoint.includes('morning-flow') || endpoint.includes('mode=manual')) return null;
     dayReads++;
     return dayReads === 3 ? response({ status: 'finished', startedAt: '2026-11-12T08:00:00Z' }) : null;
   } });
+  assert.equal(dayReads, 1);
+  app.get('historyPanel').open = true;
+  app.get('historyPanel').handlers.toggle();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(dayReads, 3);
   assert.equal(app.get('cycleBadge').textContent, 'Ainda não iniciada');
   assert.match(app.get('latestCycle').textContent, /Última execução encontrada/);
@@ -196,4 +200,75 @@ test('WhatsApp withdrawal proof and uncertainty remain separate from publication
   const closed = await dashboard({ whatsapp: { ...data, lastWithdrawalResult: { status: 'closed_without_removal_confirmation', at: startedAt } } });
   assert.equal(closed.get('whatsappBadge').textContent, 'Retirada encerrada sem confirmação');
   assert.match(closed.get('whatsappWithdrawal').textContent, /sem confirmação de eliminação/);
+});
+
+test('the main action submits one manual request, including a double tap and a stale first read', async () => {
+  let resolveStart; let state = { status: 'not_started' };
+  const app = await dashboard({ fetch: (path, init) => {
+    if (path.includes('action=manual-start')) {
+      assert.equal(init.method, 'POST');
+      return new Promise(resolve => { resolveStart = resolve; });
+    }
+    if (path.includes('mode=manual')) return response(state);
+    return null;
+  } });
+  assert.equal(app.get('runNow').disabled, false);
+  const first = app.get('runNow').handlers.click();
+  await app.get('runNow').handlers.click();
+  assert.equal(app.get('runNow').disabled, true);
+  resolveStart(response({ status: 'queued', day: today() }, 202));
+  await first;
+  assert.equal(app.get('runNow').disabled, true);
+  assert.match(app.get('runNow').textContent, /em curso/);
+  state = { status: 'finished', verification: { catalog: { catalogConfirmed: false } }, results: { photo: { status: 'published' }, story: { status: 'no_new_stock' } } };
+  await app.get('refreshButton').handlers.click();
+  assert.match(app.get('runNow').textContent, /já utilizada/);
+  assert.match(app.get('manualOutcome').textContent, /Catálogo · Por confirmar/);
+  assert.match(app.get('manualOutcome').textContent, /Publicação confirmada/);
+  assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
+});
+
+test('consultation of stalled manual work is read-only and an explicit continuation uses the original cycle', async () => {
+  let resumed = false;
+  const app = await dashboard({ fetch: (path, init) => {
+    if (path.includes('action=resume')) { resumed = true; assert.equal(init.method, 'POST'); assert.match(path, /mode=manual/); return response({ status: 'queued', day: today() }); }
+    if (path.includes('mode=manual')) return response(resumed ? { status: 'running', step: 'catalog' } :
+      { status: 'queued', startedAt: new Date(Date.now() - 700000).toISOString(), updatedAt: new Date(Date.now() - 480000).toISOString(), stalled: true });
+    return null;
+  } });
+  await app.get('refreshButton').handlers.click();
+  assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+  assert.equal(resumed, false);
+  await app.get('runNow').handlers.click();
+  assert.equal(resumed, true);
+  assert.match(app.get('manualStatus').textContent, /catálogo/i);
+  assert.equal(app.calls.some(c => c.endpoint.includes('manual-start')), false);
+});
+
+test('an unreadable manual state blocks the action without hiding other channels', async () => {
+  const app = await dashboard({ fetch: path => path.includes('mode=manual') ? response({ error: 'unavailable' }, 503) : null });
+  assert.equal(app.get('runNow').disabled, true);
+  assert.match(app.get('manualStatus').textContent, /Consultar estado/);
+  assert.equal(app.get('dashboardView').hidden, false);
+  assert.equal(app.get('sourceCount').textContent, '9');
+  await app.get('runNow').handlers.click();
+  assert.equal(app.calls.some(c => c.init.method === 'POST'), false);
+});
+
+test('the installed shortcut loads the same panel and only resumes existing queued work', async () => {
+  const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
+  assert.equal(config.redirects.find(rule => rule.source === '/stock-rapido.html').destination, '/rotina.html#atalho');
+  let state = 'queued';
+  const app = await dashboard({ hash: '#atalho', fetch: path => {
+    if (path.includes('action=resume')) { state = 'running'; return response({ status: state }); }
+    if (path.includes('mode=manual')) return response({ status: state, startedAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date(Date.now() - 120000).toISOString() });
+    return null;
+  } });
+  assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
+  assert.equal(app.calls.some(c => c.endpoint.includes('manual-start')), false);
+});
+
+test('a matching label without explicit Meta confirmation stays unconfirmed', async () => {
+  const app = await dashboard({ catalog: { lastResult: { status: 'catalog_matches', catalogConfirmed: false } } });
+  assert.equal(app.get('catalogBadge').textContent, 'Catálogo por confirmar');
 });

@@ -5,62 +5,147 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#101c2d">
-  <title>A minha rotina · AutoValorPT</title>
+  <meta name="theme-color" content="#142337">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Stock AutoValor">
+  <link rel="manifest" href="/manifest-stock-rapido.json">
+  <link rel="icon" href="/avpt-icone.svg" type="image/svg+xml">
+  <title>Stock e publicações · AutoValorPT</title>
   <style>
-    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17283d;background:#f4f6fa;--orange:#e7752d;--navy:#101c2d;--muted:#5a6b80;--line:#dce3ed}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100svh}header{background:var(--navy);color:white}header>div{max-width:1100px;margin:auto;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px}.brand{font-weight:850;font-size:21px;letter-spacing:-.04em}.brand span{color:#ffa46e}nav{display:flex;gap:8px;flex-wrap:wrap}nav a,nav button{color:#fff;background:transparent;border:1px solid #5b6a80;min-height:44px;padding:10px 13px;border-radius:12px;font-size:14px}a{color:#8b3f14}main{max-width:1100px;margin:auto;padding:32px 24px 60px}h1{font-size:clamp(30px,5vw,42px);letter-spacing:-.045em;line-height:1.1;margin:0}h2{font-size:20px;margin:0 0 14px}p{line-height:1.6}.eyebrow{text-transform:uppercase;letter-spacing:.1em;font-size:12px;font-weight:800;color:#9d491b;margin:0 0 10px}.muted,.time{color:var(--muted)}.time{font-size:13px}.intro{margin:14px 0 24px;max-width:750px}.card{padding:24px;background:white;border:1px solid var(--line);border-radius:22px;box-shadow:0 8px 28px #20314d05}.login{max-width:490px;margin:5vh auto}.login label{display:block;margin:24px 0 8px;font-weight:750}.login input{width:100%;min-height:54px;padding:12px;border:1px solid #a8bad0;border-radius:12px;font-size:18px}.login button{width:100%;margin-top:16px}button,input{font:inherit}button,.button{display:inline-flex;align-items:center;justify-content:center;min-height:50px;border-radius:13px;border:1px solid #bbc8da;padding:12px 16px;background:#f6f9fd;color:#254c7c;font-weight:750;text-decoration:none;cursor:pointer}button.primary{background:var(--orange);border-color:var(--orange);color:#172536}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--orange);outline-offset:4px}.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:20px 0}.toolbar label{font-size:14px;display:flex;align-items:center;gap:8px;min-height:44px}.toolbar input[type=checkbox]{width:20px;height:20px}.toolbar input[type=date]{min-height:46px;border:1px solid #bbc8da;border-radius:10px;padding:8px;color:#17283d;max-width:100%}.grid{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start}.stack{display:grid;gap:18px}.badge{display:inline-block;background:#eef2f8;color:#334a68;border-radius:50px;padding:7px 12px;font-size:13px;font-weight:750}.badge.good{background:#e8f5ed;color:#1d7047}.badge.pending{background:#fff1e6;color:#8a461e}.badge.error{background:#fcebe7;color:#973921}.status{white-space:pre-line;overflow-wrap:anywhere;line-height:1.6;color:var(--muted);font-size:14px}.notice{padding:14px 17px;border-radius:13px;background:#fff1e6;color:#8a461e}.notice:empty{display:none}.steps{list-style:none;padding:0;margin:20px 0 0}.steps li{padding:15px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px;align-items:start}.steps strong{font-size:15px}.steps small{grid-column:1/-1;line-height:1.5;color:var(--muted)}.steps .badge{max-width:180px;text-align:right}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.stat{padding:14px 9px;border:1px solid var(--line);border-radius:13px}.stat span{font-size:12px;color:var(--muted)}.stat strong{display:block;font-size:29px;margin-top:6px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.control{margin-top:22px}.control summary{font-weight:800;cursor:pointer;min-height:32px}.control li{margin:10px 0;line-height:1.6}.control ul{padding-left:22px}.footnote{font-size:13px;margin-top:22px;color:var(--muted)}@media(max-width:760px){header>div{padding:16px;align-items:flex-start;flex-wrap:wrap}main{padding:25px 16px 44px}.grid{grid-template-columns:1fr}.card{padding:20px}.toolbar{align-items:stretch}.toolbar>button{flex:1}.steps .badge{max-width:145px;font-size:12px}.actions .button{flex:1}.login{margin:24px auto}nav a,nav button{font-size:13px}.stat{padding:12px 8px}.stat span{font-size:11px}}
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182b40; background: #f4f6f8; --navy: #142337; --orange: #ff9c56; --line: #d8e0e7; --muted: #4b5e70; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; min-height: 100svh; }
+    header { background: var(--navy); color: white; }
+    .top, main { max-width: 760px; margin: auto; padding-inline: clamp(16px, 4vw, 30px); }
+    .top, .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .top { min-height: 62px; }
+    .brand { font-size: 21px; font-weight: 800; letter-spacing: -.045em; }
+    .brand span { color: var(--orange); }
+    main { padding-top: 26px; padding-bottom: max(44px, env(safe-area-inset-bottom)); }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(28px, 5vw, 38px); letter-spacing: -.045em; line-height: 1.15; }
+    h2 { font-size: 21px; line-height: 1.25; letter-spacing: -.025em; }
+    p, li { line-height: 1.5; }
+    button, input { font: inherit; }
+    button, summary, .link { cursor: pointer; touch-action: manipulation; }
+    button, .link { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 650; }
+    button:disabled { cursor: default; }
+    button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #3084b4; outline-offset: 3px; }
+    .signout { background: transparent; color: #f4f6f8; }
+    .card, .rows { background: white; border: 1px solid var(--line); border-radius: 17px; }
+    .login { max-width: 430px; padding: 25px; margin: 4vh auto; }
+    .login p, .lead { margin-top: 7px; color: var(--muted); }
+    label { display: block; font-weight: 650; }
+    .login label { margin: 20px 0 7px; }
+    input { max-width: 100%; min-height: 48px; border-radius: 9px; border: 1px solid #9dabb8; padding: 10px; background: white; color: #182b40; }
+    .login input, .primary { width: 100%; }
+    .primary { min-height: 52px; margin-top: 18px; font-size: 17px; font-weight: 750; background: var(--orange); color: #182432; }
+    .primary:disabled { background: #d9e0e6; color: #425568; }
+    .action { padding: clamp(17px, 3vw, 25px); border-left: 4px solid #d87633; margin-top: 20px; }
+    .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
+    .hint, .time, .status, .details-body { overflow-wrap: anywhere; }
+    .hint, .time { font-size: 14px; color: var(--muted); }
+    .hint { margin-top: 9px; }
+    .time { margin: 3px 0 10px; }
+    .status { white-space: pre-line; color: var(--muted); }
+    .status:empty, .hint:empty { display: none; }
+    .notice:not(:empty) { margin: 8px 0; padding: 10px 12px; background: #fff3df; color: #674113; border-radius: 10px; }
+    #manualOutcome:not(:empty) { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; font-size: 14px; }
+    .section-head { margin-top: 20px; }
+    .secondary { background: #e6edf2; color: #234662; }
+    .rows { margin-bottom: 16px; }
+    .rows details + details { border-top: 1px solid var(--line); }
+    summary { min-height: 54px; padding: 13px 16px; list-style: none; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 12px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: ''; grid-column: 2; grid-row: 1 / span 2; width: 8px; height: 8px; margin-right: 4px; border-right: 2px solid #677888; border-bottom: 2px solid #677888; transform: rotate(45deg); }
+    details[open] > summary::after { transform: rotate(225deg); }
+    summary strong { font-size: 17px; }
+    summary .badge { justify-self: start; grid-column: 1; }
+    .details-body { margin: 0 16px; border-top: 1px solid var(--line); padding: 13px 0 16px; }
+    .details-body p + p { margin-top: 7px; }
+    .details-body p { font-size: 14px; }
+    .details-body > ul { margin: 0; padding-left: 20px; }
+    .details-body li + li { margin-top: 8px; }
+    .badge { display: inline-block; max-width: 100%; background: #eef2f6; color: #3e5366; border-radius: 7px; padding: 3px 8px; font-size: 13px; font-weight: 650; }
+    .badge.good { color: #195f43; background: #e5f4eb; }
+    .badge.pending { color: #735122; background: #fff2dd; }
+    .badge.error { color: #872d29; background: #ffedea; }
+    .links, .toolbar, .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+    .links { margin-top: 10px; }
+    .link { display: inline-flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; background: #edf2f6; color: #244f70; }
+    .stats { margin-bottom: 12px; }
+    .stat { padding: 7px 12px; border-left: 2px solid var(--line); }
+    .stat span { display: block; font-size: 12px; color: var(--muted); }
+    .stat strong { font-size: 20px; }
+    .toolbar { align-items: end; margin: 12px 0; }
+    .toolbar label { display: grid; gap: 4px; font-size: 14px; }
+    .steps { list-style: none; padding: 0; margin: 12px 0 0; }
+    .steps li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; border-top: 1px solid var(--line); padding: 8px 0; }
+    .steps small { width: 100%; color: var(--muted); }
+    @media (max-width: 420px) { .section-head h2 { font-size: 19px; } .section-head button { padding-inline: 10px; } }
   </style>
   <script src="/rotina.js" defer></script>
 </head>
 <body>
-  <header><div><div class="brand">AutoValor<span>PT</span></div><nav id="privateNav" aria-label="Área privada" hidden><a href="/editorial.html">Publicações criativas</a><a href="/stock-rapido.html">Atualizar já</a><a href="/catalogo.html">Catálogo</a><a href="/stories.html">Vídeos</a><button id="logoutButton" type="button">Sair</button></nav></div></header>
+  <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
+    <nav id="privateNav" aria-label="Sessão" hidden><button id="logoutButton" class="signout" type="button">Sair</button></nav>
+  </div></header>
   <main>
-    <section class="card login" id="loginView" aria-labelledby="loginTitle">
-      <p class="eyebrow">Área privada</p><h1 id="loginTitle">A minha rotina</h1><p class="muted">Acompanhe as atualizações, os resultados e os passos que precisam de si.</p>
-      <form id="loginForm"><label for="accessCode">Código de acesso privado</label><input id="accessCode" name="password" type="password" autocomplete="current-password" maxlength="160" required><button id="loginButton" class="primary" type="submit" disabled>Entrar</button></form>
-      <p class="status" id="loginStatus" role="status" aria-live="polite">A verificar a sessão…</p>
+    <section id="loginView" class="card login" aria-labelledby="loginTitle">
+      <h1 id="loginTitle">Stock e publicações</h1><p>Entra com o teu código privado da AutoValorPT.</p>
+      <form id="loginForm"><label for="accessCode">Código de acesso</label><input id="accessCode" name="password" type="password" autocomplete="current-password" maxlength="160" required>
+        <button id="loginButton" class="primary" type="submit" disabled>Entrar</button></form>
+      <p id="loginStatus" class="hint" role="status">A verificar a sessão…</p>
     </section>
     <section id="dashboardView" aria-labelledby="pageTitle" hidden>
-      <p class="eyebrow">Área privada · Acompanhamento</p><h1 id="pageTitle">A minha rotina</h1>
-      <p class="intro muted">Início diário previsto às <strong>08h00, hora de Portugal</strong>. Aqui pode acompanhar o que foi executado e o que continua por confirmar.</p>
-      <div class="actions"><a class="button" href="/editorial.html">Acompanhar publicações criativas</a><a class="button" href="/stock-rapido.html">Entrou um carro novo? Atualizar agora</a></div>
-      <div class="toolbar"><button id="refreshButton" class="primary" type="button">Atualizar estado</button><label><input id="autoRefresh" type="checkbox" checked>Atualizar a cada 30 segundos</label></div>
-      <p class="time" id="readAt"></p><p class="status notice" id="dashboardStatus" role="status" aria-live="polite"></p>
-      <div class="grid">
-        <section class="card" aria-labelledby="cycleTitle">
-          <h2 id="cycleTitle">Execução diária</h2><span class="badge" id="cycleBadge">Por consultar</span>
-          <p class="status" id="cycleSummary"></p><p class="time" id="cycleTime"></p><p class="time" id="latestCycle"></p>
-          <div class="toolbar"><label for="cycleDay">Consultar dia <input id="cycleDay" type="date"></label><button id="todayButton" type="button">Hoje</button></div>
-          <ol class="steps" id="stepsList" aria-label="Etapas da execução"></ol>
-        </section>
-        <div class="stack">
-          <section class="card" aria-labelledby="catalogTitle">
-            <h2 id="catalogTitle">Catálogo WhatsApp</h2><p class="muted">Stock Samucar + AutoValorPT</p><span class="badge" id="catalogBadge">Por consultar</span>
-            <div class="stats"><div class="stat"><span>Standvirtual</span><strong id="sourceCount">—</strong></div><div class="stat"><span>Ficheiro</span><strong id="feedCount">—</strong></div><div class="stat"><span>Meta</span><strong id="metaCount">—</strong></div></div>
-            <p class="status" id="catalogSummary"></p><p class="time" id="catalogTime"></p><p class="status" id="catalogAccess"></p>
-            <div class="actions"><a class="button" href="/catalogo.html">Ver catálogo em detalhe</a></div>
-          </section>
-          <section class="card" aria-labelledby="instagramTitle">
-            <h2 id="instagramTitle">Instagram</h2><p class="status" id="photoSummary"></p><p class="status" id="storySummary"></p>
-            <div class="actions"><a class="button" href="/stories.html">Ver vídeos e histórico</a></div>
-          </section>
-          <section class="card" aria-labelledby="whatsappTitle">
-            <h2 id="whatsappTitle">Estados WhatsApp</h2><span class="badge pending" id="whatsappBadge">Por consultar</span>
-            <p class="status" id="whatsappSummary"></p><p class="status" id="whatsappAccess"></p>
-            <p class="status" id="whatsappLast"></p><p class="time" id="whatsappTime"></p><p class="status" id="whatsappWithdrawal"></p>
-            <p class="time">Um vídeo pronto ou um Story no Instagram não confirma publicação no Estado WhatsApp. As retiradas ficam registadas apenas após observação da eliminação no WhatsApp.</p>
-            <div class="actions"><a class="button" href="/estado-whatsapp.html">Ver Estados e gerir acesso</a></div>
-          </section>
-        </div>
+      <h1 id="pageTitle">O meu stock</h1>
+      <p class="lead">Rotina diária prevista para as <strong>08h00</strong>, hora de Portugal.</p>
+      <section class="card action" aria-labelledby="actionTitle">
+        <h2 id="actionTitle">Entrou uma viatura?</h2>
+        <p>Procura novidades na Samucar e na AutoValorPT, sincroniza o catálogo e pode publicar as novas viaturas no Instagram.</p>
+        <button id="runNow" class="primary" type="button" aria-describedby="manualStatus" disabled>Atualizar stock agora</button>
+        <p id="manualStatus" class="hint" role="status">A verificar se podes iniciar a atualização extra…</p>
+        <p id="manualOutcome" class="status"></p>
+      </section>
+      <div class="section-head"><h2>Últimos resultados</h2><button id="refreshButton" class="secondary" type="button">Consultar estado</button></div>
+      <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
+      <div class="rows">
+        <details><summary><strong>Catálogo WhatsApp</strong><span id="catalogBadge" class="badge">Por consultar</span></summary>
+          <div class="details-body">
+            <div class="stats"><div class="stat"><span>Standvirtual</span><strong id="sourceCount">—</strong></div><div class="stat"><span>Para a Meta</span><strong id="feedCount">—</strong></div><div class="stat"><span>Na Meta</span><strong id="metaCount">—</strong></div></div>
+            <p id="catalogSummary" class="status"></p><p id="catalogTime" class="time"></p><p id="catalogAccess" class="status"></p>
+            <div class="links"><a class="link" href="/catalogo.html">Gerir só o catálogo</a></div>
+          </div>
+        </details>
+        <details><summary><strong>Instagram</strong><span id="instagramBrief" class="badge">Por consultar</span></summary>
+          <div class="details-body"><p id="photoSummary" class="status"></p><p id="storySummary" class="status"></p>
+            <div class="links"><a class="link" href="/stories.html">Ver vídeos e Stories</a><a class="link" href="/editorial.html">Publicações criativas</a></div>
+          </div>
+        </details>
+        <details><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span></summary>
+          <div class="details-body"><p>O Estado tem um passo próprio. Abre os Estados para ver o próximo vídeo e confirmar a publicação no WhatsApp.</p>
+            <div class="links"><a class="link" href="/estado-whatsapp.html">Abrir Estados</a></div>
+            <p id="whatsappLast" class="status"></p><p id="whatsappTime" class="time"></p>
+            <details><summary>Detalhes do dispositivo</summary><div class="details-body"><p id="whatsappAccess" class="status"></p><p id="whatsappSummary" class="status"></p><p id="whatsappWithdrawal" class="status"></p></div></details>
+          </div>
+        </details>
       </div>
-      <details class="card control"><summary>Os meus acessos e controlo</summary><ul>
-        <li><strong>WhatsApp:</strong> na aplicação do telemóvel, abra Definições → Dispositivos associados. Pode consultar os dispositivos e terminar a sessão de qualquer um. Desligar o dispositivo usado pela rotina interrompe a publicação de Estados por essa ligação.</li>
-        <li><strong>Meta:</strong> nas definições do negócio Watermelon Auto, consulte Apps e Utilizadores do sistema para rever a aplicação e o acesso ao catálogo. Remover esse acesso interrompe a verificação e correção pelo servidor; a importação agendada do feed tem configuração própria.</li>
-        <li><strong>Este painel:</strong> usa o mesmo código privado da área de vídeos. Sair termina a sessão neste navegador; não desliga as rotinas no servidor.</li>
-      </ul><p class="status">As consultas deste painel não iniciam publicações, importações nem remoções. Os avisos de atualizações e de intervenção necessária continuam na tarefa AutoValorPT do ChatGPT.</p></details>
-      <p class="footnote">Datas em Portugal. As contagens e os estados referem-se à verificação indicada. Uma leitura indisponível significa resultado por confirmar; não prova que a importação tenha parado.</p>
+      <div class="rows">
+        <details id="historyPanel"><summary><strong>Histórico das 08h00</strong><span id="cycleBadge" class="badge">Por consultar</span></summary>
+          <div class="details-body"><p id="cycleSummary" class="status"></p><p id="cycleTime" class="time"></p><p id="latestCycle" class="time"></p>
+            <div class="toolbar"><label for="cycleDay">Dia da rotina <input id="cycleDay" type="date"></label><button id="todayButton" class="secondary" type="button">Hoje</button></div>
+            <ol id="stepsList" class="steps" aria-label="Etapas da rotina"></ol>
+          </div>
+        </details>
+        <details><summary><strong>Acessos e definições</strong></summary><div class="details-body"><ul>
+          <li>No WhatsApp, podes rever ou desligar dispositivos em <strong>Definições → Dispositivos associados</strong>.</li>
+          <li>Na Meta, os acessos ao catálogo estão nas definições do negócio <strong>Watermelon Auto</strong>.</li>
+          <li>O botão <strong>Sair</strong> termina a sessão neste navegador. A rotina das 08h00 continua agendada.</li>
+        </ul></div></details>
+      </div>
     </section>
-    <noscript><p class="card">Ative JavaScript para consultar esta área privada.</p></noscript>
+    <noscript><p>Ativa o JavaScript para abrir o painel.</p></noscript>
   </main>
 </body>
 </html>
