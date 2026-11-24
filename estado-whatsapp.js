@@ -44,7 +44,15 @@
     $('enroll').disabled = busy || data.device?.valid || data.blocked;
     $('revoke').disabled = busy || !data.device?.valid;
     $('device').textContent = !data.device ? 'Ainda sem dispositivo autorizado.' : data.device.revokedAt ? `Acesso revogado em ${format(data.device.revokedAt)}.` : !data.device.valid ? 'A autorização expirou ou foi invalidada.' : `${data.device.thisDevice ? 'Este dispositivo está autorizado' : 'Outro dispositivo está autorizado'} até ${format(data.device.expiresAt)}.`;
-    $('claim').hidden = !selected || !data.device?.thisDevice || data.blocked;
+    $('claim').hidden = !selected || !data.device?.valid || !data.device.thisDevice || data.blocked;
+    let nextStep = '';
+    if (data.blocked) nextStep = 'Há uma tentativa por concluir. Consulta os dados da tentativa antes de escolher outro vídeo.';
+    else if (selected && !data.device?.valid) nextStep = data.role === 'admin'
+      ? 'Para reservar o vídeo, abre «Acesso do dispositivo» e autoriza o navegador que vais usar.'
+      : 'Para reservar o vídeo, é preciso que o administrador autorize este dispositivo.';
+    else if (selected && !data.device?.thisDevice) nextStep = 'Para reservar e descarregar este vídeo, abre esta página no dispositivo autorizado.';
+    else if (selected) nextStep = 'Reserva este vídeo para o poderes descarregar.';
+    $('candidateHint').textContent = nextStep;
     $('plan').disabled = busy || data.blocked;
     $('withdrawalPlan').disabled = busy || data.blocked;
     const active = data.active; const removing = active?.kind === 'withdrawal';
@@ -78,11 +86,11 @@
     $('lastWithdrawal').textContent = removal ? removal.status === 'observed_removed' ? `${removal.id}: eliminação observada em ${format(removal.observedAt)}. ${removal.observation}` : `${removal.id}: retirada encerrada sem confirmação de eliminação, em ${format(removal.at)}. Não será repetida automaticamente.` : 'Ainda sem eliminação observada.';
     $('automationExplanation').textContent = data.automation === 'publication_observed_scheduled_test_pending' ? 'A publicação já foi observada no WhatsApp neste dispositivo. Falta validar a primeira execução agendada; a rotina completa ainda não está confirmada.' : 'A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.';
   }
-  async function work(action) {
+  async function work(action, completed = 'Registo atualizado.') {
     if (busy) return; busy = true;
     for (const button of document.querySelectorAll('button')) button.disabled = true;
     $('message').textContent = 'A verificar…';
-    try { await action(); $('message').textContent = state?.automation === 'publication_observed_scheduled_test_pending' ? 'Registo atualizado. Publicação observada; primeira execução agendada ainda por validar.' : 'Registo atualizado. A rotina automática continua a aguardar o teste completo.'; }
+    try { await action(); $('message').textContent = completed; }
     catch (error) {
       $('message').textContent = errors[error.code] || 'Não foi possível confirmar a operação. Atualize o estado antes de repetir qualquer envio.';
       if (error.status === 401) { $('private').hidden = true; $('login').hidden = false; state = null; selected = null; }
@@ -92,14 +100,14 @@
     }
   }
   async function refresh() { selected = null; $('candidate').textContent = 'Verifique o stock para selecionar o próximo vídeo.'; $('withdrawalCandidates').replaceChildren(); $('withdrawalPlanResult').textContent = 'Verifique o stock para identificar Estados que precisem de ser retirados.'; render(await api('status')); }
-  $('refresh').onclick = () => work(refresh);
+  $('refresh').onclick = () => work(refresh, 'Registo consultado.');
   for (const action of ['enroll', 'revoke']) $(action).onclick = () => work(async () => { selected = null; render(await api(action, {})); });
   $('plan').onclick = () => work(async () => {
     const data = await api('plan'); selected = data.candidate;
     $('candidate').textContent = selected ? `${selected.title} · ${selected.price} · ${selected.id}` : errors[data.reason] || 'Não há um novo vídeo elegível já preparado.';
     $('baseline').textContent = data.wouldInitializeBaseline && selected ? 'Na primeira reserva, os restantes carros atuais ficam excluídos da publicação automática inicial.' : '';
     render(data);
-  });
+  }, 'Pesquisa de vídeo concluída.');
   $('claim').onclick = () => work(async () => { if (!selected) return; const data = await api('claim', { id: selected.id, fingerprint: selected.fingerprint }); selected = null; render(data); });
   const attempt = () => ({ attemptId: state?.active?.attemptId });
   $('begin').onclick = () => work(async () => render(await api('begin', { ...attempt(), account: $('account').value.replace(/\s/g, '') })));
@@ -130,7 +138,7 @@
       } else { const note = document.createElement('small'); note.textContent = 'Esta retirada só pode ser executada pelo dispositivo que registou a publicação.'; li.append(note); }
       $('withdrawalCandidates').append(li);
     }
-  });
+  }, 'Consulta de Estados a retirar concluída.');
   const withdrawalIdentity = () => ({ ...attempt(), account: $('withdrawalAccount').value.replace(/\s/g, ''), id: state?.active?.id,
     fingerprint: state?.active?.fingerprint, publicationAttemptId: state?.active?.publicationAttemptId, observedAt: new Date().toISOString() });
   $('withdrawalBegin').onclick = () => work(async () => render(await api('withdrawal-begin', { ...withdrawalIdentity(),
@@ -139,5 +147,5 @@
     deletionActionObserved: $('withdrawalActionObserved').checked, absentFromMyStatus: $('withdrawalAbsent').checked, observation: $('withdrawalAfterObservation').value.trim() })));
   $('withdrawalUncertain').onclick = () => work(async () => render(await api('uncertain', attempt())));
   $('withdrawalClose').onclick = () => work(async () => render(await api('close', { ...attempt(), doNotRepeat: true })));
-  work(refresh);
+  work(refresh, 'Registo consultado.');
 })();

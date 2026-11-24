@@ -6,6 +6,8 @@
   <title>Estados WhatsApp · AutoValorPT</title>
   <style>
     :root{font-family:system-ui,sans-serif;color:#17283d;background:#f4f6fa}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}header{background:#101c2d;color:white;padding:22px}header div,main{max-width:850px;margin:auto}header a{color:#fff}header div{display:flex;justify-content:space-between;gap:16px}main{padding:32px 20px}h1{font-size:34px;letter-spacing:-.04em}h2{font-size:21px}p{line-height:1.6}.card{padding:24px;border:1px solid #dce3ed;border-radius:20px;background:#fff;margin:20px 0}.muted{color:#5a6b80}.notice{background:#fff1e6;border-radius:12px;padding:15px}button,.button{display:inline-block;min-height:48px;padding:12px 16px;border:1px solid #bbc8da;border-radius:12px;color:#254c7c;background:#f6f9fd;font:inherit;font-weight:700;cursor:pointer;text-decoration:none}button:disabled{opacity:.5;cursor:not-allowed}.primary{background:#e7752d;color:#172536;border-color:#e7752d}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}label{display:block;margin:16px 0 8px}input,textarea{font:inherit;width:100%;padding:12px;border:1px solid #bbc8da;border-radius:10px}input[type=checkbox]{width:auto;margin-right:8px}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #e7752d;outline-offset:4px}#message{white-space:pre-line;overflow-wrap:anywhere}dt{font-weight:700;margin-top:12px}dd{margin:4px 0;overflow-wrap:anywhere}small{line-height:1.5}li{margin:10px 0}summary{cursor:pointer;padding:12px 0}video{max-height:350px;max-width:100%}
+    details.card > summary { cursor:pointer; font-weight:700; font-size:17px; min-height:44px; padding:10px 0; }
+    #candidateHint:empty { display:none; }
   </style>
   <script src="/estado-whatsapp.js" defer></script>
 </head>
@@ -13,28 +15,19 @@
   <header><div><strong>AutoValorPT</strong><a href="/rotina.html">A minha rotina</a></div></header>
   <main>
     <h1>Estados WhatsApp</h1>
-    <p class="muted">Vídeos para o número <strong>+351 965 637 736</strong>.</p><p class="muted" id="automationExplanation">A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.</p>
+    <p class="muted">Prepara aqui o vídeo e publica-o no WhatsApp Business da conta <strong>+351 965 637 736</strong>.</p><p class="muted" id="automationExplanation">A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.</p>
     <p id="message" class="notice" role="status" aria-live="polite">A verificar o acesso…</p>
     <p id="login" hidden><a class="button" href="/rotina.html">Entrar na área privada</a> Depois de entrar, volte a esta página.</p>
     <div id="private" hidden>
-      <button id="refresh" type="button">Atualizar estado</button>
-      <section class="card"><h2>Acesso deste dispositivo</h2><p id="device"></p>
-        <p class="muted">A autorização dura 90 dias e dá acesso apenas ao vídeo selecionado e ao registo da respetiva publicação. A sessão WhatsApp tem de estar ligada neste navegador.</p>
-        <p class="muted">Revogar aqui bloqueia o acesso aos vídeos e registos desta página. Para desligar também a sessão WhatsApp, remova o navegador em «Dispositivos associados» no WhatsApp do telemóvel.</p>
-        <div id="adminControls" class="actions" hidden><button id="enroll" class="primary" type="button">Autorizar este dispositivo por 90 dias</button><button id="revoke" type="button">Revogar acesso aos vídeos e registos</button></div>
-      </section>
-      <section class="card"><h2>Próximo vídeo</h2><p id="candidate">Por consultar.</p><p id="baseline" class="muted"></p>
-        <div class="actions"><button id="plan" type="button">Verificar stock e vídeo</button><button id="claim" class="primary" type="button" hidden>Reservar este vídeo</button></div>
+      <button id="refresh" type="button">Consultar registo</button>
+      <section class="card"><h2>Próximo vídeo</h2><p id="candidate">Por consultar.</p><p id="baseline" class="muted"></p><p id="candidateHint" class="muted"></p>
+        <div class="actions"><button id="plan" type="button">Procurar vídeo</button><button id="claim" class="primary" type="button" hidden>Reservar este vídeo</button></div>
         <p class="muted">É reutilizado um vídeo já preparado e publicado no Instagram, com os dados conferidos no stock atual. No máximo um envio iniciado por dia, mesmo quando o resultado fica incerto. Os carros antigos não são publicados em série.</p>
         <p class="muted">Os Estados registados podem ser retirados quando o carro sai do stock ou os dados mudam. A eliminação é executada no WhatsApp e só fica confirmada após observação.</p>
       </section>
-      <section class="card"><h2>Estados a retirar</h2><p id="withdrawalPlanResult">Verifique o stock para identificar Estados desatualizados.</p>
-        <button id="withdrawalPlan" type="button">Verificar Estados a retirar</button><ul id="withdrawalCandidates"></ul><p id="elapsed" class="muted"></p>
-        <p class="muted">Só são considerados Estados registados por esta rotina e ainda dentro da janela de 24 horas. Identidade ambígua, falta de stock confirmado ou resultado incerto impedem uma nova eliminação.</p>
-      </section>
       <section id="attempt" class="card" hidden><h2>Publicação em curso</h2><dl id="attemptDetails"></dl>
-        <div class="actions"><a id="download" class="button" hidden>Descarregar vídeo reservado</a><button id="begin" type="button" hidden>Iniciar envio no WhatsApp</button></div>
-        <p class="muted">Descarregue o vídeo e prepare o Estado no WhatsApp. Confirme o número da conta abaixo e registe o início imediatamente antes de carregar em enviar no WhatsApp.</p>
+        <div class="actions"><a id="download" class="button" hidden>Descarregar vídeo reservado</a><button id="begin" type="button" hidden>Registar início do envio</button></div>
+        <p class="muted">Descarrega o vídeo e prepara o teu Estado no WhatsApp Business. Confirma aqui o número da conta e regista o início. Depois, toca em enviar no WhatsApp.</p>
         <label for="account">Número confirmado na conta WhatsApp</label><input id="account" type="tel" autocomplete="off" placeholder="+351965637736">
         <div id="evidence" hidden>
           <label for="observation">O que ficou visível em «O meu estado»?</label><textarea id="observation" maxlength="300" rows="3" placeholder="Indique o carro e o preço que observou no vídeo publicado."></textarea>
@@ -64,6 +57,15 @@
         <div class="actions"><button id="withdrawalUncertain" type="button">Resultado incerto — não repetir</button></div>
         <details id="withdrawalReconcile" hidden><summary>Encerrar retirada sem confirmação</summary><p>Liberta a rotina, mas não afirma que o Estado foi eliminado e impede repetir esta retirada automaticamente.</p><button id="withdrawalClose" type="button">Encerrar sem confirmar eliminação</button></details>
       </section>
+      <details class="card"><summary>Acesso do dispositivo</summary><p id="device"></p>
+        <p class="muted">A autorização dura 90 dias e dá acesso apenas ao vídeo selecionado e ao registo da respetiva publicação. A sessão WhatsApp tem de estar ligada neste navegador.</p>
+        <p class="muted">Revogar aqui bloqueia o acesso aos vídeos e registos desta página. Para desligar também a sessão WhatsApp, remova o navegador em «Dispositivos associados» no WhatsApp do telemóvel.</p>
+        <div id="adminControls" class="actions" hidden><button id="enroll" class="primary" type="button">Autorizar este dispositivo por 90 dias</button><button id="revoke" type="button">Revogar acesso aos vídeos e registos</button></div>
+      </details>
+      <details class="card"><summary>Estados a retirar</summary><p id="withdrawalPlanResult">Verifique o stock para identificar Estados desatualizados.</p>
+        <button id="withdrawalPlan" type="button">Verificar Estados a retirar</button><ul id="withdrawalCandidates"></ul><p id="elapsed" class="muted"></p>
+        <p class="muted">Só são considerados Estados registados por esta rotina e ainda dentro da janela de 24 horas. Identidade ambígua, falta de stock confirmado ou resultado incerto impedem uma nova eliminação.</p>
+      </details>
       <section class="card"><h2>Últimos registos</h2><p id="last">Ainda sem publicação observada.</p><p id="lastWithdrawal">Ainda sem eliminação observada.</p><small class="muted">O registo confirma uma observação no WhatsApp Web por quem executa a rotina. Não é uma confirmação recebida da API da Meta.</small></section>
     </div>
   </main>

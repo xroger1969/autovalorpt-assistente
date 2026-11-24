@@ -89,3 +89,19 @@ test('refreshing the same withdrawal attempt preserves entered evidence across i
   assert.equal(app.get('withdrawalAfter').hidden, false);
   assert.ok(app.calls.every(call => call.options.method === 'GET'));
 });
+
+test('finding a video shows the next step for the actual device and makes only read requests', async () => {
+  for (const [device, expected, canReserve] of [
+    [null, /Acesso do dispositivo/, false],
+    [{ valid: false, thisDevice: true }, /Acesso do dispositivo/, false],
+    [{ valid: true, thisDevice: false }, /navegador autorizado|dispositivo autorizado/, false],
+    [{ valid: true, thisDevice: true }, /Reserva este vídeo/, true]
+  ]) {
+    const app = await page({ role: 'admin', candidate: { title: 'Viatura de teste', price: '15000 €', id: 'IDabcde1' }, device, blocked: false });
+    await app.get('plan').onclick();
+    assert.match(app.get('candidateHint').textContent, expected);
+    assert.equal(Boolean(app.get('claim').hidden), !canReserve);
+    assert.match(app.get('message').textContent, /Pesquisa de vídeo concluída/);
+    assert.ok(app.calls.every(call => call.options.method === 'GET'));
+  }
+});
