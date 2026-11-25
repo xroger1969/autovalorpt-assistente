@@ -4,7 +4,8 @@
   const ID = /^ID[A-Za-z0-9]{5,30}$/;
   const PROCESSED = new Set(['published', 'mapping_pending', 'retired', 'expired', 'unknown']);
   const LABELS = { baseline: 'Registo inicial', queued: 'Em fila', ready: 'Vídeo pronto', preview_ready: 'Pré-visualização pronta', preview_failed: 'Pré-visualização não concluída', published: 'Story publicado', mapping_pending: 'Publicado; confirmação em curso', mapped: 'Publicação confirmada', canceled: 'Cancelado', retired: 'Story retirado', expired: 'Story expirado', failed: 'Operação não concluída', unknown: 'Resultado por confirmar' };
-  const REASONS = { facebook_authorization_required: 'Falta concluir a autorização Meta.', story_permissions_required: 'A autorização Meta precisa de permissões adicionais.', instagram_business_account_required: 'A conta tem de ser uma conta empresarial do Instagram.', story_publishing_limit_reached: 'O limite de publicações da conta foi atingido.', story_test_requires_latest_publication: 'A viatura já não é elegível. Verifique novamente a ligação e a disponibilidade.', story_already_processed: 'Esta viatura já foi processada. Atualize o estado.', video_signing_not_configured: 'A disponibilização do vídeo ainda não está configurada.', wrong_story_account: 'A conta ligada não corresponde a @autovalorpt.', story_provider_rejected: 'O Instagram ou a Meta recusou o pedido. Consulte o estado antes de repetir.', story_binding_changed: 'A configuração do registo mudou e precisa de verificação.' };
+  const STOCK_CHANGED = new Set(['stock_source_changed','stock_not_synchronized']);
+  const REASONS = { stock_source_changed: 'O stock do Standvirtual mudou desde a última sincronização. Volta ao painel principal e carrega em «Atualizar tudo» antes de verificar a ligação.', stock_not_synchronized: 'O stock ainda não está sincronizado. Volta ao painel principal e carrega em «Atualizar tudo».', facebook_authorization_required: 'Falta concluir a autorização Meta.', story_permissions_required: 'A autorização Meta precisa de permissões adicionais.', instagram_business_account_required: 'A conta tem de ser uma conta empresarial do Instagram.', story_publishing_limit_reached: 'O limite de publicações da conta foi atingido.', story_test_requires_latest_publication: 'A viatura já não é elegível. Verifique novamente a ligação e a disponibilidade.', story_already_processed: 'Esta viatura já foi processada. Atualize o estado.', video_signing_not_configured: 'A disponibilização do vídeo ainda não está configurada.', wrong_story_account: 'A conta ligada não corresponde a @autovalorpt.', story_provider_rejected: 'O Instagram ou a Meta recusou o pedido. Consulte o estado antes de repetir.', story_binding_changed: 'A configuração do registo mudou e precisa de verificação.' };
   let version = 0;
   const model = { status: null, verification: null, verifiedAt: 0, candidate: null, preview: null, busy: false, review: false, attemptedId: null, attemptedAt: 0, confirmationId: null };
 
@@ -120,13 +121,18 @@
     version += 1;
     Object.assign(model, { status: null, verification: null, verifiedAt: 0, candidate: null, busy: false, review: false, confirmationId: null });
     if ($('publishDialog').open) $('publishDialog').close();
-    clearVideo(); $('historyList').replaceChildren();
+    clearVideo(); $('historyList').replaceChildren(); $('stockRecovery').hidden = true;
     $('dashboardView').hidden = true; $('privateNav').hidden = true; $('loginView').hidden = false; $('loginButton').disabled = false;
     message('loginStatus', text, kind);
   }
   function showDashboard() { $('accessCode').value = ''; $('loginView').hidden = true; $('dashboardView').hidden = false; $('privateNav').hidden = false; }
   function handleError(error, target = 'dashboardStatus') {
     if (error.status === 401) { showLogin(error.message); return; }
+    if (STOCK_CHANGED.has(error.data?.error)) {
+      model.verification = null; model.verifiedAt = 0; model.candidate = null;
+      clearVideo(); $('stockRecovery').hidden = false;
+      message('verificationStatus', REASONS[error.data.error], 'error');
+    }
     message(target, error.message || 'Não foi possível concluir o pedido. Atualize o estado antes de repetir.', 'error');
   }
   function applyStatus(data) {
@@ -153,7 +159,7 @@
   }
   async function verifyConnection() {
     if (model.busy) return;
-    model.busy = true; model.verification = null; model.verifiedAt = 0; render(); message('verificationStatus', 'A verificar conta, autorização e viatura…'); const v = version;
+    model.busy = true; model.verification = null; model.verifiedAt = 0; $('stockRecovery').hidden = true; render(); message('verificationStatus', 'A verificar conta, autorização e viatura…'); const v = version;
     try {
       const data = await api(apiUrl('stories-dry-run'), {}, 90000);
       if (v !== version) return;
