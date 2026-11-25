@@ -16,14 +16,16 @@
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
   let editorialPost = null; let extraAvailable = false; let extraSubmitting = false;
+  let channelCheck = null, stockCheck = null, currentCycle = null, pendingManualStories = 0, calendarState = '';
   const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
   const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
   const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' });
-  function today() {
-    const parts = Object.fromEntries(dayFormat.formatToParts(new Date()).map(part => [part.type, part.value]));
+  function lisbonDay(value) {
+    const parts = Object.fromEntries(dayFormat.formatToParts(value).map(part => [part.type, part.value]));
     return [parts.year, parts.month, parts.day].join('-');
   }
+  const today = () => lisbonDay(new Date());
   function date(value) { const d = new Date(value || ''); return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'medium', timeStyle: 'short' }).format(d) : 'Data não registada'; }
   function text(id, value) { $(id).textContent = value; }
   function badge(id, value, kind = 'pending') { text(id, value); $(id).className = `badge ${kind}`; }
@@ -52,10 +54,16 @@
   }
   function sessionView(value, message = '') {
     authenticated = value; generation++;
-    globalThis.AutoValorManualStories?.setSession(value, () => sessionView(false, 'A sessão terminou. Volta a entrar.'));
+    const expire = () => sessionView(false, 'A sessão terminou. Volta a entrar.');
+    globalThis.AutoValorRoutineCalendar?.setSession(value, expire);
+    globalThis.AutoValorManualStories?.setSession(value, expire, pending => {
+      pendingManualStories = pending;
+      showCheckOverview();
+    });
     $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) {
+      channelCheck = null; stockCheck = null; currentCycle = null; pendingManualStories = 0; calendarState = '';
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
       verifying = false; manualRequest = null; dashboardRequest = null; setBusy(false); text('checkStatus', '');
       $('stockActionDetails').open = false; text('manualHint', ''); text('checkDetails', '');
@@ -126,6 +134,7 @@
     const version = generation;
     manualRequest = api(url('morning-flow', 'status') + '&mode=manual').then(data => {
       if (request !== manualRead || version !== generation) return false;
+      if (stockCheck) stockCheck.manualMissing = false;
       renderManual(data); return true;
     }).catch(error => {
       if (request === manualRead && version === generation) {
@@ -151,12 +160,79 @@
     }
     const counts = stands.map(name => name + ' · ' + data.items.filter(item => item.sources.includes(name)).length);
     const total = data.items.length;
-    return 'Stock atual: ' + total + (total === 1 ? ' viatura' : ' viaturas') + ' (' + counts.join(', ') + ').';
+    return { total, detail: 'Stock atual: ' + total + (total === 1 ? ' viatura' : ' viaturas') + ' (' + counts.join(', ') + ').' };
+  }
+  function showCheckOverview() {
+    if (!authenticated || verifying || !channelCheck) return;
+    const current = stockCheck?.day === today() ? stockCheck : null;
+    const alerts = [...channelCheck.alerts];
+    if (current?.unavailable) alerts.unshift('Stock Standvirtual por consultar');
+    if (current?.manualMissing) alerts.push('Atualização manual por consultar');
+    if (pendingManualStories > 0) alerts.unshift(pendingManualStories === 1 ? 'Story manual por confirmar' : 'Stories manuais por confirmar');
+    const newerDiagnostic = channelCheck.total != null && channelCheck.stamp > (current?.stockAt || 0);
+    const total = current?.unavailable ? null : newerDiagnostic ? channelCheck.total : current?.total ?? channelCheck.total;
+    if (!current?.unavailable && !newerDiagnostic && current?.total != null && channelCheck.total != null &&
+        current.total !== channelCheck.total && !alerts.some(item => item.startsWith('Catálogo WhatsApp')))
+      alerts.push('Contagem do catálogo WhatsApp por atualizar');
+    if (total == null && !current?.unavailable && !alerts.length) alerts.push('Stock por verificar');
+    const line = total == null ? [] : [total + (total === 1 ? ' viatura' : ' viaturas')];
+    if (alerts.length) line.push(...new Set(alerts));
+    else line.push('Verificação concluída');
+    if (current?.time) line.push(current.time);
+    const element = $('checkStatus');
+    element.className = 'status' + (alerts.length ? ' attention' : '');
+    text('checkStatus', line.join(' · '));
+  }
+  function publicationAttention(name, data) {
+    if (!data || data.ok === false) return name + ' por consultar';
+    if (data.authorization?.expired || data.authorization?.lastError) return name + ' com acesso por renovar';
+    if (data.active) return name + (/unknown|review|required/.test(data.active.phase || '') ? ' por confirmar' : ' em curso');
+    if (data.configuration?.enabled !== true) return name + ' por ativar';
+    const result = data.lastResult;
+    if (result?.ok !== false && ['published', 'mapped', 'no_new_stock', 'expired', 'daily_limit_reached'].includes(result?.status)) return '';
+    return name + ' por confirmar';
+  }
+  function updateCheckOverview({ catalog, photos, stories, editorial, whatsapp, cycle, cycleError }) {
+    const alerts = [];
+    const diagnostic = catalog?.lastResult;
+    const stamp = Date.parse(diagnostic?.checkedAt || diagnostic?.at);
+    const currentDiagnostic = Number.isFinite(stamp) && lisbonDay(new Date(stamp)) === today();
+    const total = currentDiagnostic && !catalog.active && (diagnostic.sourceValid || diagnostic.catalogConfirmed) &&
+      Number.isSafeInteger(diagnostic.sourceCount) && diagnostic.sourceCount >= 0 ? diagnostic.sourceCount : null;
+    alerts.push(publicationAttention('Story', stories), publicationAttention('Fotografia', photos));
+    if (!catalog || catalog.ok === false) alerts.push('Catálogo WhatsApp por consultar');
+    else if (catalog.active || diagnostic?.catalogConfirmed !== true || diagnostic?.ok === false) alerts.push('Catálogo WhatsApp por confirmar');
+    const wa = whatsapp?.active;
+    if (!whatsapp || whatsapp.ok === false) alerts.push('Estado WhatsApp por consultar');
+    else if (wa || whatsapp.blocked || !whatsapp.device?.valid ||
+        ['closed_without_publication_confirmation', 'unknown'].includes(whatsapp.lastResult?.status))
+      alerts.push('Estado WhatsApp por confirmar');
+    if (!editorial || editorial.ok === false) alerts.push('Publicações criativas por consultar');
+    else if ($('editorialBadge').className !== 'badge good') alerts.push('Publicações criativas · ' + $('editorialBadge').textContent.toLowerCase());
+    if (cycleError || cycle?.ok === false) alerts.push('Rotina das 08h00 por consultar');
+    else if (cycle?.stalled || ['blocked', 'interrupted'].includes(cycle?.status) || cycle?.status === 'finished' && !cycle.verification)
+      alerts.push('Rotina das 08h00 por confirmar');
+    else if (cycle?.status === 'not_started' &&
+        Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Lisbon', hour: '2-digit', hourCycle: 'h23' }).format(new Date())) >= 8)
+      alerts.push('Rotina das 08h00 sem registo');
+    if (cycle?.status === 'finished') {
+      for (const name of finalIssues(cycle)) {
+        const service = { 'Stories': stories, fotografias: photos, 'catálogo': catalog }[name];
+        // A later successful channel check supersedes a morning report.
+        const latest = Date.parse(service?.lastResult?.checkedAt || service?.lastResult?.at);
+        if (Number.isFinite(latest) && latest > Date.parse(cycle.updatedAt)) continue;
+        const topic = { Stories: 'Story', fotografias: 'Fotografia', 'catálogo': 'Catálogo WhatsApp' }[name];
+        if (topic && !alerts.some(item => item.startsWith(topic))) alerts.push(topic + ' por confirmar');
+      }
+    }
+    channelCheck = { total, stamp, alerts: alerts.filter(Boolean) };
+    showCheckOverview();
   }
   async function verifyPanel(checkStock) {
     if (verifying) return;
     const version = generation;
     verifying = true; showManualButton(); text('checkDetails', '');
+    $('checkStatus').className = 'status';
     text('checkStatus', checkStock ? 'A consultar os dois inventários e os registos dos canais…' : 'A consultar o progresso da atualização…');
     try {
       const stock = checkStock ? api(url('instagram-sync', 'stories-manual-stock')).then(stockSummary) : null;
@@ -165,24 +241,25 @@
       if (inventory.status === 'rejected' && inventory.reason?.status === 401) {
         sessionView(false, 'A sessão terminou. Volta a entrar.'); return;
       }
-      const missing = [];
-      if (checkStock && inventory.status === 'rejected') missing.push('stock Standvirtual');
-      if (manual.status !== 'fulfilled' || !manual.value) missing.push('atualização manual');
-      if (channels.status !== 'fulfilled' || !Array.isArray(channels.value)) missing.push('registos dos canais');
-      else missing.push(...channels.value);
+      if (channels.status !== 'fulfilled' || !Array.isArray(channels.value)) channelCheck = { total: null, alerts: ['Registos dos canais por consultar'] };
       const time = new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', timeStyle: 'medium' }).format(new Date());
-      const summary = [missing.length ? 'Consulta incompleta às ' + time + '.' : 'Consulta concluída às ' + time + '.'];
-      if (checkStock && inventory.status === 'fulfilled') text('checkDetails', inventory.value);
-      if (missing.length) summary.push('Por consultar: ' + missing.join(', ') + '.');
-      text('checkStatus', summary.join('\n'));
-    } finally { if (version === generation) { verifying = false; showManualButton(); } }
+      const prior = stockCheck?.day === today() ? stockCheck : null;
+      stockCheck = { ...prior, day: today(), time, manualMissing: manual.status !== 'fulfilled' || !manual.value };
+      if (checkStock) {
+        stockCheck.stockAt = Date.now();
+        stockCheck.unavailable = inventory.status !== 'fulfilled';
+        stockCheck.total = stockCheck.unavailable ? null : inventory.value.total;
+        stockCheck.detail = stockCheck.unavailable ? '' : inventory.value.detail;
+      }
+      text('checkDetails', stockCheck.detail || '');
+    } finally { if (version === generation) { verifying = false; showManualButton(); showCheckOverview(); } }
   }
   async function submitManual() {
     if (!authenticated || submitting || !manualAction || $('runNow').disabled) return;
     const version = generation;
     const action = manualAction;
     if (action === 'verify' || action === 'refresh') { await verifyPanel(action === 'verify'); return; }
-    manualRead++; manualRequest = null; text('checkStatus', ''); text('checkDetails', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
+    manualRead++; manualRequest = null; stockCheck = null; text('checkStatus', ''); text('checkDetails', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
     if (action === 'resume') lastResume = Date.now();
     text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
     try {
@@ -357,6 +434,11 @@
     return ({published:'Publicação confirmada',already_published:'Publicação já confirmada',not_due:'A aguardar o horário',before_start:'A aguardar o início',disabled:'Rotina pausada',paused:'Rotina pausada',publishing:'A confirmar publicação',failed:'Publicação não concluída',authorization_required:'Ligação por verificar'})[result?.status] || label(result);
   }
   function showEditorial(data, error) {
+    if (!error && data?.ok !== false && data) {
+      const revision = [data.enabled, data.nextPost?.id, data.nextPost?.date, data.lastResult?.at, data.active?.phase].join('|');
+      if (calendarState && revision !== calendarState) globalThis.AutoValorRoutineCalendar?.invalidate();
+      calendarState = revision;
+    }
     if (error || !data || data.ok === false) {
       clearEditorial(); badge('editorialBadge','Leitura indisponível','error'); text('editorialResult','Não foi possível consultar as publicações criativas.'); return;
     }
@@ -382,6 +464,7 @@
     const post = data.nextPost;
     const valid = validDay(post?.date) && (post.format === 'REELS' || Number.isSafeInteger(post.slideCount) && post.slideCount >= 1 && post.slideCount <= 10);
     editorialPost = valid ? post : null;
+    globalThis.AutoValorRoutineCalendar?.setNextPost(editorialPost);
     renderPreviewLinks(editorialPost);
     $('editorialNext').hidden = !valid;
     const image = $('editorialImage'); const src = editorialImageUrl(editorialPost);
@@ -427,6 +510,11 @@
     const error = index => results[index].status === 'rejected' ? results[index].reason : null;
     showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
     showInstagram(value(2), value(3), error(2), error(3)); showEditorial(value(5), error(5));
+    const currentDay = today();
+    if (day === currentDay) currentCycle = { day, value: value(0), error: error(0) };
+    updateCheckOverview({ catalog: value(1), photos: value(2), stories: value(3), whatsapp: value(4), editorial: value(5),
+      cycle: currentCycle?.day === currentDay ? currentCycle.value : null,
+      cycleError: currentCycle?.day !== currentDay || currentCycle.error });
     text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
     text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
     if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {

@@ -32,9 +32,7 @@
     return '/api/stock?' + query;
   }
 
-  function renderSources(sources) {
-    const panel = document.getElementById('editorialSources');
-    const list = document.getElementById('editorialSourceList');
+  function renderSources(sources, panel = document.getElementById('editorialSources'), list = document.getElementById('editorialSourceList')) {
     list.replaceChildren(); panel.hidden = true;
     if (!Array.isArray(sources)) return;
     for (const item of sources) {
@@ -65,5 +63,13 @@
     simulatorLink('editorialSimulator', post?.simulatorUrl, 'https://carregador.vercel.app/');
     simulatorLink('editorialCreditSimulator', post?.creditSimulatorUrl, 'https://credicarros.vercel.app/simulador-ano.html');
   }
-  globalThis.AutoValorEditorialPreview = { imageUrl, renderPreviewLinks };
+  function videoUrl(value) {
+    if (typeof value !== 'string' || !value) return null;
+    try {
+      const url = new URL(value, pageOrigin);
+      if (![pageOrigin, productionOrigin].includes(url.origin) || url.username || url.password || url.search || url.hash) return null;
+      return ['/assets/editorial/rotina-web-v1.mp4', '/assets/editorial/test-drive-web-v1.mp4'].includes(url.pathname) ? url.pathname : null;
+    } catch { return null; }
+  }
+  globalThis.AutoValorEditorialPreview = { validDay, imageUrl, videoUrl, renderSources, renderPreviewLinks };
 })();

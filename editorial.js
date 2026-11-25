@@ -1,10 +1,8 @@
 (() => {
   'use strict';
-  const { imageUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
+  const { imageUrl, videoUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const API = '/api/stock?integration=editorial&action=';
-  const PAGE_ORIGIN = globalThis.location?.origin || 'https://autovalorpt-assistente.vercel.app';
-  const VIDEO_PATHS = new Set(['/assets/editorial/rotina-web-v1.mp4', '/assets/editorial/test-drive-web-v1.mp4']);
   const LABELS = {
     published: 'Publicação confirmada', already_published: 'Publicação já confirmada',
     disabled: 'Rotina pausada', not_due: 'A aguardar o horário', before_start: 'A aguardar o início',
@@ -57,14 +55,6 @@
     } catch { return null; }
   }
 
-  function videoUrl(value) {
-    if (typeof value !== 'string' || !value) return null;
-    try {
-      const url = new URL(value, PAGE_ORIGIN);
-      if (url.origin !== PAGE_ORIGIN || url.username || url.password || url.search || url.hash || !VIDEO_PATHS.has(url.pathname)) return null;
-      return url.pathname;
-    } catch { return null; }
-  }
   function clearVideo() {
     const video = $('previewVideo');
     if (typeof video.pause === 'function') video.pause();

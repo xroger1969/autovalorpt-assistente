@@ -60,6 +60,7 @@
     .time { margin: 3px 0 10px; }
     .status { white-space: pre-line; color: var(--muted); }
     .status:empty, .hint:empty { display: none; }
+    #checkStatus.attention { color: #77400b; }
     .notice:not(:empty) { margin: 8px 0; padding: 10px 12px; background: #fff3df; color: #674113; border-radius: 10px; }
     .action-details { margin-top: 8px; }
     .action-details > summary, #manualStories > details.ms-preview > summary { min-height: 44px; padding: 9px 0; font-weight: 650; }
@@ -96,12 +97,24 @@
     .steps { list-style: none; padding: 0; margin: 12px 0 0; }
     .steps li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; border-top: 1px solid var(--line); padding: 8px 0; }
     .steps small { width: 100%; color: var(--muted); }
+    .calendar { margin-top: 18px; }
+    .calendar .details-body > .hint { margin-top: 0; }
+    .calendar-entry { margin-top: 8px; border-top: 1px solid var(--line); }
+    .calendar-entry > summary { padding: 12px 4px; }
+    .calendar-entry > summary > span, .calendar-entry > summary > strong { grid-column: 1; overflow-wrap: anywhere; }
+    .calendar-entry > summary .time { margin: 0; }
+    .calendar-preview { padding: 4px 4px 14px; }
+    .calendar-preview img, .calendar-preview video { display: block; width: min(100%, 320px); height: auto; margin: 6px 0; border-radius: 10px; }
+    .calendar-preview video { max-height: 55vh; width: auto; max-width: 100%; background: #142337; }
+    .calendar-caption { white-space: pre-line; margin-top: 12px; }
+    #calendarRefresh { margin-top: 12px; }
     @media (max-width: 420px) { .section-head h2 { font-size: 19px; } .section-head button { padding-inline: 10px; } }
   </style>
   <link rel="stylesheet" href="/manual-stories.css">
-  <script src="/manual-stories.js?v=20261125-4" defer></script>
-  <script src="/editorial-preview.js" defer></script>
-  <script src="/rotina.js?v=20261125-4" defer></script>
+  <script src="/manual-stories.js?v=20261125-5" defer></script>
+  <script src="/editorial-preview.js?v=20261125-5" defer></script>
+  <script src="/routine-calendar.js" defer></script>
+  <script src="/rotina.js?v=20261125-5" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -135,6 +148,15 @@
         <button id="extraButton" type="button" class="primary" disabled>Publicar conteúdo extra agora</button>
         <p id="extraTitle" class="hint"></p><p id="extraStatus" role="status" class="hint">Uma publicação extra por dia, sem alterar a rotina das 19h00.</p>
       </section>
+      <details id="routineCalendar" class="card calendar">
+        <summary><strong>Próximas 7 publicações</strong></summary>
+        <div class="details-body">
+          <p class="hint">Publicações criativas a partir das 19h00, hora de Lisboa.</p>
+          <p id="calendarStatus" class="status" role="status" aria-live="polite"></p>
+          <div id="calendarItems"></div>
+          <button id="calendarRefresh" class="secondary" type="button">Atualizar calendário</button>
+        </div>
+      </details>
       <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button" hidden>Consultar estado</button></div>
       <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
       <div class="rows">

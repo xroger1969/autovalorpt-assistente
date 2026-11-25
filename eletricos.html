@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#142337">
+  <meta name="description" content="Consulta os automóveis 100% elétricos disponíveis na Samucar e na AutoValorPT, com preços, fotografias originais e ligação aos anúncios.">
+  <link rel="canonical" href="https://autovalorpt-assistente.vercel.app/eletricos.html">
+  <link rel="icon" type="image/svg+xml" href="/avpt-icone.svg">
+  <link rel="stylesheet" href="/eletricos.css">
+  <script defer src="/eletricos.js"></script>
+  <title>Elétricos em stock · AutoValorPT</title>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap">
+      <nav class="topbar" aria-label="Navegação principal">
+        <span class="brand">AutoValor<span>PT</span></span>
+        <a href="https://carregador.vercel.app/">Comparar custos <span class="out-arrow" aria-hidden="true"></span></a>
+      </nav>
+      <div class="intro">
+        <h1>Elétricos em stock</h1>
+        <p>Automóveis 100% elétricos da Samucar e da AutoValorPT.</p>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="inventory-heading">
+      <p id="inventoryStatus" role="status" aria-live="polite" aria-atomic="true">A consultar os dois inventários…</p>
+      <time id="checkedAt" hidden></time>
+    </div>
+    <noscript><p>Ativa o JavaScript para consultar o stock disponível.</p></noscript>
+    <button id="retryInventory" type="button" hidden>Voltar a consultar</button>
+    <ul id="vehicleList" aria-label="Viaturas disponíveis" aria-busy="true"></ul>
+  </main>
+</body>
+</html>

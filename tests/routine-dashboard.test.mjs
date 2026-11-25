@@ -472,3 +472,36 @@ test('creative details show source links and select electric or extra artwork wi
   assert.equal(app.get('editorialSources').hidden, true);
   assert.ok(app.calls.every(call => !call.init.method || call.init.method === 'GET'));
 });
+
+test('the closed dashboard shows a single verified stock count, then replaces success with a live Story warning', async () => {
+  let story = { configuration: { enabled: true }, lastResult: { status: 'published', at: startedAt } };
+  const app = await dashboard({ cycle: finishedCycle(), whatsapp: { device: { valid: true } },
+    catalog: { lastResult: { checkedAt: startedAt, catalogConfirmed: true, sourceCount: 9 } },
+    fetch: path => path.includes('action=stories-status') ? response(story) : null });
+  assert.equal(app.get('checkStatus').textContent, '9 viaturas · Verificação concluída');
+  assert.ok(!app.get('stockActionDetails').open);
+  story = { ...story, active: { phase: 'unknown' } };
+  await app.get('refreshButton').handlers.click();
+  assert.match(app.get('checkStatus').textContent, /9 viaturas · Story por confirmar/);
+  assert.doesNotMatch(app.get('checkStatus').textContent, /concluída/);
+  assert.match(app.get('checkStatus').className, /attention/);
+});
+
+test('compact stock overview uses current counts, distinguishes zero from a missing count and flags diverging catalog numbers', async () => {
+  const catalog = { lastResult: { checkedAt: '2020-03-01T12:00:00Z', catalogConfirmed: true, sourceCount: 9 } };
+  const app = await dashboard({ cycle: finishedCycle(), catalog, whatsapp: { device: { valid: true } },
+    fetch: path => path.includes(manualStockAction) ? response({ ok: true, items: [] }) : null });
+  assert.doesNotMatch(app.get('checkStatus').textContent, /9 viaturas|0 viaturas|concluída/);
+  catalog.lastResult.checkedAt = startedAt;
+  await app.get('runNow').handlers.click();
+  assert.match(app.get('checkStatus').textContent, /0 viaturas · Contagem do catálogo WhatsApp por atualizar/);
+});
+
+test('a failed Story in today’s final check stays visible by the button without opening its details', async () => {
+  const cycle = finishedCycle();
+  cycle.verification.story = { status: 'unverified', ok: false };
+  const app = await dashboard({ cycle });
+  assert.match(app.get('checkStatus').textContent, /Story por confirmar/);
+  assert.ok(!app.get('stockActionDetails').open);
+  assert.doesNotMatch(app.get('checkStatus').textContent, /concluída/);
+});

@@ -1,4 +1,4 @@
-import { readStockInventories } from '../lib/meta-catalog-source.js';
+import { handleElectricStock, readPublicInventory } from '../lib/public-stock.js';
 import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
 
 // Keep the original response field and URL base for existing consumers. The
@@ -312,7 +312,8 @@ async function loadStock() {
   if (Date.now() - memoryCache.at < CACHE_MS && cachedItems.length) return { items: cachedItems, stale: false };
 
   try {
-    const inventory = await readStockInventories({ timeoutMs: SOURCE_TIMEOUT_MS });
+    const inventory = await readPublicInventory();
+    if (inventory.sources.some(source => !source.count)) throw Object.assign(new Error('source_empty_inventory'), { code: 'source_empty_inventory' });
     const base = inventory.items.map(item => ({
       title: item.title, url: item.link, image: item.image, price: formatPrice(item.price),
       year: String(item.year), mileage: formatMileage(item.mileage), fuel: item.fuel
@@ -327,6 +328,7 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'electric-stock') return handleElectricStock(req, res);
   if (req.query?.integration === 'catalog-image') {
     return (await import('../lib/catalog-image-handler.js')).default(req, res);
   }

@@ -67,7 +67,7 @@
     disabled: 'A publicação manual está desativada. Podes descarregar o MP4.',
     authorization_required: 'A autorização da Meta precisa de verificação.'
   };
-  let authenticated = false, onExpiry, sessionVersion = 0, busy = false;
+  let authenticated = false, onExpiry, notifyPending, sessionVersion = 0, busy = false;
   let stock = [], stockAt = 0, preview = null, phase = '', confirmation = null;
   let pending = new Map();
 
@@ -117,6 +117,7 @@
       button.addEventListener('click', () => checkAttempt(attempt));
       container.appendChild(button);
     }
+    notifyPending?.(pending.size);
   }
   function setPicker(open) {
     $('vehiclePicker').hidden = !open;
@@ -336,8 +337,9 @@
       if (!validId.test(id)) return;
       host.scrollIntoView({ block: 'start' }); void openStock(id);
     },
-    setSession(active, expire) {
+    setSession(active, expire, onPendingChange = notifyPending) {
       authenticated = active; onExpiry = expire; sessionVersion++; busy = false;
+      notifyPending = onPendingChange;
       clearPreview(); setPicker(false); message(''); stock = []; stockAt = 0; pending = new Map();
       $('vehicleResults').replaceChildren(); $('vehicleSearch').value = '';
       if (active) {
@@ -347,6 +349,7 @@
         } catch { /* Ignore unavailable storage. */ }
       } else storePending();
       renderPending(); updateControls();
+      if (!active) notifyPending = undefined;
     }
   };
 })();

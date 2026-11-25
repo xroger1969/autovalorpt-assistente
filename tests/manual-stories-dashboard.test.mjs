@@ -96,13 +96,34 @@ test('preview/download and canceled confirmation never publish; repeated confirm
 test('a lost publication response survives reload and only queries the original receipt', async () => {
   const storage = new Map();
   const first = dashboard({ publish() { throw new Error('disconnected'); } }, storage);
+  const counts = [];
+  first.setSession(true, undefined, (...args) => counts.push(args));
   await first.open(); await first.select(0);
   first.click('publishStory'); first.click('sendStory'); await flush();
   assert.equal(first.element('publishStory').disabled, true); assert.equal(storage.size, 1);
+  assert.deepEqual(counts, [[0], [1]]);
   const next = dashboard({ status: input => ({ id: input.id, status: 'published' }) }, storage);
+  const restoredCounts = [];
+  next.setSession(true, undefined, (...args) => restoredCounts.push(args));
+  assert.deepEqual(restoredCounts, [[1]]);
+  assert.deepEqual(next.calls, []);
   next.element('pendingStories').children[0].emit('click'); await flush();
   assert.deepEqual(next.calls, [{ action: 'status', body: { id: stock[0].id, fingerprint, reviewToken: 'review-' + stock[0].id } }]);
   assert.equal(storage.size, 0);
+  assert.deepEqual(restoredCounts, [[1], [0]]);
+});
+
+test('logout clears the pending count and detaches its listener without checking receipts', () => {
+  const receipts = stock.map(({ id }) => ({ id, fingerprint, reviewToken: 'test-receipt' }));
+  const storage = new Map([['autovalorpt.manual-stories.pending.v1', JSON.stringify(receipts)]]);
+  const app = dashboard({}, storage);
+  const counts = [];
+  app.setSession(true, undefined, count => counts.push(count));
+  app.setSession(false);
+  app.setSession(true);
+  assert.deepEqual(counts, [2, 0]);
+  assert.equal(storage.size, 0);
+  assert.deepEqual(app.calls, []);
 });
 
 test('the confirmation stays closed before the video loads and after a playback error', async () => {
