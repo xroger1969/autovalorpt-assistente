@@ -58,6 +58,7 @@
     if (!value) {
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
       verifying = false; manualRequest = null; dashboardRequest = null; setBusy(false); text('checkStatus', '');
+      $('stockActionDetails').open = false; text('manualHint', ''); text('checkDetails', '');
       manualRead++; manualAction = ''; acceptedDay = ''; submitting = false; followRequest = false; lastResume = 0;
       manualInProgress = false; manualPollingUntil = 0; lastDashboardRead = 0;
       $('runNow').disabled = true; text('runNow', 'Atualizar tudo'); text('manualStatus', ''); text('manualOutcome', '');
@@ -114,7 +115,10 @@
       hint = 'A atualização só está disponível no painel de produção.';
     }
     manualTitle = title; showManualButton();
-    text('manualStatus', message || hint); text('manualOutcome', result);
+    const routineHint = state === 'finished' || manualAction === 'manual-start';
+    text('manualHint', routineHint ? hint : '');
+    text('manualStatus', message || (routineHint ? '' : hint));
+    text('manualOutcome', result);
   }
   function readManualStatus() {
     if (manualRequest) return manualRequest;
@@ -152,7 +156,7 @@
   async function verifyPanel(checkStock) {
     if (verifying) return;
     const version = generation;
-    verifying = true; showManualButton();
+    verifying = true; showManualButton(); text('checkDetails', '');
     text('checkStatus', checkStock ? 'A consultar os dois inventários e os registos dos canais…' : 'A consultar o progresso da atualização…');
     try {
       const stock = checkStock ? api(url('instagram-sync', 'stories-manual-stock')).then(stockSummary) : null;
@@ -168,7 +172,7 @@
       else missing.push(...channels.value);
       const time = new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', timeStyle: 'medium' }).format(new Date());
       const summary = [missing.length ? 'Consulta incompleta às ' + time + '.' : 'Consulta concluída às ' + time + '.'];
-      if (checkStock && inventory.status === 'fulfilled') summary.push(inventory.value);
+      if (checkStock && inventory.status === 'fulfilled') text('checkDetails', inventory.value);
       if (missing.length) summary.push('Por consultar: ' + missing.join(', ') + '.');
       text('checkStatus', summary.join('\n'));
     } finally { if (version === generation) { verifying = false; showManualButton(); } }
@@ -178,7 +182,7 @@
     const version = generation;
     const action = manualAction;
     if (action === 'verify' || action === 'refresh') { await verifyPanel(action === 'verify'); return; }
-    manualRead++; manualRequest = null; text('checkStatus', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
+    manualRead++; manualRequest = null; text('checkStatus', ''); text('checkDetails', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
     if (action === 'resume') lastResume = Date.now();
     text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
     try {

@@ -32,11 +32,11 @@ class Element {
   showModal() { this.open = true; }
   close() { this.open = false; this.emit('close'); }
   focus() {}
-  pause() {}
+  pause() { this.paused = true; }
   load() { this.readyState = 0; }
 }
 
-function dashboard(overrides = {}, storage = new Map()) {
+function dashboard(overrides = {}, storage = new Map(), collapsible = false) {
   const elements = new Map(); const calls = [];
   function element(id) {
     if (!elements.has(id)) elements.set(id, new Element());
@@ -52,6 +52,7 @@ function dashboard(overrides = {}, storage = new Map()) {
       return { ok: true, status: 200, json: async () => result };
     }, location: { origin: 'https://example.test' }, URL, AbortController, clearTimeout, setTimeout,
     sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } };
+  if (collapsible) element('manualStories').setAttribute('data-collapsible-preview', '');
   vm.runInNewContext(script, context);
   context.AutoValorManualStories.setSession(true);
   const click = id => element(id).emit('click');
@@ -64,7 +65,7 @@ function dashboard(overrides = {}, storage = new Map()) {
     player.readyState = 1; player.currentSrc = new URL(player.src, context.location.origin).href;
     player.emit('loadedmetadata');
   }
-  return { element, click, open, select, calls, results };
+  return { element, click, open, select, calls, results, setSession: context.AutoValorManualStories.setSession };
 }
 
 test('manual stock is fetched on demand and searched by make, model, ID and unformatted plate', async () => {
@@ -113,4 +114,36 @@ test('the confirmation stays closed before the video loads and after a playback 
   player.error = { code: 4 }; player.emit('error'); assert.equal(app.element('publishStory').disabled, true);
   app.click('publishStory'); assert.ok(!app.element('confirmStory').open);
   assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview']);
+});
+
+test('the routine preview opens after selection, folds without fetching, pauses playback and resets on logout', async () => {
+  const storage = new Map(); const app = dashboard({}, storage, true);
+  const markup = app.element('manualStories').innerHTML;
+  assert.match(markup, /<details id="vehiclePreview"[^>]*>\s*<summary id="vehicleName">/);
+  assert.match(markup, /<\/details>\s*<p id="vehicleStatus"[\s\S]*id="pendingStories"/);
+  const previewPanel = app.element('vehiclePreview'), player = app.element('vehicleVideo');
+  assert.equal(previewPanel.hidden, true); assert.equal(previewPanel.open, false);
+  await app.open(); await app.select(1);
+  assert.equal(previewPanel.hidden, false); assert.equal(previewPanel.open, true);
+  assert.equal(app.element('vehicleName').textContent, 'Vídeo preparado · Renault Zoe');
+  const src = player.src, download = app.element('vehicleDownload').href;
+  player.paused = false; previewPanel.open = false; previewPanel.emit('toggle');
+  assert.equal(player.paused, true); assert.equal(app.element('vehicleStatus').textContent, '');
+  previewPanel.open = true; previewPanel.emit('toggle');
+  assert.equal(player.src, src); assert.equal(app.element('vehicleDownload').href, download);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview']); assert.equal(storage.size, 0);
+  app.setSession(false);
+  assert.equal(previewPanel.open, false); assert.equal(previewPanel.hidden, true);
+  assert.equal(player.hasAttribute('src'), false); assert.equal(app.element('vehicleDownload').hasAttribute('href'), false);
+  assert.equal(app.element('vehicleName').textContent, 'Vídeo preparado');
+});
+
+test('the Stories page keeps the expanded video section and existing review prompt', async () => {
+  const app = dashboard();
+  assert.match(app.element('manualStories').innerHTML, /<section id="vehiclePreview"[^>]*>\s*<h2 id="vehicleName">/);
+  await app.open(); await app.select(0);
+  assert.equal(app.element('vehicleName').textContent, 'Citroën ë-C4');
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  assert.match(app.element('vehicleStatus').textContent, /rever o vídeo/);
+  assert.equal(app.element('vehiclePreview').events.has('toggle'), false);
 });

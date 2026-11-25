@@ -2,6 +2,8 @@
   'use strict';
   const host = document.getElementById('manualStories');
   if (!host) return;
+  const collapsiblePreview = host.hasAttribute('data-collapsible-preview');
+  const previewTag = collapsiblePreview ? 'details' : 'section';
   // Both private pages share the same controls. All data from the API is inserted as text.
   host.innerHTML = `
     <button class="ms-action ms-launch" id="chooseVehicle" type="button" aria-controls="vehiclePicker" aria-expanded="false" disabled>Criar vídeo de outra viatura</button>
@@ -11,14 +13,15 @@
       <p class="ms-detail">Seleciona uma viatura para preparar o vídeo.</p>
       <ul id="vehicleResults" class="ms-list" aria-label="Viaturas disponíveis"></ul>
     </div>
-    <section id="vehiclePreview" class="ms-preview" aria-labelledby="vehicleName" hidden>
-      <h2 id="vehicleName"></h2><p id="vehicleDetails" class="ms-detail"></p>
+    <${previewTag} id="vehiclePreview" class="ms-preview" aria-labelledby="vehicleName" hidden>
+      ${collapsiblePreview ? '<summary id="vehicleName">Vídeo preparado</summary>' : '<h2 id="vehicleName"></h2>'}
+      <p id="vehicleDetails" class="ms-detail"></p>
       <video id="vehicleVideo" controls playsinline preload="metadata" aria-label="Pré-visualização do vídeo da viatura"></video>
       <div class="ms-actions">
         <a id="vehicleDownload" class="ms-action" download>Descarregar MP4</a>
         <button id="publishStory" class="ms-action ms-publish" type="button" disabled>Publicar Story agora</button>
       </div>
-    </section>
+    </${previewTag}>
     <p id="vehicleStatus" class="ms-message" role="status" aria-live="polite"></p>
     <div id="pendingStories" class="ms-actions"></div>
     <dialog id="confirmStory" class="ms-dialog" aria-labelledby="confirmStoryTitle" aria-describedby="confirmStoryText">
@@ -124,7 +127,11 @@
     preview = null; confirmation = null; phase = '';
     const player = $('vehicleVideo');
     if (player.hasAttribute('src')) { player.pause(); player.removeAttribute('src'); player.load(); }
-    $('vehicleDownload').removeAttribute('href'); $('vehiclePreview').hidden = true;
+    $('vehicleDownload').removeAttribute('href');
+    $('vehicleName').textContent = collapsiblePreview ? 'Vídeo preparado' : '';
+    $('vehicleDetails').textContent = '';
+    $('vehiclePreview').hidden = true;
+    if (collapsiblePreview) $('vehiclePreview').open = false;
   }
   function videoPath(value, id, fingerprint) {
     try {
@@ -235,14 +242,16 @@
       }
       const previous = pending.get(item.id);
       phase = previous ? 'review_required' : remotePhase;
-      $('vehicleName').textContent = title(vehicle);
+      $('vehicleName').textContent = collapsiblePreview ? 'Vídeo preparado · ' + title(vehicle) : title(vehicle);
       $('vehicleDetails').textContent = [price(vehicle), item.id, '30 segundos', '1080 × 1920',
         preview.previous && 'Último Story manual em ' + preview.previous].filter(Boolean).join(' · ');
       $('vehicleVideo').src = media;
       $('vehicleDownload').href = download; $('vehicleDownload').download = 'AutoValorPT_' + item.id + '.mp4';
       $('vehiclePreview').hidden = false;
+      if (collapsiblePreview) $('vehiclePreview').open = true;
+      const readyMessage = collapsiblePreview ? '' : 'Carrega em reproduzir para rever o vídeo e confirmar o preço.';
       message(previous ? 'Há um envio anterior desta viatura. Consulta o resultado antes de publicar.' :
-        data.publicationEnabled ? 'Carrega em reproduzir para rever o vídeo e confirmar o preço.' : outcomes.disabled);
+        data.publicationEnabled ? readyMessage : outcomes.disabled);
       $('vehicleVideo').focus();
     } catch (error) {
       if (version === sessionVersion) { stockAt = 0; message(error.message, 'error'); }
@@ -296,6 +305,10 @@
     else { setPicker(false); message(''); }
   });
   $('vehicleSearch').addEventListener('input', renderStock);
+  if (collapsiblePreview) $('vehiclePreview').addEventListener('toggle', () => {
+    const player = $('vehicleVideo');
+    if (!$('vehiclePreview').open && !player.paused) player.pause();
+  });
   $('vehicleVideo').addEventListener('loadedmetadata', updateControls);
   $('vehicleVideo').addEventListener('error', () => {
     if (!preview || !$('vehicleVideo').error) return;

@@ -61,7 +61,10 @@
     .status { white-space: pre-line; color: var(--muted); }
     .status:empty, .hint:empty { display: none; }
     .notice:not(:empty) { margin: 8px 0; padding: 10px 12px; background: #fff3df; color: #674113; border-radius: 10px; }
-    #manualOutcome:not(:empty) { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; font-size: 14px; }
+    .action-details { margin-top: 8px; }
+    .action-details > summary, #manualStories > details.ms-preview > summary { min-height: 44px; padding: 9px 0; font-weight: 650; }
+    .action-details > .details-body { margin: 0; padding: 8px 0 0; }
+    .action-details .hint:first-child { margin-top: 0; }
     .section-head { margin-top: 20px; }
     .secondary { background: #e6edf2; color: #234662; }
     .rows { margin-bottom: 16px; }
@@ -96,9 +99,9 @@
     @media (max-width: 420px) { .section-head h2 { font-size: 19px; } .section-head button { padding-inline: 10px; } }
   </style>
   <link rel="stylesheet" href="/manual-stories.css">
-  <script src="/manual-stories.js" defer></script>
+  <script src="/manual-stories.js?v=20261125-4" defer></script>
   <script src="/editorial-preview.js" defer></script>
-  <script src="/rotina.js?v=20261125-3" defer></script>
+  <script src="/rotina.js?v=20261125-4" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -118,9 +121,16 @@
         <button id="runNow" class="primary" type="button" aria-describedby="manualStatus checkStatus" disabled>Atualizar tudo</button>
         <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
         <p id="checkStatus" class="status" role="status" aria-atomic="true"></p>
-        <p id="manualOutcome" class="status"></p>
+        <details id="stockActionDetails" class="action-details">
+          <summary>Detalhes da atualização</summary>
+          <div class="details-body">
+            <p id="manualHint" class="hint"></p>
+            <p id="checkDetails" class="status"></p>
+            <p id="manualOutcome" class="status"></p>
+          </div>
+        </details>
       </section>
-      <section class="card action" id="manualStories" aria-label="Vídeos de viaturas"></section>
+      <section class="card action" id="manualStories" data-collapsible-preview aria-label="Vídeos de viaturas"></section>
       <section class="card action" aria-label="Publicação criativa extra">
         <button id="extraButton" type="button" class="primary" disabled>Publicar conteúdo extra agora</button>
         <p id="extraTitle" class="hint"></p><p id="extraStatus" role="status" class="hint">Uma publicação extra por dia, sem alterar a rotina das 19h00.</p>

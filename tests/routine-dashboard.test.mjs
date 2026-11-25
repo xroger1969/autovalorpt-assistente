@@ -388,8 +388,12 @@ test('full check shows progress, deduplicates clicks and waits for the live inve
     assert.ok(readOnly(calls));
   } finally { stock.resolve(response(dualInventory)); }
   await Promise.all([check, second]);
-  const result = app.get('checkStatus').textContent;
-  assert.match(result, /\d{2}:\d{2}:\d{2}/);
+  assert.match(app.get('checkStatus').textContent, /\d{2}:\d{2}:\d{2}/);
+  assert.doesNotMatch(app.get('checkStatus').textContent, /Samucar/);
+  assert.ok(!app.get('stockActionDetails').open);
+  assert.equal(app.get('manualStatus').textContent, '');
+  assert.match(app.get('manualHint').textContent, /terminou/);
+  const result = app.get('checkDetails').textContent;
   assert.match(result, /3\s+viaturas?|viaturas?\D{0,5}3/i);
   assert.match(result, /Samucar\D{0,8}3|3\D{0,8}Samucar/i);
   assert.match(result, /AutoValorPT\D{0,8}1|1\D{0,8}AutoValorPT/i);
@@ -411,7 +415,7 @@ test('full check joins the initial channel reads and waits for the last slow cha
     assert.equal(app.calls.filter(c => c.endpoint.includes(manualStockAction)).length, 1);
   } finally { catalog.resolve(response({ configuration: { enabled: true } })); }
   await check;
-  assert.match(app.get('checkStatus').textContent, /Samucar/i);
+  assert.match(app.get('checkDetails').textContent, /Samucar/i);
   assert.equal(button.disabled, false);
   assert.ok(readOnly(app.calls));
 });
