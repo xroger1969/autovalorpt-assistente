@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  const { imageUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const API = '/api/stock?integration=editorial&action=';
   const PAGE_ORIGIN = globalThis.location?.origin || 'https://autovalorpt-assistente.vercel.app';
@@ -55,19 +56,7 @@
       url.search = ''; url.hash = ''; return url.href;
     } catch { return null; }
   }
-  function imageUrl(post, index) {
-    if (!validDay(post?.date) || !Number.isSafeInteger(index) || index < 0 || index >= 10) return null;
-    const query = new URLSearchParams({ integration: 'editorial-image', date: post.date, slide: String(index + 1) });
-    // Preserve the server's content version without accepting another URL or
-    // arbitrary image source from a response.
-    try {
-      const source = new URL((post.imageUrls || post.images)?.[index], PAGE_ORIGIN);
-      const versionKey = source.searchParams.has('v') ? 'v' : 'version';
-      const version = source.searchParams.get(versionKey);
-      if (/^[A-Za-z0-9_-]{1,40}$/.test(version || '')) query.set(versionKey, version);
-    } catch { /* The first-party route also accepts its current version. */ }
-    return `/api/stock?${query}`;
-  }
+
   function videoUrl(value) {
     if (typeof value !== 'string' || !value) return null;
     try {
@@ -101,6 +90,7 @@
     } finally { clearTimeout(timeout); }
   }
   function clearPrivateView() {
+    renderPreviewLinks();
     current = null; slide = 0;
     for (const id of ['dashboardStatus', 'readAt', 'resultDescription', 'resultTime', 'previewDate', 'captionText', 'copyStatus', 'imageStatus']) text(id);
     badge('routineBadge', 'Por consultar'); badge('resultBadge', 'Por consultar');
@@ -142,6 +132,7 @@
     slide = 0; text('copyStatus'); text('imageStatus');
     const reel = post?.format === 'REELS';
     const valid = validDay(post?.date) && (reel || Number.isSafeInteger(post?.slideCount) && post.slideCount >= 1 && post.slideCount <= 10);
+    renderPreviewLinks(valid ? post : null);
     $('previewContent').hidden = !valid; $('previewEmpty').hidden = valid; $('formatBadge').hidden = !valid;
     if (!valid) {
       text('previewTitle', 'Próximo conteúdo'); text('previewDate');
@@ -150,7 +141,9 @@
     }
     text('previewTitle', typeof post.title === 'string' ? post.title : 'Conteúdo AutoValorPT');
     text('formatBadge', reel ? 'Reel' : post.format === 'CAROUSEL' ? 'Carrossel' : 'Imagem');
-    text('previewDate', `Preparado para ${date(`${post.date}T12:00:00Z`, false)}.`);
+    const previewDay = date(post.date + 'T12:00:00Z', false);
+    text('previewDate', post.provisional === true ? 'Previsto para ' + previewDay +
+      '. As fontes e a legenda serão preparadas mais perto da publicação.' : 'Preparado para ' + previewDay + '.');
     text('captionText', typeof post.caption === 'string' ? post.caption : 'Legenda por consultar.');
     $('copyCaption').disabled = typeof post.caption !== 'string' || !post.caption;
     $('imageFrame').hidden = reel;

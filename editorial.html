@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#101c2d">
   <title>Publicações criativas · AutoValorPT</title>
   <link rel="stylesheet" href="/editorial.css">
+  <script src="/editorial-preview.js" defer></script>
   <script src="/editorial.js" defer></script>
 </head>
 <body>
@@ -73,6 +74,9 @@
               <button id="nextSlide" class="button quiet" type="button" aria-label="Ver imagem seguinte">Seguinte →</button>
             </div>
             <p id="imageStatus" class="small muted" role="status"></p>
+            <a id="editorialSimulator" class="button quiet" target="_blank" rel="noopener noreferrer" hidden>Simular custos de um elétrico</a>
+            <a id="editorialCreditSimulator" class="button quiet" target="_blank" rel="noopener noreferrer" hidden>Simular a prestação</a>
+            <details id="editorialSources" class="caption-details" hidden><summary>Fontes do conteúdo</summary><ul id="editorialSourceList"></ul></details>
             <details class="caption-details" open>
               <summary>Legenda preparada</summary>
               <p id="captionText" class="caption"></p>

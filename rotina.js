@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  const { imageUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Histórico Instagram'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
@@ -15,7 +16,6 @@
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
   let editorialPost = null; let extraAvailable = false; let extraSubmitting = false;
-  const PAGE_ORIGIN = globalThis.location?.origin || 'https://autovalorpt-assistente.vercel.app';
   const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
   const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
@@ -320,6 +320,7 @@
   }
 
   function clearEditorial() {
+    renderPreviewLinks();
     editorialPost = null; extraAvailable = false; $('extraButton').disabled = true; text('extraButton','Publicar conteúdo extra agora'); text('extraTitle',''); text('extraStatus','');
     for (const id of ['editorialSchedule','editorialResult','editorialTitle','editorialDate','editorialCaption','editorialPreviewNote']) text(id, '');
     $('editorialNext').hidden = true; $('editorialImage').hidden = true;
@@ -334,19 +335,7 @@
       url.search = ''; url.hash = ''; return url.href;
     } catch { return null; }
   }
-  function imageUrl(post, index) {
-    if (!validDay(post?.date) || !Number.isSafeInteger(index) || index < 0 || index >= 10) return null;
-    const query = new URLSearchParams({ integration: 'editorial-image', date: post.date, slide: String(index + 1) });
-    // Preserve the server's content version without accepting another URL or
-    // arbitrary image source from a response.
-    try {
-      const source = new URL((post.imageUrls || post.images)?.[index], PAGE_ORIGIN);
-      const versionKey = source.searchParams.has('v') ? 'v' : 'version';
-      const version = source.searchParams.get(versionKey);
-      if (/^[A-Za-z0-9_-]{1,40}$/.test(version || '')) query.set(versionKey, version);
-    } catch { /* The first-party route also accepts its current version. */ }
-    return `/api/stock?${query}`;
-  }
+
 
   function editorialImageUrl(post) {
     if (!validDay(post?.date) || post?.format === 'REELS' || !Number.isSafeInteger(post?.slideCount) || post.slideCount < 1 || post.slideCount > 10) return null;
@@ -389,11 +378,14 @@
     const post = data.nextPost;
     const valid = validDay(post?.date) && (post.format === 'REELS' || Number.isSafeInteger(post.slideCount) && post.slideCount >= 1 && post.slideCount <= 10);
     editorialPost = valid ? post : null;
+    renderPreviewLinks(editorialPost);
     $('editorialNext').hidden = !valid;
     const image = $('editorialImage'); const src = editorialImageUrl(editorialPost);
     if (!src || image.getAttribute('src') !== src) { image.removeAttribute('src'); image.hidden = true; image.alt = ''; }
     text('editorialTitle', valid && typeof post.title === 'string' ? post.title : 'Conteúdo por confirmar');
-    text('editorialDate', valid ? 'Preparado para ' + new Intl.DateTimeFormat('pt-PT',{timeZone:'Europe/Lisbon',dateStyle:'medium'}).format(new Date(post.date+'T12:00:00Z')) + '.' : '');
+    const previewDay = valid ? new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'medium' }).format(new Date(post.date + 'T12:00:00Z')) : '';
+    text('editorialDate', !valid ? '' : post.provisional === true ? 'Previsto para ' + previewDay +
+      '. As fontes e a legenda serão preparadas mais perto da publicação.' : 'Preparado para ' + previewDay + '.');
     text('editorialCaption', valid && typeof post.caption === 'string' ? post.caption : '');
     text('editorialPreviewNote', !valid ? '' : post.format === 'REELS' ? 'Reel preparado. Abre a pré-visualização completa para ver o vídeo.' : post.slideCount > 1 ? 'Primeira imagem do carrossel. Abre a pré-visualização completa para ver todas.' : '');
     loadEditorialPreview();

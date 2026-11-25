@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = await readFile(new URL('../editorial.js', import.meta.url), 'utf8');
+const script = (await Promise.all(['editorial-preview.js', 'editorial.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const ready = () => ({
@@ -53,7 +53,7 @@ test('enabled and configured is distinct from confirmed publication', async () =
   assert.equal(app.get('resultBadge').textContent, 'Ainda sem execução');
   assert.match(app.get('connectionStatus').textContent, /configurada.*será confirmada/);
   assert.equal(app.get('lastPostLink').hidden, true);
-  assert.match(app.get('previewImage').src, /^\/api\/stock\?integration=editorial-image&date=2026-11-21&slide=1&version=v1$/);
+  assert.match(app.get('previewImage').src, /^\/api\/stock\?integration=editorial-image&date=2026-11-21&slide=1&v=v1$/);
   assert.equal(app.get('previousSlide').disabled, true);
   app.get('nextSlide').handlers.click();
   assert.match(app.get('previewImage').src, /slide=2/);
@@ -180,4 +180,50 @@ test('confirmed publication keeps an unconfirmed AI indication visible', async (
   assert.equal(app.get('resultBadge').textContent, 'Publicação confirmada');
   assert.equal(app.get('lastPostLink').hidden, false);
   assert.match(app.get('resultDescription').textContent, /IA ainda precisa de confirmação/);
+});
+
+test('editorial preview shows verified sources and clears them on a later provisional post', async () => {
+  const data = ready(), accepted = ['www.acp.pt', 'apclima.pt', 'portugal.gov.pt', 'www.fundoambiental.pt', 'www.mobie.pt', 'employment-social-affairs.ec.europa.eu'];
+  data.nextPost.sources = accepted.map(host => ({ label: host, url: 'https://' + host + '/artigo', date: '2026-11-24' })).concat(
+    ['https://www.acp.pt.example.com/abc', 'https://www.acp.pt@unexpected.pt', 'https://name@www.acp.pt/abc', 'http://www.acp.pt/abc', 'javascript:alert(1)']
+      .map(url => ({ label: 'Outro', url })));
+  const app = await dashboard({ status: data });
+  assert.equal(app.get('editorialSources').hidden, false);
+  const rows = app.get('editorialSourceList').children;
+  assert.deepEqual(rows.map(row => row.children[0].href), accepted.map(host => 'https://' + host + '/artigo'));
+  assert.equal(rows[0].children[0].rel, 'noopener noreferrer');
+  assert.match(rows[0].children[1].textContent, /2026/);
+  delete data.nextPost.sources; data.nextPost.provisional = true;
+  await app.get('refreshButton').handlers.click();
+  assert.equal(app.get('editorialSources').hidden, true);
+  assert.equal(app.get('editorialSourceList').children.length, 0);
+  assert.match(app.get('previewDate').textContent, /fontes e a legenda serão preparadas/);
+});
+
+test('only supported image versions and the extra flag are retained on the editorial preview', async () => {
+  for (const [metadata, expected] of [['v=v2&extra=0', '&v=v2'], ['version=v1&extra=1', '&v=v1&extra=1'], ['v=v9&x=invalid', '']]) {
+    const data = ready(); data.nextPost.images = ['/api/stock?integration=editorial-image&' + metadata];
+    const app = await dashboard({ status: data });
+    assert.equal(app.get('previewImage').src, '/api/stock?integration=editorial-image&date=2026-11-21&slide=1' + expected);
+  }
+});
+
+
+test('only the exact AutoValorPT simulator opens from a distinct preview link', async () => {
+  const data = ready(), url = 'https://carregador.vercel.app/';
+  data.nextPost.simulatorUrl = url;
+  data.nextPost.creditSimulatorUrl = 'https://credicarros.vercel.app/simulador-ano.html';
+  const app = await dashboard({ status: data });
+  const link = app.get('editorialSimulator');
+  assert.equal(link.href, url); assert.equal(link.hidden, false);
+  const credit = app.get('editorialCreditSimulator');
+  assert.equal(credit.href, data.nextPost.creditSimulatorUrl); assert.equal(credit.hidden, false);
+  assert.equal(app.get('editorialSources').hidden, true);
+  for (const value of [url + '?next=other', 'https://carregador.vercel.app.evil.pt/', undefined]) {
+    data.nextPost.simulatorUrl = value;
+    data.nextPost.creditSimulatorUrl = value ? 'https://credicarros.vercel.app/other.html' : undefined;
+    await app.get('refreshButton').handlers.click();
+    assert.equal(link.hidden, true); assert.equal(link.href, undefined);
+    assert.equal(credit.hidden, true); assert.equal(credit.href, undefined);
+  }
 });

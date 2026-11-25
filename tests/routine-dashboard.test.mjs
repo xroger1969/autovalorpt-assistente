@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = await readFile(new URL('../rotina.js', import.meta.url), 'utf8');
+const script = (await Promise.all(['editorial-preview.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const startedAt = `${today()}T08:00:00Z`;
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
@@ -444,4 +444,27 @@ test('checking results from the installed shortcut cannot resume a cycle that ch
   await app.get('runNow').handlers.click();
   assert.ok(readOnly(app.calls));
   assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+});
+
+test('creative details show source links and select electric or extra artwork without publishing', async () => {
+  const post = { date: today(), format: 'IMAGE', slideCount: 1, title: 'Novidades', provisional: true, simulatorUrl: 'https://carregador.vercel.app/',
+    sources: [{ label: 'ACP', url: 'https://www.acp.pt/novidades' }, { label: 'Inválido', url: 'https://www.acp.pt.example.org' }],
+    images: ['/api/stock?integration=editorial-image&v=v2'] };
+  const app = await dashboard({ editorial: {ok: true, nextPost: post} });
+  assert.equal(app.get('editorialSimulator').href, post.simulatorUrl);
+  assert.equal(app.get('editorialCreditSimulator').hidden, true);
+  assert.equal(app.get('editorialSourceList').children.length, 1);
+  assert.equal(app.get('editorialSourceList').children[0].children[0].href, 'https://www.acp.pt/novidades');
+  assert.equal(app.get('editorialImage').src, undefined);
+  app.get('editorialPanel').open = true; app.get('editorialPanel').handlers.toggle();
+  assert.match(app.get('editorialImage').src, /&v=v2$/);
+  assert.match(app.get('editorialDate').textContent, /fontes e a legenda serão preparadas/);
+  post.images = ['/api/stock?integration=editorial-image&version=v1&extra=1']; post.sources = []; delete post.simulatorUrl;
+  post.creditSimulatorUrl = 'https://credicarros.vercel.app/simulador-ano.html';
+  await app.get('refreshButton').handlers.click();
+  assert.match(app.get('editorialImage').src, /&v=v1&extra=1$/);
+  assert.equal(app.get('editorialSimulator').href, undefined);
+  assert.equal(app.get('editorialCreditSimulator').href, post.creditSimulatorUrl);
+  assert.equal(app.get('editorialSources').hidden, true);
+  assert.ok(app.calls.every(call => !call.init.method || call.init.method === 'GET'));
 });
