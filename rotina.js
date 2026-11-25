@@ -40,8 +40,8 @@
   }
   function errorText(error) { return ERRORS[error?.code] || 'Leitura indisponível. O resultado fica por confirmar.'; }
   function url(integration, action, day) { const q = new URLSearchParams({ integration, action }); if (validDay(day)) q.set('day', day); return `/api/stock?${q}`; }
-  async function api(endpoint, options = {}) {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 30000);
+  async function api(endpoint, options = {}, timeoutMs = 30000) {
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(endpoint, { ...options, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal, headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
       const data = await response.json().catch(() => null);
@@ -328,9 +328,9 @@
     const extra = data.extra;
     extraAvailable = extra?.available === true && configured && !auth.expired && !auth.lastError;
     $('extraButton').disabled = !extraAvailable || extraSubmitting;
-    text('extraButton', extra?.resumable ? 'Continuar publicação extra' : 'Publicar conteúdo extra agora');
+    text('extraButton', extra?.verifyOnly ? 'Verificar publicação extra' : extra?.resumable ? 'Continuar publicação extra' : 'Publicar conteúdo extra agora');
     text('extraTitle', typeof extra?.nextPost?.title === 'string' ? extra.nextPost.title : '');
-    text('extraStatus', extra?.usedToday ? 'Publicação extra de hoje confirmada. A rotina das 19h00 mantém-se.' : extra?.lastResult?.status === 'publish_unknown' ? 'Publicação extra por confirmar. Não repetir.' : extraAvailable ? 'Cria e publica uma imagem e legenda diferentes do conteúdo diário.' : 'Publicação extra indisponível ou já em curso.');
+    text('extraStatus', extra?.usedToday ? 'Publicação extra de hoje confirmada. A rotina das 19h00 mantém-se.' : extra?.lastResult?.status === 'publish_unknown' && data.active?.extra === true ? 'Publicação extra por confirmar. Verifica o resultado sem a repetir.' : extraAvailable ? 'Cria e publica uma imagem e legenda diferentes do conteúdo diário.' : 'Publicação extra indisponível ou já em curso.');
     if (data.active) {
       const uncertain = /unknown|uncertain/.test(data.active.phase || '');
       badge('editorialBadge', uncertain ? 'Publicação por confirmar' : 'Publicação em curso', uncertain ? 'error' : 'pending');
@@ -396,7 +396,7 @@
     const version = generation; extraSubmitting = true; extraAvailable = false; $('extraButton').disabled = true;
     text('extraStatus','A criar e publicar o conteúdo extra…');
     let result, failed = false;
-    try { result = await api(url('editorial','extra-run'),{method:'POST'}); }
+    try { result = await api(url('editorial','extra-run'),{method:'POST'},240000); }
     catch (error) { if (error.status === 401 && generation === version) { sessionView(false,'A sessão terminou. Volta a entrar.'); return; } failed = true; }
     finally { extraSubmitting = false; }
     if (!authenticated || generation !== version) return;

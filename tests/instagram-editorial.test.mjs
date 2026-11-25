@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { BlobPreconditionFailedError } from '@vercel/blob';
 import { createInstagramEditorial, editorialClock, editorialDue, editorialImageUrl } from '../lib/instagram-editorial.js';
 import { editorialPlan } from '../lib/editorial-content.js';
+import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const STATE = 'instagram/editorial/v1/production/state.json';
@@ -374,4 +375,25 @@ test('uncertain extra cannot be repeated or confused with the daily lane',async(
   assert.equal((await f.publisher.run({extra:true})).status,'busy'); assert.equal(f.posts().length,1);
   f.setTime('2026-11-21T19:01:00Z');
   assert.equal((await f.publisher.run()).status,'review_required'); assert.equal(f.posts().length,1);
+});
+
+test('scheduled slot safely displaces an old, merely preparing extra without publishing it',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.publisher.run({extra:true})).status,'preparing');
+  f.setTime('2026-11-21T19:01:00Z'); f.setContainerStatus('FINISHED');
+  assert.equal((await f.publisher.run()).status,'published');
+  assert.equal(f.posts().length,1); const state=await f.publisher.status();
+  assert.equal(state.extra.lastResult.status,'skipped'); assert.equal(state.extra.lastResult.reason,'scheduled_slot_priority');
+  assert.equal(state.lastResult.status,'published');
+});
+test('extra route requires authenticated same-origin POST and cannot be triggered by cron GET',async()=>{
+  let calls=0; const env={CRON_SECRET:'synthetic-secret-at-least-32-characters'};
+  const handler=createInstagramEditorialHandler({env,authorizeAdmin:req=>req.headers.admin==='yes',publisher:{run:async args=>{assert.deepEqual(args,{extra:true});calls++;return {ok:true,status:'published',published:1}}},report:()=>{}});
+  async function invoke(method,headers){const res={code:200,setHeader(){},status(code){this.code=code;return this},json(body){this.body=body;return this}};await handler({method,headers,query:{action:'extra-run'}},res);return res.code}
+  assert.equal(await invoke('GET',{admin:'yes',host:'autovalorpt-assistente.vercel.app'}),403);
+  assert.equal(await invoke('GET',{authorization:'Bearer '+env.CRON_SECRET}),403);
+  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://example.com'}),403);
+  assert.equal(await invoke('POST',{host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),401);
+  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),200);
+  assert.equal(calls,1);
 });

@@ -104,5 +104,5 @@ test('extra bank uses distinct original question images and does not change dail
   const plans=Array.from({length:32},(_,i)=>extraEditorialPlan(dateAt(i)));
   assert.equal(new Set(plans.map(p=>p.topicId)).size,32);
   for (const plan of plans) { assert.equal(plan.extra,true); assert.equal(plan.format,'IMAGE'); assert.notEqual(plan.id,editorialPlan(plan.date).id); assert.equal(plan.slides[0].options.length,3); }
-  const buffer=await renderEditorialImage(plans[0],0); assert.ok(buffer.length>10000);
+  for (const plan of plans) { const buffer=await renderEditorialImage(plan,0); assert.ok(buffer.length>10000); }
 });
