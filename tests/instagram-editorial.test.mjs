@@ -352,3 +352,26 @@ test('public post lookup returns only a confirmed safe stored URL without Meta o
   f.memory.records.set(STATE, { ...stored, text: JSON.stringify(state) });
   assert.equal(await f.publisher.postLink('2026-11-21'), null);
 });
+
+test('extra manual publication is independent of the 19h calendar and deduplicated', async () => {
+  const f=fixture({time:'2026-11-21T10:00:00Z'});
+  const before=await f.publisher.status(); assert.equal(before.extra.available,true); assert.notEqual(before.extra.nextPost.id,before.nextPost.id);
+  const result=await f.publisher.run({extra:true}); assert.equal(result.status,'published'); assert.equal(f.posts().length,1);
+  const create=f.calls.find(c=>c.method==='POST'&&c.url.endsWith('/media')); assert.equal(new URL(new URLSearchParams(create.body).get('image_url')).searchParams.get('extra'),'1');
+  const state=await f.publisher.status(); assert.equal(state.extra.usedToday,true); assert.equal(state.lastResult,null); assert.equal(state.nextPost.date,'2026-11-21'); assert.equal(state.history[0].extra,true);
+  assert.equal((await f.publisher.run({extra:true})).status,'already_published'); assert.equal(f.posts().length,1);
+  assert.equal((await f.publisher.run()).status,'before_schedule');
+  f.setTime('2026-11-21T19:01:00Z'); assert.equal((await f.publisher.run()).status,'published'); assert.equal(f.posts().length,2);
+  assert.equal((await f.publisher.status()).history.length,2);
+});
+test('extra cannot consume the last quota reserved for the daily publication',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setLimits({data:[{quota_usage:99,config:{quota_total:100}}]});
+  assert.equal((await f.publisher.run({extra:true})).reason,'editorial_quota_reserved'); assert.equal(f.posts().length,0); assert.ok(f.calls.every(c=>c.method==='GET'));
+});
+test('uncertain extra cannot be repeated or confused with the daily lane',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setFailPublish(true);
+  assert.equal((await f.publisher.run({extra:true})).status,'review_required');
+  assert.equal((await f.publisher.run({extra:true})).status,'busy'); assert.equal(f.posts().length,1);
+  f.setTime('2026-11-21T19:01:00Z');
+  assert.equal((await f.publisher.run()).status,'review_required'); assert.equal(f.posts().length,1);
+});

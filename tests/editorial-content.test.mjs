@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
-import { editorialPlan, EDITORIAL_START_DATE, EDITORIAL_TOPIC_COUNT, EDITORIAL_VERSION } from '../lib/editorial-content.js';
+import { editorialPlan, extraEditorialPlan, EDITORIAL_START_DATE, EDITORIAL_TOPIC_COUNT, EDITORIAL_VERSION } from '../lib/editorial-content.js';
 import { renderEditorialImage, EDITORIAL_IMAGE_WIDTH, EDITORIAL_IMAGE_HEIGHT } from '../lib/editorial-image.js';
 
 const dateAt = (offset) => new Date(Date.parse(`${EDITORIAL_START_DATE}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
@@ -98,4 +98,11 @@ test('only the two authorized unpublished Reels override the original calendar',
     assert.equal(plan.slides.length, 1);
     assert.ok(!plan.caption.includes('Df9meNfBYmq'));
   }
+});
+
+test('extra bank uses distinct original question images and does not change daily plans',async()=>{
+  const plans=Array.from({length:32},(_,i)=>extraEditorialPlan(dateAt(i)));
+  assert.equal(new Set(plans.map(p=>p.topicId)).size,32);
+  for (const plan of plans) { assert.equal(plan.extra,true); assert.equal(plan.format,'IMAGE'); assert.notEqual(plan.id,editorialPlan(plan.date).id); assert.equal(plan.slides[0].options.length,3); }
+  const buffer=await renderEditorialImage(plans[0],0); assert.ok(buffer.length>10000);
 });

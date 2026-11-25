@@ -342,3 +342,12 @@ test('editorial private details are cleared on session expiry',async()=>{
   expired=true; await app.get('runNow').handlers.click();
   assert.equal(app.get('dashboardView').hidden,true); assert.equal(app.get('editorialCaption').textContent,''); assert.equal(app.get('editorialHistory').children.length,0);
 });
+
+test('extra publication is a separate explicitly pressed action and status refresh never publishes',async()=>{
+  const state={ok:true,enabled:true,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},extra:{available:true,nextPost:{title:'Nova pergunta'}}};
+  let sent=0;
+  const app=await dashboard({editorial:state,fetch:(path,init)=>{if(path.includes('action=extra-run')){assert.equal(init.method,'POST'); sent++; state.extra={available:false,usedToday:true}; return response({ok:true,status:'published'});} return null;}});
+  assert.equal(sent,0); assert.equal(app.get('extraButton').disabled,false);
+  await app.get('refreshButton').handlers.click(); assert.equal(sent,0);
+  await app.get('extraButton').handlers.click(); await app.get('extraButton').handlers.click(); assert.equal(sent,1); assert.equal(app.get('extraButton').disabled,true);
+});
