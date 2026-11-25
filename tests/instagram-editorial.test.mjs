@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { BlobPreconditionFailedError } from '@vercel/blob';
 import { createInstagramEditorial, editorialClock, editorialDue, editorialImageUrl } from '../lib/instagram-editorial.js';
 import { editorialPlan } from '../lib/editorial-content.js';
+import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const STATE = 'instagram/editorial/v1/production/state.json';
@@ -351,4 +352,48 @@ test('public post lookup returns only a confirmed safe stored URL without Meta o
   state.items['2026-11-21'].permalink = 'https://example.com/not-a-confirmed-instagram-url';
   f.memory.records.set(STATE, { ...stored, text: JSON.stringify(state) });
   assert.equal(await f.publisher.postLink('2026-11-21'), null);
+});
+
+test('extra manual publication is independent of the 19h calendar and deduplicated', async () => {
+  const f=fixture({time:'2026-11-21T10:00:00Z'});
+  const before=await f.publisher.status(); assert.equal(before.extra.available,true); assert.notEqual(before.extra.nextPost.id,before.nextPost.id);
+  const result=await f.publisher.run({extra:true}); assert.equal(result.status,'published'); assert.equal(f.posts().length,1);
+  const create=f.calls.find(c=>c.method==='POST'&&c.url.endsWith('/media')); assert.equal(new URL(new URLSearchParams(create.body).get('image_url')).searchParams.get('extra'),'1');
+  const state=await f.publisher.status(); assert.equal(state.extra.usedToday,true); assert.equal(state.lastResult,null); assert.equal(state.nextPost.date,'2026-11-21'); assert.equal(state.history[0].extra,true);
+  assert.equal((await f.publisher.run({extra:true})).status,'already_published'); assert.equal(f.posts().length,1);
+  assert.equal((await f.publisher.run()).status,'before_schedule');
+  f.setTime('2026-11-21T19:01:00Z'); assert.equal((await f.publisher.run()).status,'published'); assert.equal(f.posts().length,2);
+  assert.equal((await f.publisher.status()).history.length,2);
+});
+test('extra cannot consume the last quota reserved for the daily publication',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setLimits({data:[{quota_usage:99,config:{quota_total:100}}]});
+  assert.equal((await f.publisher.run({extra:true})).reason,'editorial_quota_reserved'); assert.equal(f.posts().length,0); assert.ok(f.calls.every(c=>c.method==='GET'));
+});
+test('uncertain extra cannot be repeated or confused with the daily lane',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setFailPublish(true);
+  assert.equal((await f.publisher.run({extra:true})).status,'review_required');
+  assert.equal((await f.publisher.run({extra:true})).status,'busy'); assert.equal(f.posts().length,1);
+  f.setTime('2026-11-21T19:01:00Z');
+  assert.equal((await f.publisher.run()).status,'review_required'); assert.equal(f.posts().length,1);
+});
+
+test('scheduled slot safely displaces an old, merely preparing extra without publishing it',async()=>{
+  const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.publisher.run({extra:true})).status,'preparing');
+  f.setTime('2026-11-21T19:01:00Z'); f.setContainerStatus('FINISHED');
+  assert.equal((await f.publisher.run()).status,'published');
+  assert.equal(f.posts().length,1); const state=await f.publisher.status();
+  assert.equal(state.extra.lastResult.status,'skipped'); assert.equal(state.extra.lastResult.reason,'scheduled_slot_priority');
+  assert.equal(state.lastResult.status,'published');
+});
+test('extra route requires authenticated same-origin POST and cannot be triggered by cron GET',async()=>{
+  let calls=0; const env={CRON_SECRET:'synthetic-secret-at-least-32-characters'};
+  const handler=createInstagramEditorialHandler({env,authorizeAdmin:req=>req.headers.admin==='yes',publisher:{run:async args=>{assert.deepEqual(args,{extra:true});calls++;return {ok:true,status:'published',published:1}}},report:()=>{}});
+  async function invoke(method,headers){const res={code:200,setHeader(){},status(code){this.code=code;return this},json(body){this.body=body;return this}};await handler({method,headers,query:{action:'extra-run'}},res);return res.code}
+  assert.equal(await invoke('GET',{admin:'yes',host:'autovalorpt-assistente.vercel.app'}),403);
+  assert.equal(await invoke('GET',{authorization:'Bearer '+env.CRON_SECRET}),403);
+  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://example.com'}),403);
+  assert.equal(await invoke('POST',{host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),401);
+  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),200);
+  assert.equal(calls,1);
 });
