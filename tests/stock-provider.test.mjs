@@ -71,8 +71,8 @@ test('provider rows receive strict feed validation and never carry additional pr
   }
 });
 
-test('malformed provider aborts photo, Story and retirement services before requests or writes', async () => {
-  for (const create of [createInstagramPublisher, createInstagramStories, createInstagramRetirements]) {
+test('malformed provider aborts photo and Story services before requests or writes', async () => {
+  for (const create of [createInstagramPublisher, createInstagramStories]) {
     const f = fixture(); const before = f.memory.records.get(publicationPath).text;
     const service = create({ ...f.options, loadFeed: async () => [car('ID8live01'), car('ID8live01')] });
     await assert.rejects(service.run(), { code: 'feed_invalid_item' });
@@ -96,15 +96,17 @@ test('Story plans from new provider reuse existing publication and Story histori
   assert.equal(f.calls.some(call => call.method !== 'GET'), false);
 });
 
-test('retirement re-reads internal provider and cancels deletion when vehicle returns', async () => {
-  const f = fixture(); let reads = 0;
-  const retirement = createInstagramRetirements({ ...f.options,
-    publisher: { postLink: async () => 'https://www.instagram.com/p/OldPost01/' },
-    loadFeed: async () => { reads++; return [car('ID8old001', { availability: reads === 1 ? 'out of stock' : 'in stock' })]; } });
-  const result = await retirement.run();
-  assert.equal(reads, 2);
-  assert.equal(result.status, 'canceled'); assert.equal(result.retired, 0);
-  assert.equal(f.calls.some(call => call.method === 'DELETE'), false);
+test('the archive preserves published vehicles regardless of subsequent availability', async () => {
+  const f = fixture();
+  for (const availability of ['out of stock', 'in stock']) {
+    let reads = 0;
+    const retirement = createInstagramRetirements({ ...f.options, loadFeed: async () => {
+      reads++; return [car('ID8old001', { availability })];
+    } });
+    assert.deepEqual(await retirement.run(), { ok: true, status: 'disabled', retired: 0 });
+    assert.equal(reads, 0);
+  }
   assert.deepEqual(JSON.parse(f.memory.records.get(publicationPath).text).items.ID8old001, f.old);
-  assert.equal(f.memory.calls.filter(call => call.method === 'put').length, 0);
+  assert.deepEqual(f.memory.calls, []);
+  assert.deepEqual(f.calls, []);
 });

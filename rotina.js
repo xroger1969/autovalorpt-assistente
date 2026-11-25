@@ -51,6 +51,7 @@
   }
   function sessionView(value, message = '') {
     authenticated = value; generation++;
+    globalThis.AutoValorManualStories?.setSession(value, () => sessionView(false, 'A sessão terminou. Volta a entrar.'));
     $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) {

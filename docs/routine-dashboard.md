@@ -1,19 +1,11 @@
-# Acompanhamento da rotina
+# Painel AutoValorPT
 
-`/rotina.html` é a entrada privada para acompanhar a rotina no telemóvel. Reutiliza o código e a sessão de `/api/admin-session`; não cria credenciais nem altera a duração da sessão. Os dados só são pedidos depois de a sessão ser confirmada. Um `401` oculta e limpa o resultado visível.
+A página `/rotina.html` reúne o stock e as publicações. Abre no iPhone e no computador com o código de acesso da aplicação. Depois de entrar, estão disponíveis três ações.
 
-O painel consulta apenas operações de leitura:
+- **Atualizar tudo** inicia ou acompanha a atualização do stock e das publicações. O painel mostra o resultado de cada canal e assinala as etapas que ficaram por confirmar.
+- **Criar vídeo de outra viatura** abre a pesquisa nos inventários da Samucar e da AutoValorPT. Selecionar a viatura prepara um MP4 privado. Depois de rever o vídeo, é possível descarregá-lo ou escolher **Publicar Story agora** e confirmar o envio para @autovalorpt.
+- **Publicar conteúdo extra agora** usa o banco de temas extra. O painel indica quando já foi usada a publicação extra do dia.
 
-- `morning-flow/status`, para o dia selecionado;
-- `meta-catalog/status`, para o último diagnóstico e configuração;
-- `instagram-sync/status` e `instagram-sync/stories-status`, para os últimos resultados.
+As secções expansíveis mostram o catálogo WhatsApp, o Instagram, as publicações criativas e o Estado do WhatsApp. A configuração técnica, o histórico da rotina e as páginas especializadas estão acessíveis nos detalhes. A verificação do catálogo compara identificadores, preços e disponibilidade. A confirmação de um Story no Instagram e a observação de um Estado no WhatsApp têm registos próprios.
 
-A consulta inicial pode procurar o último ciclo nos sete dias anteriores, parando no primeiro registo encontrado. Isto é identificado como histórico e nunca apresentado como execução de hoje. Enquanto o utilizador acompanha «Hoje», o dia muda automaticamente à meia-noite de Lisboa. A atualização a cada 30 segundos só ocorre com a página visível e pode ser desligada.
-
-Um ciclo `finished` com resultados ausentes, erros ou catálogo por confirmar aparece como terminado com pendências. As contagens Samucar, ficheiro e Meta são independentes; valores ausentes mostram `—`. Falhas de leitura de um serviço não apagam resultados disponíveis de outros. O painel não executa `run`, `check`, publicações, importações ou remoções.
-
-O Estado WhatsApp permanece explicitamente «Automação ainda por validar». Não há ainda um endpoint ou registo automático para esse destino. A ligação de um dispositivo ou um Story publicado não deve mudar este texto para sucesso. Quando a integração for concluída, substituir esta indicação por um estado autenticado com prova por vídeo; nunca inferir publicação a partir do Instagram.
-
-As instruções de controlo explicam onde rever e revogar dispositivos WhatsApp e permissões Meta. Não são incluídos tokens, códigos ou ligações com credenciais. Os avisos continuam a pertencer à tarefa AutoValorPT no ChatGPT; a página não cria notificações novas.
-
-Validação: `node --test tests/routine-dashboard.test.mjs tests/meta-catalog-dashboard.test.mjs` cobre o acesso privado, as contagens desconhecidas, a conclusão com pendências, erros parciais, expiração da sessão, procura histórica e consultas sem mutações.
+Ao abrir a página, o painel consulta o estado dos canais. A lista de viaturas é carregada ao abrir o seletor. A pesquisa por marca, modelo, ID ou matrícula usa os resultados já obtidos. O acompanhamento periódico limita-se a um pedido de atualização em curso. Consultar um envio de Story incerto recupera o estado da tentativa existente.

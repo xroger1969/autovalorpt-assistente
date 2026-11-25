@@ -96,6 +96,19 @@ test('fresh source and exact fingerprint are required for reservation, media and
   assert.equal(f.state().active.phase, 'reserved');
 });
 
+test('WhatsApp validates the row while streaming an immutable shared gallery asset', async () => {
+  const f = await fixture(); const latest = f.items[2]; const legacy = instagramVideoPath(latest.id, storyFingerprint(latest));
+  const blob = f.records.get('instagram/v1/production/stories.json'); const state = JSON.parse(blob.text);
+  const entry = state.items[latest.id]; entry.assetFingerprint = 'b'.repeat(64);
+  entry.videoPath = instagramVideoPath(latest.id, entry.assetFingerprint);
+  f.records.set(entry.videoPath, f.records.get(legacy)); f.records.delete(legacy);
+  blob.text = JSON.stringify(state);
+  const { active } = await f.claim();
+  assert.equal(active.fingerprint, storyFingerprint(latest));
+  const media = await f.service.media(f.context, { attemptId: active.attemptId });
+  assert.equal((await new Response(media.stream).text()).length, 1200);
+});
+
 test('candidate rejects untrusted IG binding, unpublished video and missing assets', async () => {
   const f = await fixture();
   await f.stories(f.items, { accountId: 'another-account' });

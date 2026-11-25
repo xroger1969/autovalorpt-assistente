@@ -15,6 +15,8 @@
     .heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:13px 18px;border:1px solid #b9cbe1;border-radius:13px;background:#f8fbff;color:#164c91;font-weight:800;text-align:center;text-decoration:none;gap:8px}.button.primary{background:var(--blue);border-color:var(--blue);color:#fff}.button.publish{background:var(--orange);border-color:var(--orange);color:#182635}.button.wide{width:100%}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 20px}.stat{padding:18px;border:1px solid var(--line);border-radius:16px;background:#fff}.stat span{display:block;color:var(--muted);font-size:13px}.stat strong{display:block;margin-top:7px;font-size:18px;overflow-wrap:anywhere}.layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:20px;align-items:start}.steps{display:grid;gap:18px}.step-label{font-size:12px;font-weight:850;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin:0 0 8px}.step-copy{margin:0 0 18px;color:var(--muted);font-size:15px}.status{white-space:pre-line;overflow-wrap:anywhere;color:var(--muted);font-size:14px;line-height:1.55;margin:14px 0 0}.status.error{color:#9b321e}.status.success{color:#126346}.notice{padding:15px 18px;border:1px solid #d5e1f1;border-radius:14px;background:#eaf1fc;margin:0 0 20px}.notice.error{background:#fff1eb;border-color:#efd2c1}.notice:empty{display:none}.candidate{padding:15px;border-radius:13px;background:#f3f6fb;margin:0 0 16px}.candidate strong{display:block;overflow-wrap:anywhere}.candidate p{margin:6px 0 0;font-size:14px;color:var(--muted)}.preview-card{text-align:center}.preview-empty{padding:60px 20px;border:1px dashed #c4d2e4;border-radius:16px;background:#f6f9fe;color:var(--muted);line-height:1.6}.preview video{display:block;width:100%;max-height:600px;aspect-ratio:9/16;background:#08182c;border-radius:16px;object-fit:contain}.preview .button{margin-top:14px;width:100%}.preview-note{font-size:13px;color:var(--muted);margin:14px 0 0}.history{margin-top:22px}.history summary{cursor:pointer;font-weight:750}.history ul{list-style:none;padding:0;margin:15px 0 0}.history li{padding:12px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.5;overflow-wrap:anywhere}.history small{display:block;color:var(--muted)}.history a{display:inline-block;margin-top:5px}.footnote{margin-top:22px;font-size:13px;color:var(--muted)}dialog{width:min(480px,calc(100% - 32px));border:1px solid var(--line);border-radius:22px;padding:26px;color:#132a45;box-shadow:0 25px 90px #06142655}dialog::backdrop{background:#08172c99}.dialog-actions{display:flex;gap:10px;margin-top:22px}.dialog-actions .button{flex:1}.checking{color:#526b88}
     @media(max-width:760px){main{padding:25px 16px 42px}.topbar-inner{padding:16px;flex-wrap:wrap}.brand{font-size:18px}.nav{gap:7px}.nav a,.nav button{font-size:13px;padding:10px 12px}.heading{display:block}.heading>.button{width:100%;margin-bottom:20px}.stats{gap:8px}.stat{padding:13px 11px}.stat strong{font-size:15px}.stat span{font-size:11px}.layout{grid-template-columns:1fr}.card{padding:21px}.preview-card{order:2}.preview video{max-height:560px}.login{margin:25px auto}.dialog-actions{flex-direction:column}.intro{margin-bottom:20px}}
   </style>
+  <link rel="stylesheet" href="/manual-stories.css">
+  <script src="/manual-stories.js" defer></script>
   <script src="/stories.js" defer></script>
 </head>
 <body>
@@ -26,23 +28,33 @@
       <p class="status" id="loginStatus" role="status" aria-live="polite">A verificar a sessão…</p>
     </section>
     <section id="dashboardView" aria-labelledby="pageTitle" hidden>
-      <div class="heading"><div><p class="eyebrow">Área privada · Instagram</p><h1 id="pageTitle">Vídeos e Stories AutoValorPT</h1><p class="intro muted">Verifique a ligação, reveja o vídeo e confirme a publicação da viatura escolhida.</p></div><button class="button" id="refreshButton" type="button">Atualizar estado</button></div>
-      <div class="stats" aria-label="Estado da integração"><div class="stat"><span>Conta de destino</span><strong id="accountName">A verificar…</strong></div><div class="stat"><span>Rotina de Stories</span><strong id="enabledState">A verificar…</strong></div><div class="stat"><span>Ligação ao Instagram</span><strong id="connectionState">Por verificar</strong></div></div>
-      <p class="status notice" id="dashboardStatus" role="status" aria-live="polite"></p>
-      <div class="layout">
-        <div class="steps">
-          <section class="card" aria-labelledby="connectionTitle"><p class="step-label">Passo 1</p><h2 id="connectionTitle">Verificar ligação</h2><p class="step-copy">Confirma a conta e identifica a última viatura publicada em fotografia.</p><button class="button primary wide" id="verifyButton" type="button">Verificar ligação</button><p class="status" id="verificationStatus" role="status" aria-live="polite"></p><a id="stockRecovery" class="button wide" href="/rotina.html" hidden>Voltar ao painel · Atualizar tudo</a></section>
-          <section class="card" aria-labelledby="previewTitle"><p class="step-label">Passo 2</p><h2 id="previewTitle">Rever o vídeo</h2><div class="candidate"><strong id="candidateName">Verifique a ligação para encontrar a viatura.</strong><p id="candidateDetails"></p><p id="candidateState"></p></div><p class="step-copy">Vídeo vertical de 30 segundos com as fotografias e o preço atuais. A criação pode demorar alguns minutos.</p><button class="button primary wide" id="previewButton" type="button" disabled>Criar pré-visualização</button><p class="status" id="previewStatus" role="status" aria-live="polite"></p></section>
-          <section class="card" aria-labelledby="publishTitle"><p class="step-label">Passo 3</p><h2 id="publishTitle">Publicar no Instagram</h2><p class="step-copy" id="publishHelp">Reveja a pré-visualização antes de publicar. A publicação exige ligação verificada e rotina ativa.</p><button class="button publish wide" id="publishButton" type="button" disabled>Publicar Story de teste</button><p class="status" id="publicationStatus" role="status" aria-live="polite"></p></section>
-        </div>
-        <aside class="card preview-card" aria-labelledby="videoTitle"><h2 id="videoTitle">Pré-visualização</h2><div class="preview-empty" id="previewEmpty">O vídeo aparece aqui quando estiver pronto.</div><div class="preview" id="previewPanel" hidden><video id="videoPlayer" controls playsinline preload="metadata" aria-label="Vídeo da viatura para rever"></video><a class="button" id="downloadLink" download>Descarregar MP4</a><p class="preview-note" id="videoDetails"></p></div><p class="preview-note">O mesmo MP4 pode ser usado no Estado do WhatsApp. Esta página confirma apenas a publicação no Instagram.</p></aside>
-      </div>
-      <details class="card history"><summary>Últimas operações</summary><p class="status" id="activeStatus"></p><ul id="historyList"></ul></details>
+      <div class="heading"><h1 id="pageTitle">Vídeos e Stories</h1></div>
+      <section class="card" id="manualStories" aria-label="Vídeos de viaturas"></section>
+      <details class="card history" id="technicalDetails"><summary>Ligação ao Instagram e histórico da rotina</summary>
+        <div class="stats" aria-label="Estado da integração"><div class="stat"><span>Conta de destino</span><strong id="accountName">Por verificar</strong></div><div class="stat"><span>Rotina de Stories</span><strong id="enabledState">Por verificar</strong></div><div class="stat"><span>Ligação ao Instagram</span><strong id="connectionState">Por verificar</strong></div></div>
+        <button class="button" id="refreshButton" type="button">Atualizar estado</button>
+        <button class="button" id="verifyButton" type="button">Verificar ligação</button>
+        <p class="status notice" id="dashboardStatus" role="status"></p><p class="status" id="verificationStatus" role="status"></p>
+        <a id="stockRecovery" class="button" href="/rotina.html" hidden>Voltar ao painel · Atualizar tudo</a>
+        <h2>Últimas operações da rotina</h2><p class="status" id="activeStatus"></p><ul id="historyList"></ul>
+        <button id="moreHistory" class="button" type="button" hidden>Mostrar histórico completo</button>
+        <section id="resumeLegacy" hidden>
+          <h2>Story em processamento</h2>
+          <p id="legacyVehicle"></p>
+          <video id="legacyVideo" controls playsinline preload="metadata" aria-label="Vídeo do envio em processamento"></video>
+          <button id="resumeLegacyButton" class="ms-action" type="button">Continuar Story em processamento</button>
+        </section>
+        <p id="resumeStatus" class="status" role="status"></p>
+      </details>
       <p class="footnote">Datas e horas de Portugal. Se um pedido ficar sem resposta, atualize o estado antes de tentar novamente.</p>
     </section>
     <noscript><p class="card">Ative JavaScript para utilizar esta área privada.</p></noscript>
   </main>
-  <dialog id="publishDialog" aria-labelledby="confirmTitle" aria-describedby="confirmText"><h2 id="confirmTitle">Publicar este vídeo?</h2><p id="confirmText"></p><p class="muted">O vídeo ficará visível no Story de @autovalorpt.</p><div class="dialog-actions"><button class="button" id="cancelPublishButton" type="button" autofocus>Voltar à pré-visualização</button><button class="button publish" id="confirmPublishButton" type="button">Publicar agora</button></div></dialog>
+  <dialog id="resumeDialog" aria-labelledby="resumeTitle" aria-describedby="resumeConfirmText">
+    <h2 id="resumeTitle">Continuar o envio anterior?</h2><p id="resumeConfirmText"></p>
+    <div class="dialog-actions"><button id="cancelResume" class="button" type="button" autofocus>Voltar ao vídeo</button>
+      <button id="confirmResume" class="button publish" type="button">Confirmar continuação</button></div>
+  </dialog>
 </body>
 </html>
 

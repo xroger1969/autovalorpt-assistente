@@ -52,12 +52,51 @@ test('signed video capabilities bind ID, content hash, expiry and signing key', 
   assert.equal(verifyInstagramVideoQuery(signed, { ...env, ADMIN_SESSION_SECRET: 'short' }, time), null);
   assert.equal(new URL(signInstagramVideoUrl(id, fingerprint, env, time)).searchParams.has('access_token'), false);
 });
-test('signed media HEAD reads metadata only; GET streams the private MP4 unchanged', async () => {
-  const video = Buffer.alloc(2048, 77); const calls = [];
-  const storage = { head: async path => { calls.push(['head', path]); return { size: video.length, contentType: 'video/mp4' }; }, get: async (path, options) => { calls.push(['get', path]); assert.equal(options.access, 'private'); assert.equal(options.useCache, false); return { statusCode: 200, stream: new Response(video).body }; } };
+test('signed media supports Safari ranges, seeking, full downloads and reuses immutable metadata', async () => {
+  const video = Buffer.from(Array.from({ length: 2048 }, (_, i) => i % 251));
+  const calls = [];
+  const storage = {
+    head: async () => { calls.push('head'); return { size: video.length, contentType: 'video/mp4' }; },
+    get: async (path, options) => {
+      assert.equal(options.access, 'private');
+      calls.push(options.headers?.Range || 'full');
+      // Exercise a storage server ignoring the initial two-byte probe.
+      if (options.headers?.Range === 'bytes=2000-2047') {
+        return { statusCode: 200, stream: new Response(video.subarray(2000)).body, headers: new Headers({ 'Content-Range': 'bytes 2000-2047/2048' }) };
+      }
+      return { statusCode: 200, stream: new Response(video).body, headers: new Headers() };
+    },
+  };
   const handler = createInstagramVideoHandler({ env, storage, now: () => time });
-  const meta = new ResponseMock(); await handler({ method: 'HEAD', query: query() }, meta); assert.equal(meta.statusCode, 200); assert.equal(meta.headers['content-length'], '2048'); assert.equal(calls.length, 1);
-  const res = new ResponseMock(); await handler({ method: 'GET', query: query(), headers: { range: 'bytes=0-10' } }, res); assert.equal(res.statusCode, 200); assert.equal(res.headers['content-type'], 'video/mp4'); assert.equal(res.headers['accept-ranges'], 'none'); assert.equal(res.headers['cache-control'], 'private, no-store'); assert.deepEqual(Buffer.concat(res.chunks), video); assert.deepEqual(calls.map(c => c[0]), ['head', 'head', 'get']);
+  const call = async (method, headers, download) => {
+    const res = new ResponseMock();
+    await handler({ method, query: { ...query(), download }, headers }, res);
+    return res;
+  };
+  const meta = await call('HEAD');
+  assert.equal(meta.statusCode, 200);
+  assert.equal(meta.headers['content-length'], '2048');
+  assert.deepEqual(calls, ['head']);
+  for (const [range, start, end] of [['bytes=0-1', 0, 1], ['bytes=-48', 2000, 2047], ['bytes=1500-', 1500, 2047]]) {
+    const res = await call('GET', { range });
+    assert.equal(res.statusCode, 206);
+    assert.equal(res.headers['accept-ranges'], 'bytes');
+    assert.equal(res.headers['content-range'], `bytes ${start}-${end}/2048`);
+    assert.equal(res.headers['content-length'], String(end - start + 1));
+    assert.deepEqual(Buffer.concat(res.chunks), video.subarray(start, end + 1));
+  }
+  const full = await call('GET', {}, '1');
+  assert.equal(full.statusCode, 200);
+  assert.equal(full.headers['content-type'], 'video/mp4');
+  assert.equal(full.headers['cache-control'], 'private, no-store');
+  assert.equal(full.headers['content-disposition'], `attachment; filename="AutoValorPT_${id}.mp4"`);
+  assert.deepEqual(Buffer.concat(full.chunks), video);
+  for (const range of ['bytes=2048-', 'bytes=10-1', 'bytes=-0', 'bytes=0-1,5-10', 'bytes=-']) {
+    const res = await call('GET', { range });
+    assert.equal(res.statusCode, 416);
+    assert.equal(res.headers['content-range'], 'bytes */2048');
+  }
+  assert.deepEqual(calls, ['head', 'bytes=0-1', 'bytes=2000-2047', 'bytes=1500-2047', 'full']);
 });
 test('media cannot escape production or read Blob before signature verification', async () => {
   const storage = { head: async () => assert.fail('storage must not be read'), get: async () => assert.fail('storage must not be read') };
@@ -69,4 +108,23 @@ test('media rejects an oversized or non-video artifact without streaming', async
   for (const meta of [{ size: 31 * 1024 * 1024, contentType: 'video/mp4' }, { size: 2048, contentType: 'application/json' }]) {
     const handler = createInstagramVideoHandler({ env, now: () => time, storage: { head: async () => meta, get: async () => assert.fail('must not stream') } }); const res = new ResponseMock(); await handler({ method: 'GET', query: query() }, res); assert.equal(res.statusCode, 404);
   }
+});
+
+test('continuing a prepared Story requires same-origin explicit admin confirmation', async () => {
+  const received = [];
+  const handler = createInstagramSyncHandler({ env, authorizeAdmin: req => req.headers.cookie === 'admin',
+    stories: { run: async args => { received.push(args); return { ok: true }; } } });
+  const admin = { cookie: 'admin', origin: 'https://autovalorpt.example', host: 'autovalorpt.example', 'content-type': 'application/json' };
+  const input = { id, attemptId: '11111111-1111-4111-8111-111111111111', confirmed: true };
+  async function invoke(method, headers, body) {
+    const res = new ResponseMock();
+    await handler({ method, headers, body, query: { action: 'stories-resume' } }, res);
+    return res.statusCode;
+  }
+  assert.equal(await invoke('POST', { authorization: `Bearer ${env.INSTAGRAM_STORY_WORKER_SECRET}` }, input), 401);
+  assert.equal(await invoke('GET', admin, input), 405);
+  assert.equal(await invoke('POST', { ...admin, origin: '' }, input), 403);
+  assert.equal(await invoke('POST', admin, { ...input, confirmed: false }), 400);
+  assert.equal(await invoke('POST', admin, input), 200);
+  assert.deepEqual(received, [{ resume: input }]);
 });

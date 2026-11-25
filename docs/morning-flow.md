@@ -1,6 +1,6 @@
 # AutoValorPT — ciclo sequencial da manhã
 
-A tarefa ChatGPT existente mantém a folha Google como espelho de consulta às 08h00 Europe/Lisbon. O servidor sincroniza diretamente o inventário completo Standvirtual num snapshot privado, preservando o histórico e validando a origem antes de cada operação. Seguem-se catálogo Meta, retiradas Instagram, uma fotografia, um vídeo/Story e verificação. A folha deixa de bloquear a execução extraordinária. O servidor não escreve na folha: a atualização desse espelho continua a cargo da tarefa ChatGPT.
+A tarefa ChatGPT existente mantém a folha Google como espelho de consulta às 08h00 Europe/Lisbon. O servidor sincroniza diretamente o inventário completo Standvirtual num snapshot privado, preservando o histórico e validando a origem antes de cada operação. Seguem-se o catálogo Meta, a preservação do histórico Instagram, a publicação de fotografia e Story e a verificação. A folha deixa de bloquear a execução extraordinária. O servidor não escreve na folha: a atualização desse espelho continua a cargo da tarefa ChatGPT.
 
 ## Agendamento
 
@@ -18,7 +18,7 @@ Se o orçamento não permitir outra etapa, o ticket fica em fila. `POST action=r
 
 Os callbacks antigos continuam disponíveis para compatibilidade, mas as novas execuções não dependem de chamadas recursivas. Os logs desses callbacks incluem apenas o código HTTP em caso de falha, sem URLs nem credenciais.
 
-Uma origem ainda não sincronizada recebe até 30 tentativas de sincronização validada com pausas de 30 segundos. Nunca são removidas ou publicadas viaturas a partir de uma auditoria inválida. Fotografias/Stories em `preparing` só continuam o mesmo ID/container; `mapping_pending`, resultados desconhecidos e mudanças de identidade não repetem publicação. As retiradas podem continuar lotes seguros, até 10 chamadas. O ciclo aceita continuações durante uma hora desde o arranque.
+Uma origem ainda não sincronizada recebe até 30 tentativas de sincronização validada com pausas de 30 segundos. Nunca são removidas ou publicadas viaturas a partir de uma auditoria inválida. Fotografias/Stories em `preparing` só continuam o mesmo ID/container; `mapping_pending`, resultados desconhecidos e mudanças de identidade não repetem publicação. As publicações de viaturas vendidas permanecem no histórico. O ciclo aceita continuações durante uma hora desde o arranque.
 
 Uma falha de autorização do catálogo fica registada e permite continuar as etapas independentes do Instagram; nunca equivale a catálogo atualizado. Uma falha ao guardar o resultado mantém o ticket em `running` e exige revisão, pois a operação remota pode ter ocorrido. Um ticket ainda em fila pode ser retomado por outro pedido autorizado, sem repetir etapas concluídas. Não há garantia de recuperação automática após perda definitiva da invocação; um estado sem progresso durante seis minutos é assinalado `stalled/requiresReview`. Nunca reiniciar o registo para contornar isto.
 

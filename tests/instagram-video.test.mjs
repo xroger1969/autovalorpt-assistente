@@ -56,6 +56,11 @@ test('portrait cards render bundled-font Portuguese text and keep the photograph
   assert.ok(center.some((value) => value > 70));
 });
 
+test('short real model names render without an empty variant overlay', async () => {
+  const card = await instagramVideoCard({ ...vehicle, title: 'Mercedes-Benz GLC 300 | 2022 | 60 000 km' }, await photo());
+  assert.equal((await sharp(card).metadata()).height, 1920);
+});
+
 test('an exhausted render budget never fetches a photograph or starts an encoder', async () => {
   let calls = 0;
   await assert.rejects(renderInstagramVideo(vehicle, { deadline: Date.now() - 1, fetchImpl: async () => { calls++; } }), /video_budget_exhausted/);

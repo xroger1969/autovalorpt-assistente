@@ -25,9 +25,9 @@ function fixture(options = {}) {
   let granted = [...permissions]; let accountType = 'BUSINESS'; let username = 'autovalorpt'; let linkedId = env.INSTAGRAM_RETIREMENTS_USER_ID;
   let quotaResponse = { data: [{ quota_usage: 0, config: { quota_total: 100, quota_duration: 86400 } }] }; let quotaRejected = false;
   let profileId = env.INSTAGRAM_USER_ID; const instagramToken = 'synthetic-instagram-profile-token';
-  let publishResult = 'success'; let deleteResult = 'success'; let containerStatus = 'FINISHED';
-  let renderHook, publishHook, containerReadHook, permissionHook, ledgerWriteHook, storyReadHook;
-  const publishedStories = new Map(); let mappingMode = 'success'; let instagramMediaOverride; let facebookStoriesOverride; let facebookPageResponse;
+  let publishResult = 'success'; let containerStatus = 'FINISHED';
+  let renderHook, publishHook, containerReadHook, permissionHook, ledgerWriteHook;
+  const publishedStories = new Map(); let mappingMode = 'success'; let facebookPageResponse;
   let nextContainer = 880000000; let nextMedia = 990000000;
   const publication = { version: 1, accountId: env.INSTAGRAM_USER_ID, username: 'autovalorpt', loginMode: env.INSTAGRAM_LOGIN_MODE,
     sourceHash: createHash('sha256').update(env.INSTAGRAM_FEED_URL).digest('hex'), lastFeedCount: options.lastFeedCount || items.length,
@@ -99,26 +99,16 @@ function fixture(options = {}) {
       assert.equal(method, 'GET'); assert.equal(url.searchParams.get('fields'), 'id,permalink,timestamp');
       const durable = JSON.parse(memory.records.get(ledgerPath).text);
       assert.ok(Object.values(durable.items).some(entry => entry.instagramMediaId === url.pathname.split('/').at(-1)), 'IG publication ID is durable before cross-provider readback');
-      await storyReadHook?.();
       if (mappingMode === 'transport') throw new Error('Mapping read interrupted');
       const record = publishedStories.get(url.pathname.split('/').at(-1));
-      return Response.json({ id: record.id, permalink: record.permalink, timestamp: record.timestamp, ...instagramMediaOverride });
+      return Response.json({ id: record.id, permalink: record.permalink, timestamp: record.timestamp });
     }
     if (!instagram && url.pathname.endsWith(`/${env.INSTAGRAM_RETIREMENTS_USER_ID}/stories`)) {
       assert.equal(method, 'GET'); assert.equal(url.searchParams.get('fields'), 'id,permalink,media_product_type,timestamp');
       const records = [...publishedStories.values()].map(record => ({ id: record.facebookId, permalink: record.permalink, timestamp: record.timestamp, media_product_type: 'STORY' }));
       if (facebookPageResponse) return Response.json(facebookPageResponse(url, records));
-      const data = facebookStoriesOverride || (mappingMode === 'missing' ? [] : mappingMode === 'ambiguous' && records.length ? [...records, { ...records[0], id: '550099999' }] : mappingMode === 'wrong_product' ? records.map(record => ({ ...record, media_product_type: 'FEED' })) : records);
+      const data = (mappingMode === 'missing' ? [] : mappingMode === 'ambiguous' && records.length ? [...records, { ...records[0], id: '550099999' }] : mappingMode === 'wrong_product' ? records.map(record => ({ ...record, media_product_type: 'FEED' })) : records);
       return Response.json({ data });
-    }
-    if (method === 'DELETE') {
-      assert.equal(instagram, false, 'Deletion must use Facebook Login only');
-      const id = url.pathname.split('/').at(-1); const intent = JSON.parse(memory.records.get(ledgerPath).text);
-      assert.equal(intent.active.phase, 'deleting'); assert.equal(intent.active.facebookMediaId || intent.active.mediaId, id);
-      assert.equal(publishedStories.has(id), false, 'Instagram-scoped media IDs must never be sent to DELETE');
-      assert.ok([...publishedStories.values()].some(record => record.facebookId === id), 'Delete only a mapped Facebook Story ID');
-      if (deleteResult === 'transport') throw new Error('Delete transport interrupted');
-      return Response.json({ success: true, deleted_id: deleteResult === 'wrong-id' ? '99999999999' : id });
     }
     if (url.searchParams.get('fields') === 'status_code') { assert.equal(instagram, true); await containerReadHook?.(); return Response.json({ status_code: containerStatus }); }
     throw new Error(`Unexpected test request ${method} ${url.pathname}`);
@@ -137,12 +127,11 @@ function fixture(options = {}) {
     setPermissions: value => { granted = value; }, setAccountType: value => { accountType = value; },
     setQuotaResponse: value => { quotaResponse = value; }, setQuotaRejected: value => { quotaRejected = value; },
     setUsername: value => { username = value; }, setLinkedId: value => { linkedId = value; }, setProfileId: value => { profileId = value; },
-    setPublishResult: value => { publishResult = value; }, setDeleteResult: value => { deleteResult = value; }, setContainerStatus: value => { containerStatus = value; },
+    setPublishResult: value => { publishResult = value; }, setContainerStatus: value => { containerStatus = value; },
     setRenderHook: value => { renderHook = value; }, setPublishHook: value => { publishHook = value; },
     setContainerReadHook: value => { containerReadHook = value; }, setPermissionHook: value => { permissionHook = value; },
     setLedgerWriteHook: value => { ledgerWriteHook = value; },
-    setStoryReadHook: value => { storyReadHook = value; }, setMappingMode: value => { mappingMode = value; },
-    setInstagramMedia: value => { instagramMediaOverride = value; }, setFacebookStories: value => { facebookStoriesOverride = value; },
+    setMappingMode: value => { mappingMode = value; },
     setFacebookPageResponse: value => { facebookPageResponse = value; },
     advance: milliseconds => { clock += milliseconds; },
     rewriteLedger: change => { const current = memory.records.get(ledgerPath); const value = JSON.parse(current.text); change(value); current.text = JSON.stringify(value); },
@@ -480,10 +469,10 @@ test('successful publication survives failed mapping commit without another publ
 test('unmapped Stories expire from their original publication time without deletion or reposting', async () => {
   const f = fixture(); f.setMappingMode('missing');
   assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'mapping_pending');
-  const originalTime = f.ledger().items.ID8live01.at; f.advance(24 * 3600_000);
+  const originalTime = f.ledger().items.ID8live01.at; f.advance(24 * 3600_000 - 1);
   assert.equal((await f.stories.run()).status, 'mapping_pending'); assert.equal(f.ledger().items.ID8live01.at, originalTime);
   const mediaReads = () => f.calls.filter(call => new URL(call.url).searchParams.get('fields') === 'id,permalink,timestamp').length;
-  const beforeExpiry = mediaReads(); f.advance(3600_001); f.setItems([...f.getItems(), car('ID8next01')]);
+  const beforeExpiry = mediaReads(); f.advance(1); f.setItems([...f.getItems(), car('ID8next01')]);
   const result = await f.stories.run(); assert.equal(result.status, 'expired'); assert.equal(result.published, 0);
   assert.equal(f.ledger().items.ID8live01.mappingStatus, 'expired_unmapped'); assert.equal(f.ledger().items.ID8live01.at, originalTime);
   assert.equal(mediaReads(), beforeExpiry); assert.equal(f.deletes().length, 0); assert.equal(f.posts().length, 1);
@@ -506,31 +495,6 @@ test('mapping reads every bounded Story page and refuses incomplete pagination b
   }
 });
 
-test('retirement rechecks both provider identities and exact Story permalink before DELETE', async () => {
-  const changes = [
-    [f => f.setInstagramMedia({ id: '990099999' }), 'story_mapping_identity_invalid'],
-    [f => f.setInstagramMedia({ permalink: 'https://www.instagram.com/stories/unrelated/1990000001/' }), 'story_mapping_identity_invalid'],
-    [f => f.setInstagramMedia({ permalink: 'https://www.instagram.com/p/1990000001/' }), 'story_mapping_identity_invalid'],
-    [f => f.setInstagramMedia({ timestamp: '2026-11-11T12:00:01Z' }), 'story_mapping_timestamp_mismatch'],
-    [f => { const item = [...f.publishedStories.values()][0]; f.setFacebookStories([{ id: '550099999', permalink: item.permalink, timestamp: item.timestamp, media_product_type: 'STORY' }]); }, 'story_mapping_identity_changed'],
-    [f => f.setMappingMode('ambiguous'), 'story_mapping_ambiguous'],
-    [f => { const item = [...f.publishedStories.values()][0]; f.setFacebookStories([
-      { id: item.facebookId, permalink: item.permalink, timestamp: item.timestamp, media_product_type: 'STORY' },
-      { id: '550099999', permalink: item.permalink, timestamp: '2026-11-11T12:00:01Z', media_product_type: 'STORY' },
-    ]); }, 'story_mapping_ambiguous'],
-    [f => f.setMappingMode('wrong_product'), 'story_mapping_missing'],
-  ];
-  for (const [alter, code] of changes) {
-    const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); alter(f);
-    f.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
-    await assert.rejects(f.stories.run(), { code }); assert.equal(f.deletes().length, 0); assert.equal(f.posts().length, 1);
-  }
-  const restored = fixture(); await restored.stories.run({ sampleId: 'ID8live01' });
-  restored.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
-  restored.setStoryReadHook(() => restored.setItems([car(), car('ID8old001')]));
-  await restored.stories.run(); assert.equal(restored.deletes().length, 0, 'Current stock is read again after provider identity checks');
-});
-
 test('only unpublished legacy ledgers migrate and old Facebook containers never resume on Instagram', async () => {
   const baseline = fixture(); await baseline.stories.run(); baseline.rewriteLedger(state => { delete state.publicationProvider; });
   assert.equal((await baseline.stories.run()).status, 'no_new_stock'); assert.equal(baseline.ledger().publicationProvider, 'instagram');
@@ -550,33 +514,14 @@ test('only unpublished legacy ledgers migrate and old Facebook containers never 
   }
 });
 
-test('explicit unavailable Story is deleted by the recorded Facebook ID and never twice', async () => {
-  const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); const mediaId = f.ledger().items.ID8live01.facebookMediaId;
-  f.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
-  await f.stories.run(); assert.equal(f.ledger().items.ID8live01.status, 'retired');
-  assert.equal(f.deletes().length, 1); assert.equal(new URL(f.deletes()[0].url).pathname.split('/').at(-1), mediaId);
-  await f.stories.run(); assert.equal(f.deletes().length, 1);
-});
-
-test('wrong deleted_id leaves an unknown intent and cannot trigger repeated deletion', async () => {
-  const f = fixture(); await f.stories.run({ sampleId: 'ID8live01' }); f.setDeleteResult('wrong-id');
-  f.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
-  await assert.rejects(f.stories.run(), { code: 'story_delete_unknown' });
-  assert.equal(f.ledger().active.phase, 'unknown'); assert.equal((await f.stories.run()).status, 'review_required'); assert.equal(f.deletes().length, 1);
-  const failedCommit = fixture(); await failedCommit.stories.run({ sampleId: 'ID8live01' });
-  failedCommit.setItems([car('ID8live01', { availability: 'out of stock' }), car('ID8old001')]);
-  failedCommit.setLedgerWriteHook(state => { if (state.lastResult?.status === 'retired') throw new Error('Durable retirement write failed'); });
-  await assert.rejects(failedCommit.stories.run(), /Durable retirement write failed/);
-  assert.equal(failedCommit.ledger().active.phase, 'deleting');
-  assert.equal((await failedCommit.stories.run()).status, 'review_required'); assert.equal(failedCommit.deletes().length, 1);
-});
-
-test('changed price retires an active Story while absent records never authorize deletion', async () => {
-  const price = fixture(); await price.stories.run({ sampleId: 'ID8live01' });
-  price.setItems([car('ID8live01', { price: '33990.00 EUR' }), car('ID8old001')]); await price.stories.run();
-  assert.equal(price.ledger().items.ID8live01.reason, 'vehicle_details_changed'); assert.equal(price.deletes().length, 1);
-  const absent = fixture(); await absent.stories.run({ sampleId: 'ID8live01' }); absent.setItems([car('ID8old001')]); await absent.stories.run();
-  assert.equal(absent.deletes().length, 0); assert.equal(absent.ledger().items.ID8live01.status, 'published');
+test('a legacy unresolved deletion remains recorded without retrying it', async () => {
+  const f = fixture();
+  await f.stories.run({ sampleId: 'ID8live01' });
+  f.rewriteLedger(state => { state.active = { id: 'ID8live01', provider: 'facebook', phase: 'deleting' }; });
+  const before = f.ledger();
+  assert.equal((await f.stories.run()).status, 'review_required');
+  assert.deepEqual(f.ledger(), before);
+  assert.equal(f.deletes().length, 0);
 });
 
 test('changed ledger account binding is rejected before further rendering or publishing', async () => {
@@ -585,19 +530,48 @@ test('changed ledger account binding is rejected before further rendering or pub
   assert.equal(f.posts().length, 0); assert.equal(f.renders.length, 0);
 });
 
-test('historical retention never deletes sold or repriced Stories and keeps their saved video', async () => {
-  for (const change of [{availability:'out of stock'},{price:'33990.00 EUR'}]) {
-    const f=fixture({env:{INSTAGRAM_RETIREMENTS_ENABLED:'false'}});
-    await f.stories.run({sampleId:'ID8live01'});
-    const before=f.ledger().items.ID8live01;
-    f.setItems([car('ID8live01',change),car('ID8old001')]);
+test('sold, absent and repriced vehicles retain their Story and MP4 through natural expiry', async () => {
+  for (const current of [
+    [car('ID8live01', { availability: 'out of stock' }), car('ID8old001')],
+    [car('ID8live01', { price: '33990.00 EUR' }), car('ID8old001')],
+    [car('ID8old001')],
+  ]) {
+    const f = fixture(); // Includes the old retirement flag set to true.
+    await f.stories.run({ sampleId: 'ID8live01' });
+    const before = f.ledger().items.ID8live01;
+    const video = f.memory.records.get(before.videoPath);
+    f.setItems(current);
+    f.advance(24 * 3600_000 - 1);
     await f.stories.run();
-    const after=f.ledger().items.ID8live01;
-    assert.equal(f.deletes().length,0); assert.equal(after.status,'published');
-    assert.equal(after.videoPath,before.videoPath); assert.equal(after.instagramMediaId,before.instagramMediaId);
-    assert.equal(f.posts().length,1);
-    f.advance(26*3600_000); await f.stories.run();
-    assert.equal(f.deletes().length,0); assert.equal(f.ledger().items.ID8live01.status,'expired');
-    assert.equal(f.ledger().items.ID8live01.videoPath,before.videoPath);
+    assert.deepEqual(f.ledger().items.ID8live01, before);
+    f.advance(1);
+    await f.stories.run();
+    assert.deepEqual(f.ledger().items.ID8live01, { ...before, status: 'expired' });
+    assert.equal(f.memory.records.get(before.videoPath), video);
+    assert.equal(f.deletes().length, 0);
+    assert.equal(f.posts().length, 1);
   }
+});
+
+test('explicit continuation reuses the reviewed preparing attempt and a stale request cannot start another Story', async () => {
+  const f = fixture();
+  f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.stories.run({ sampleId: 'ID8live01' })).status, 'preparing');
+  const { id, attemptId } = (await f.stories.status()).active;
+  assert.match(attemptId, /^[0-9a-f-]{36}$/);
+  const resume = { id, attemptId, confirmed: true };
+  f.advance(6 * 60_000);
+  f.setContainerStatus('FINISHED');
+  f.setItems([...f.getItems(), car('ID8next01')]);
+  for (const invalid of [{ ...resume, id: 'ID8next01' }, { ...resume, attemptId: '00000000-0000-0000-0000-000000000000' }, { ...resume, confirmed: false }]) {
+    assert.equal((await f.stories.run({ resume: invalid })).status, 'no_pending_story');
+  }
+  assert.equal(f.posts().length, 0);
+  const results = await Promise.all([f.stories.run({ resume }), f.stories.run({ resume })]);
+  assert.equal(results.filter(r => r.published === 1).length, 1);
+  assert.equal((await f.stories.run({ resume })).status, 'no_pending_story');
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.renders.length, 1);
+  assert.equal(f.containers().length, 1);
+  assert.equal((await f.stories.run()).id, 'ID8next01');
 });

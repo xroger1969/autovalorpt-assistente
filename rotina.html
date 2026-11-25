@@ -95,6 +95,8 @@
     .steps small { width: 100%; color: var(--muted); }
     @media (max-width: 420px) { .section-head h2 { font-size: 19px; } .section-head button { padding-inline: 10px; } }
   </style>
+  <link rel="stylesheet" href="/manual-stories.css">
+  <script src="/manual-stories.js" defer></script>
   <script src="/rotina.js" defer></script>
 </head>
 <body>
@@ -116,6 +118,11 @@
         <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
         <p id="manualOutcome" class="status"></p>
       </section>
+      <section class="card action" id="manualStories" aria-label="Vídeos de viaturas"></section>
+      <section class="card action" aria-label="Publicação criativa extra">
+        <button id="extraButton" type="button" class="primary" disabled>Publicar conteúdo extra agora</button>
+        <p id="extraTitle" class="hint"></p><p id="extraStatus" role="status" class="hint">Uma publicação extra por dia, sem alterar a rotina das 19h00.</p>
+      </section>
       <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button" hidden>Consultar estado</button></div>
       <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
       <div class="rows">
@@ -128,13 +135,12 @@
         </details>
         <details><summary><strong>Instagram</strong><span id="instagramBrief" class="badge">Por consultar</span></summary>
           <div class="details-body"><p id="photoSummary" class="status"></p><p id="storySummary" class="status"></p><p class="hint">As publicações do Instagram são preservadas como histórico, mesmo depois de uma viatura ser vendida. Os Stories expiram naturalmente.</p>
-            <div class="links"><a class="link" href="/stories.html">Ver vídeos e Stories</a></div>
+            <div class="links"><a class="link" href="/stories.html">Histórico e ligação ao Instagram</a></div>
           </div>
         </details>
         <details id="editorialPanel"><summary><strong>Publicações criativas</strong><span id="editorialBadge" class="badge">Por consultar</span></summary>
           <div class="details-body">
             <p id="editorialSchedule" class="status"></p><p id="editorialResult" class="status"></p>
-            <section class="editorial-next" aria-label="Publicação extra"><h3>Conteúdo extra</h3><p id="extraTitle" class="status"></p><button id="extraButton" type="button" class="primary" disabled>Publicar conteúdo extra agora</button><p id="extraStatus" role="status" class="hint">Uma publicação extra por dia, sem alterar a rotina das 19h00.</p></section>
             <section id="editorialNext" hidden class="editorial-next"><p class="hint">Próximo conteúdo</p><h3 id="editorialTitle"></h3><p id="editorialDate" class="time"></p>
               <img id="editorialImage" class="editorial-image" alt="" width="1080" height="1350" decoding="async" loading="lazy" hidden>
               <p id="editorialPreviewNote" class="hint"></p>
