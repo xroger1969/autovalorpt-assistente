@@ -13,6 +13,8 @@
   let followRequest = false; let lastResume = 0;
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
+  let editorialPost = null;
+  const PAGE_ORIGIN = globalThis.location?.origin || 'https://autovalorpt-assistente.vercel.app';
   const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
   const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
@@ -57,6 +59,7 @@
       manualInProgress = false; manualPollingUntil = 0; lastDashboardRead = 0;
       $('runNow').disabled = true; text('runNow', 'Atualizar tudo'); text('manualStatus', ''); text('manualOutcome', '');
       badge('instagramBrief', 'Por consultar'); $('historyPanel').open = false;
+      clearEditorial(); badge('editorialBadge', 'Por consultar'); $('editorialPanel').open = false; $('editorialHistoryPanel').open = false;
       for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
       badge('cycleBadge', 'Por consultar'); badge('catalogBadge', 'Por consultar'); badge('whatsappBadge', 'Por consultar'); $('stepsList').replaceChildren();
@@ -80,7 +83,7 @@
     let result = '';
     if (state === 'not_started' && acceptedDay !== today()) {
       manualAction = 'manual-start'; title = 'Atualizar tudo';
-      hint = 'Stock Samucar e AutoValorPT, catálogo WhatsApp e Instagram. Uma atualização extra por dia.';
+      hint = 'Stock, catálogo WhatsApp e Instagram, incluindo consulta das publicações criativas. Uma atualização extra por dia.';
     } else if (resumable) {
       manualAction = 'resume'; title = 'Continuar atualização';
       hint = 'O pedido ficou em fila. Podes continuar a partir da etapa onde parou.';
@@ -270,19 +273,106 @@
     const confirmed = services.every(s => s?.configuration?.enabled === true && ['published', 'mapped', 'no_new_stock'].includes(s?.lastResult?.status));
     badge('instagramBrief', 'Foto ' + short(photos) + ' · Story ' + short(stories), confirmed ? 'good' : 'pending');
   }
+
+  function clearEditorial() {
+    editorialPost = null;
+    for (const id of ['editorialSchedule','editorialResult','editorialTitle','editorialDate','editorialCaption','editorialPreviewNote']) text(id, '');
+    $('editorialNext').hidden = true; $('editorialImage').hidden = true;
+    $('editorialImage').removeAttribute('src'); $('editorialImage').alt = '';
+    $('editorialHistory').replaceChildren();
+  }
+  function postLink(value) {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.username || url.password || url.port) return null;
+      if (!/^\/(?:autovalorpt\/)?(?:p|reel)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) return null;
+      url.search = ''; url.hash = ''; return url.href;
+    } catch { return null; }
+  }
+  function imageUrl(post, index) {
+    if (!validDay(post?.date) || !Number.isSafeInteger(index) || index < 0 || index >= 10) return null;
+    const query = new URLSearchParams({ integration: 'editorial-image', date: post.date, slide: String(index + 1) });
+    // Preserve the server's content version without accepting another URL or
+    // arbitrary image source from a response.
+    try {
+      const source = new URL((post.imageUrls || post.images)?.[index], PAGE_ORIGIN);
+      const versionKey = source.searchParams.has('v') ? 'v' : 'version';
+      const version = source.searchParams.get(versionKey);
+      if (/^[A-Za-z0-9_-]{1,40}$/.test(version || '')) query.set(versionKey, version);
+    } catch { /* The first-party route also accepts its current version. */ }
+    return `/api/stock?${query}`;
+  }
+
+  function editorialImageUrl(post) {
+    if (!validDay(post?.date) || post?.format === 'REELS' || !Number.isSafeInteger(post?.slideCount) || post.slideCount < 1 || post.slideCount > 10) return null;
+    return imageUrl(post, 0);
+  }
+  function loadEditorialPreview() {
+    if (!authenticated || !$('editorialPanel').open) return;
+    const src = editorialImageUrl(editorialPost); const image = $('editorialImage');
+    if (!src) return;
+    if (image.getAttribute('src') !== src) image.src = src;
+    image.alt = typeof editorialPost.title === 'string' ? editorialPost.title : 'Conteúdo AutoValorPT';
+    image.hidden = false;
+  }
+  function editorialResultLabel(result) {
+    return ({published:'Publicação confirmada',already_published:'Publicação já confirmada',not_due:'A aguardar o horário',before_start:'A aguardar o início',disabled:'Rotina pausada',paused:'Rotina pausada',publishing:'A confirmar publicação',failed:'Publicação não concluída',authorization_required:'Ligação por verificar'})[result?.status] || label(result);
+  }
+  function showEditorial(data, error) {
+    if (error || !data || data.ok === false) {
+      clearEditorial(); badge('editorialBadge','Leitura indisponível','error'); text('editorialResult','Não foi possível consultar as publicações criativas.'); return;
+    }
+    const config = data.configuration || {}; const auth = data.authorization || {};
+    const configured = config.tokenConfigured === true && config.accountConfigured === true && config.validApi === true && config.imagesConfigured === true && config.production !== false;
+    const last = data.lastResult;
+    if (data.active) {
+      const uncertain = /unknown|uncertain/.test(data.active.phase || '');
+      badge('editorialBadge', uncertain ? 'Publicação por confirmar' : 'Publicação em curso', uncertain ? 'error' : 'pending');
+    } else if (auth.expired || auth.lastError || !configured || ['publish_unknown','unknown','review_required','failed','authorization_required'].includes(last?.status)) {
+      badge('editorialBadge','Precisa de atenção','error');
+    } else if (data.enabled === false) badge('editorialBadge','Rotina pausada','pending');
+    else if (data.enabled === true) badge('editorialBadge','Rotina ativa · 19h00','good');
+    else badge('editorialBadge','Rotina por confirmar','pending');
+    text('editorialSchedule', data.enabled === false ? 'Rotina pausada.' : data.enabled === true && data.schedule?.nextRunAt ? 'Próxima publicação prevista: ' + date(data.schedule.nextRunAt) + '.' : 'Próxima publicação por confirmar.');
+    text('editorialResult', data.active ? 'Existe uma tentativa em curso ou por confirmar. Não repetir.' : last ? 'Último resultado: ' + editorialResultLabel(last) + (last.at ? ' · ' + date(last.at) : '') + '.' : 'Ainda sem publicação registada.');
+    const post = data.nextPost;
+    const valid = validDay(post?.date) && (post.format === 'REELS' || Number.isSafeInteger(post.slideCount) && post.slideCount >= 1 && post.slideCount <= 10);
+    editorialPost = valid ? post : null;
+    $('editorialNext').hidden = !valid;
+    const image = $('editorialImage'); const src = editorialImageUrl(editorialPost);
+    if (!src || image.getAttribute('src') !== src) { image.removeAttribute('src'); image.hidden = true; image.alt = ''; }
+    text('editorialTitle', valid && typeof post.title === 'string' ? post.title : 'Conteúdo por confirmar');
+    text('editorialDate', valid ? 'Preparado para ' + new Intl.DateTimeFormat('pt-PT',{timeZone:'Europe/Lisbon',dateStyle:'medium'}).format(new Date(post.date+'T12:00:00Z')) + '.' : '');
+    text('editorialCaption', valid && typeof post.caption === 'string' ? post.caption : '');
+    text('editorialPreviewNote', !valid ? '' : post.format === 'REELS' ? 'Reel preparado. Abre a pré-visualização completa para ver o vídeo.' : post.slideCount > 1 ? 'Primeira imagem do carrossel. Abre a pré-visualização completa para ver todas.' : '');
+    loadEditorialPreview();
+    const history = $('editorialHistory'); history.replaceChildren();
+    const rows = Array.isArray(data.history) ? data.history.slice(0,14) : [];
+    if (!rows.length) history.appendChild(node('li','Ainda sem histórico consultado.'));
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      const item = node('li',''); item.appendChild(node('small',validDay(row.date) ? row.date : date(row.at)));
+      item.appendChild(node('strong',typeof row.title === 'string' ? row.title : 'Conteúdo AutoValorPT'));
+      const published = ['published','already_published'].includes(row.status);
+      item.appendChild(node('span',editorialResultLabel(row),'badge ' + (published ? 'good' : ISSUES.has(row.status) ? 'error' : 'pending')));
+      const link = published ? postLink(row.permalink) : null;
+      if (link) { const a = node('a','Ver publicação'); a.href=link; a.target='_blank'; a.rel='noopener noreferrer'; item.appendChild(a); }
+      history.appendChild(item);
+    }
+  }
   async function refresh() {
     if (!authenticated || busy) return;
     $('cycleDay').max = today(); if (followingToday) $('cycleDay').value = today();
     const day = $('cycleDay').value; if (!validDay(day)) return;
     setBusy(true); lastDashboardRead = Date.now(); const version = generation; text('dashboardStatus', 'A consultar os registos…');
     try {
-      const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status'))]);
+      const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status')), api(url('editorial', 'status'))]);
       if (version !== generation) return;
       if (results.some(r => r.status === 'rejected' && r.reason.status === 401)) { sessionView(false, 'A sessão terminou. Volte a entrar para consultar os resultados.'); return; }
       const value = index => results[index].status === 'fulfilled' ? results[index].value : null;
       const error = index => results[index].status === 'rejected' ? results[index].reason : null;
       showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
-      showInstagram(value(2), value(3), error(2), error(3));
+      showInstagram(value(2), value(3), error(2), error(3)); showEditorial(value(5), error(5));
       text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
       text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
       if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {
@@ -294,6 +384,7 @@
   }
   function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
   $('runNow').addEventListener('click', submitManual);
+  $('editorialPanel').addEventListener('toggle', loadEditorialPreview);
   $('historyPanel').addEventListener('toggle', () => {
     if ($('historyPanel').open) void loadHistory();
     else { historyVersion++; lastSearch = null; }

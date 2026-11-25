@@ -11,7 +11,7 @@ const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, s
 async function dashboard(options = {}) {
   const elements = new Map(); const calls = []; let interval;
   const element = () => ({ textContent: '', className: '', children: [], hidden: false, checked: true, value: '', handlers: {},
-    addEventListener(name, callback) { this.handlers[name] = callback; }, replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); } });
+    addEventListener(name, callback) { this.handlers[name] = callback; }, replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }, removeAttribute(name) { delete this[name]; }, getAttribute(name) { return this[name] || null; } });
   const document = { hidden: false, getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); }, createElement: element };
   const fetch = async (endpoint, init = {}) => {
     calls.push({ endpoint, init });
@@ -20,10 +20,11 @@ async function dashboard(options = {}) {
     const u = new URL(endpoint, 'https://example.invalid'); const integration = u.searchParams.get('integration');
     if (integration === 'morning-flow') return response(options.cycle || { ok: true, status: 'not_started', day: u.searchParams.get('day') });
     if (integration === 'meta-catalog') return response(options.catalog || { configuration: { enabled: false }, lastResult: { status: 'authorization_required', sourceCount: 9, expectedCount: 9, actualCount: null, checkedAt: startedAt, authorization: { ready: false } } });
+    if (integration === 'editorial') return response(options.editorial || {ok:true,enabled:true,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},schedule:{nextRunAt:today()+'T19:00:00Z'},history:[]});
     if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
     return response({ configuration: { enabled: true }, lastResult: { status: 'no_new_stock', at: startedAt, published: 0 } });
   };
-  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '' }, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
+  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '' }, URL, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
   await new Promise(resolve => setImmediate(resolve));
   return { get: id => document.getElementById(id), calls, document, tick: () => interval() };
 }
@@ -300,10 +301,44 @@ test('active cycle polls only its own status and refreshes channels once after c
   assert.match(app.calls.at(-1).endpoint, /mode=manual/);
   state = { status: 'finished', results: {} };
   app.tick(); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(app.calls.length, before + 7);
+  assert.equal(app.calls.length, before + 8);
   assert.equal(app.get('runNow').textContent, 'Verificar tudo');
   const completed = app.calls.length;
   app.tick(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(app.calls.length, completed);
   assert.ok(app.calls.every(c => !c.init.method || c.init.method === 'GET'));
+});
+
+test('unified button reads creative editorial state and never starts its publication', async () => {
+  const status = {ok:true,enabled:true,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},schedule:{nextRunAt:today()+'T19:00:00Z'},nextPost:{date:today(),title:'Conteúdo de hoje',caption:'Legenda original.',format:'IMAGE',slideCount:1,images:['/api/stock?integration=editorial-image&version=v1']},lastResult:{status:'published',at:startedAt},history:[{date:today(),status:'published',title:'Histórico',permalink:'https://www.instagram.com/p/ABC/'},{date:today(),status:'published',title:'Inválido',permalink:'https://example.invalid/p/ABC/'}]};
+  const app = await dashboard({editorial:status,cycle:{status:'finished',results:{}}});
+  assert.match(app.get('editorialBadge').textContent,/Rotina ativa/);
+  assert.equal(app.get('editorialTitle').textContent,'Conteúdo de hoje');
+  assert.equal(app.get('editorialCaption').textContent,'Legenda original.');
+  assert.match(app.get('editorialResult').textContent,/Publicação confirmada/);
+  assert.equal(app.get('editorialHistory').children[0].children.at(-1).href,'https://www.instagram.com/p/ABC/');
+  assert.equal(app.get('editorialHistory').children[1].children.at(-1).href,undefined);
+  assert.equal(app.get('editorialImage').src,undefined);
+  app.get('editorialPanel').open=true; app.get('editorialPanel').handlers.toggle();
+  assert.ok(app.get('editorialImage').src.startsWith('/api/stock?integration=editorial-image'));
+  const before=app.calls.filter(c=>c.endpoint.includes('integration=editorial&action=status')).length;
+  await app.get('runNow').handlers.click();
+  assert.equal(app.calls.filter(c=>c.endpoint.includes('integration=editorial&action=status')).length,before+1);
+  assert.ok(app.calls.filter(c=>c.endpoint.includes('integration=editorial')).every(c=>!c.init.method || c.init.method==='GET'));
+  assert.ok(app.calls.every(c=>!c.endpoint.includes('action=run')));
+});
+test('editorial failures and pause remain visible without hiding the catalogue', async () => {
+  const failure=await dashboard({fetch:path=>path.includes('integration=editorial&action=status')?response({error:'unavailable'},503):null});
+  assert.equal(failure.get('editorialBadge').textContent,'Leitura indisponível');
+  assert.equal(failure.get('sourceCount').textContent,'9');
+  const paused=await dashboard({editorial:{ok:true,enabled:false,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},history:[]}});
+  assert.equal(paused.get('editorialBadge').textContent,'Rotina pausada');
+  assert.equal(paused.get('editorialSchedule').textContent,'Rotina pausada.');
+});
+test('editorial private details are cleared on session expiry',async()=>{
+  let expired=false;
+  const app=await dashboard({cycle:{status:'finished',results:{}},editorial:{ok:true,enabled:true,nextPost:{date:today(),format:'IMAGE',slideCount:1,title:'Privado',caption:'Legenda privada'},history:[]},fetch:path=>expired&&path.includes('integration=editorial&action=status')?response({error:'private_access_required'},401):null});
+  assert.equal(app.get('editorialCaption').textContent,'Legenda privada');
+  expired=true; await app.get('runNow').handlers.click();
+  assert.equal(app.get('dashboardView').hidden,true); assert.equal(app.get('editorialCaption').textContent,''); assert.equal(app.get('editorialHistory').children.length,0);
 });

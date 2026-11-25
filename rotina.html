@@ -45,6 +45,12 @@
     .action { padding: clamp(17px, 3vw, 25px); margin-top: 20px; }
     .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
     .action .primary { margin-top: 0; }
+    .editorial-next { margin: 12px 0; padding-top: 12px; border-top: 1px solid var(--line); }
+    .editorial-next h3 { margin: 5px 0; font-size: 18px; }
+    .editorial-image { display: block; width: 100%; max-width: 340px; height: auto; border-radius: 12px; margin: 10px auto; }
+    .editorial-caption { padding: 0 8px 12px; }
+    #editorialHistory a { color: #244f70; text-decoration: underline; }
+    #editorialHistory li { display: grid; gap: 4px; }
     .channel-note { font-size: 13px; color: var(--muted); grid-column: 1; }
     .advanced > summary { font-weight: 650; }
     .advanced .rows { margin: 0 12px 12px; }
@@ -104,7 +110,7 @@
     </section>
     <section id="dashboardView" aria-labelledby="pageTitle" hidden>
       <h1 id="pageTitle">O meu stock</h1>
-      <p class="lead">Atualização automática diária às <strong>08h00</strong>.</p>
+      <p class="lead">Stock às <strong>08h00</strong> · Publicações criativas a partir das <strong>19h00</strong>.</p>
       <section class="card action" aria-label="Atualizar stock e publicações">
         <button id="runNow" class="primary" type="button" aria-describedby="manualStatus" disabled>Atualizar tudo</button>
         <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
@@ -122,7 +128,20 @@
         </details>
         <details><summary><strong>Instagram</strong><span id="instagramBrief" class="badge">Por consultar</span></summary>
           <div class="details-body"><p id="photoSummary" class="status"></p><p id="storySummary" class="status"></p>
-            <div class="links"><a class="link" href="/stories.html">Ver vídeos e Stories</a><a class="link" href="/editorial.html">Publicações criativas</a></div>
+            <div class="links"><a class="link" href="/stories.html">Ver vídeos e Stories</a></div>
+          </div>
+        </details>
+        <details id="editorialPanel"><summary><strong>Publicações criativas</strong><span id="editorialBadge" class="badge">Por consultar</span></summary>
+          <div class="details-body">
+            <p id="editorialSchedule" class="status"></p><p id="editorialResult" class="status"></p>
+            <section id="editorialNext" hidden class="editorial-next"><p class="hint">Próximo conteúdo</p><h3 id="editorialTitle"></h3><p id="editorialDate" class="time"></p>
+              <img id="editorialImage" class="editorial-image" alt="" width="1080" height="1350" decoding="async" loading="lazy" hidden>
+              <p id="editorialPreviewNote" class="hint"></p>
+              <details><summary>Legenda preparada</summary><p id="editorialCaption" class="status editorial-caption"></p></details>
+            </section>
+            <details id="editorialHistoryPanel"><summary>Histórico recente</summary><ol id="editorialHistory" class="steps"></ol></details>
+            <p class="hint">A publicação diária mantém o horário previsto. Atualizar o painel não antecipa nem repete publicações criativas.</p>
+            <div class="links"><a class="link" href="/editorial.html">Pré-visualização completa e definições</a></div>
           </div>
         </details>
         <details><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span><span class="channel-note">Envio no WhatsApp Business</span></summary>
