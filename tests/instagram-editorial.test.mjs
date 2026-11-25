@@ -435,6 +435,18 @@ test('retries after definite creation failure need a new confirmation; a prior-d
   assert.equal(following.mode, 'publish'); assert.equal(following.post.date, '2026-11-22');
 });
 
+test('production prewarming is limited to the next two daily slots and reuses the following draft', async () => {
+  let preparations = 0;
+  const f = fixture({ time: '2026-11-25T21:00:00Z', planFor: adviceEditorialPlan,
+    prepareElectricEdition: async base => { preparations++; return { caption: base.caption, sources: [], copyOrigin: 'editorial' }; } });
+  assert.equal(await f.publisher.prepareFollowingEdition('2027-01-01'), null);
+  const next = await f.publisher.prepareFollowingEdition('2026-11-26');
+  assert.equal(next.date, '2026-11-27');
+  f.setTime('2026-11-27T10:00:00Z');
+  assert.deepEqual((await f.publisher.preview()).post, next);
+  assert.equal(preparations, 1); assert.equal(f.calls.length, 0);
+});
+
 test('v3 daily and extra use separate frozen captions, media URLs and history attribution', async () => {
   let prepared = 0;
   const f = fixture({ time: '2026-11-26T17:00:00Z', planFor: adviceEditorialPlan,

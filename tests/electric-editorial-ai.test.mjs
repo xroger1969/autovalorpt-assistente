@@ -110,7 +110,7 @@ test('disabled, unconfigured and invalid inputs do not access the provider', asy
 test('provider or format failure returns a sanitized reason with no retry or partial publication copy', async () => {
   for (const [supply, status] of [
     [async () => new Response('secret', { status: 429 }), 'rate_limited'],
-    [async () => new Response('secret', { status: 403 }), 'model_unavailable'],
+    [async () => new Response('secret', { status: 403 }), 'access_denied'],
     [async () => new Response(' '.repeat(49 * 1024)), 'invalid_output'],
     [async () => Response.json({ ...bodyOf('{}'), status: 'incomplete' }), 'incomplete'],
     [async () => Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal' }] }] }), 'refused'],
@@ -138,4 +138,83 @@ test('records the effective public model identifier without exposing arbitrary p
     assert.ok(await f.run());
     assert.deepEqual(f.events, [{ status: 'generated', model: expected }]);
   }
+});
+
+const notFound = () => Response.json({ error: { type: 'invalid_request_error', code: 'model_not_found',
+  message: 'synthetic provider detail not for logs' } }, { status: 404 });
+const modelList = ids => Response.json({ object: 'list', data: ids.map(id => ({ id, object: 'model' })) });
+
+test('an explicit model rejection allows one generation on the strongest listed compatible model, never the first arbitrary list entry', async () => {
+  let generations = 0;
+  const f = fixture({}, async (url, init) => {
+    if (init.method === 'GET') {
+      assert.equal(url, 'https://api.openai.com/v1/models');
+      assert.equal(init.headers.Authorization, 'Bearer mock-key');
+      return modelList(['gpt-5.4-mini', 'gpt-image-2', DEFAULT_EDITORIAL_OPENAI_MODEL, 'private-model', 'gpt-6.2-sol', 'gpt-6.1-sol']);
+    }
+    if (JSON.parse(init.body).model === DEFAULT_EDITORIAL_OPENAI_MODEL) return notFound();
+    assert.equal(JSON.parse(init.body).model, 'gpt-6.2-sol');
+    generations++;
+    return Response.json({ ...bodyOf(JSON.stringify(copy)), model: 'gpt-6.2-sol-2026-11-20' });
+  });
+  assert.ok(await f.run());
+  assert.equal(generations, 1);
+  assert.deepEqual(f.calls.map(([, init]) => init.method), ['POST', 'GET', 'POST']);
+  assert.deepEqual(f.events, [{ status: 'generated', model: 'gpt-6.2-sol-2026-11-20', fallbackFrom: DEFAULT_EDITORIAL_OPENAI_MODEL }]);
+});
+
+test('an explicit override is never changed, and generic permission or authentication errors never start discovery', async () => {
+  for (const [options, respond, status] of [
+    [{ env: { ...inputs.env, EDITORIAL_OPENAI_MODEL: DEFAULT_EDITORIAL_OPENAI_MODEL } }, notFound, 'model_not_found'],
+    [{}, () => Response.json({ error: { code: 'invalid_api_key' } }, { status: 401 }), 'authentication_failed'],
+    [{}, () => Response.json({ error: { code: 'insufficient_permissions', param: 'endpoint' } }, { status: 403 }), 'access_denied'],
+    [{}, () => Response.json({ id: 'resp_partial', error: { code: 'model_not_found' } }, { status: 404 }), 'unavailable'],
+    [{}, () => Response.json({ error: { code: 'model_not_found' } }, { status: 500 }), 'unavailable'],
+  ]) {
+    const f = fixture(options, async () => respond());
+    assert.equal(await f.run(), null);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.events[0].status, status);
+  }
+});
+
+test('selection accepts dated public snapshots, a second rejected model is terminal, and there is no discovery loop', async () => {
+  let sends = 0;
+  const f = fixture({}, async (_url, init) => {
+    if (init.method === 'GET') return modelList(['gpt-5.4-pro', 'gpt-5.5-2026-04-23', 'gpt-5.5-2026-02-01', 'ft:private', 'gpt-5.4']);
+    sends++;
+    if (sends === 1) return Response.json({ error: { code: 'model_access_denied' } }, { status: 403 });
+    assert.equal(JSON.parse(init.body).model, 'gpt-5.5-2026-04-23');
+    return notFound();
+  });
+  assert.equal(await f.run(), null);
+  assert.deepEqual(f.events, [{ status: 'model_not_found', model: 'gpt-5.5-2026-04-23', fallbackFrom: DEFAULT_EDITORIAL_OPENAI_MODEL }]);
+  assert.equal(f.calls.length, 3);
+});
+
+test('discovery failures and incompatible catalogs return safe diagnostics without another output request', async () => {
+  for (const [catalog, status] of [
+    [() => modelList(['gpt-5.4-pro', 'gpt-image-2', 'ft:private-project']), 'no_supported_model'],
+    [() => Response.json({ data: {} }), 'catalog_unavailable'],
+    [() => new Response('private message', { status: 401 }), 'authentication_failed'],
+  ]) {
+    const f = fixture({}, async (_url, init) => init.method === 'GET' ? catalog() : notFound());
+    assert.equal(await f.run(), null);
+    assert.deepEqual(f.calls.map(([, init]) => init.method), ['POST', 'GET']);
+    assert.equal(f.events[0].status, status);
+    assert.doesNotMatch(JSON.stringify(f.events), /private-project|private message/);
+  }
+});
+
+test('a model listing returned after the shared request deadline cannot trigger a late generation', async () => {
+  let finishListing;
+  const f = fixture({ deadline: Date.now() + 150 }, async (_url, init) => {
+    if (init.method === 'GET') return new Promise(resolve => { finishListing = resolve; });
+    return notFound();
+  });
+  assert.equal(await f.run(), null);
+  finishListing(modelList(['gpt-6.2-sol']));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.events[0].status, 'timeout');
+  assert.deepEqual(f.calls.map(([, init]) => init.method), ['POST', 'GET']);
 });

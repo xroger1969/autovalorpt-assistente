@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createElectricDrafts } from '../lib/electric-editorial-drafts.js';
-import { verifyAndPrepareEditorial } from '../scripts/validate-editorial-deployment.mjs';
+import { editorialModelAccess, verifyAndPrepareEditorial } from '../scripts/validate-editorial-deployment.mjs';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const post = { id: 'editorial-extra-2026-11-28-eletrico-cabo', date: '2026-11-28', electric: true, slides: [{ title: 'Cabo' }] };
@@ -128,6 +128,29 @@ test('production prewarming uses only the normal next preview and logs approved 
   assert.deepEqual(logs[1], ['editorial_next_draft_pending']);
   publisher.validate = async () => ({ username: 'another-account', verified: true });
   await assert.rejects(verifyAndPrepareEditorial(publisher, log), { code: 'wrong_instagram_account' });
+});
+
+test('a cached fallback checks model visibility and prepares only the following real edition', async () => {
+  const events = [], ids = [];
+  const first = { version: 'v3', date: '2026-11-26', id: 'daily-2026-11-26-ev', copyOrigin: 'editorial' };
+  const log = { info: (...args) => events.push(args), warn: (...args) => events.push(args) };
+  const mock = {
+    async validate() { return { verified: true, username: 'autovalorpt' }; },
+    async preview() { return { post: first }; },
+    async prepareFollowingEdition(day) {
+      ids.push(day);
+      return { version: 'v3', date: '2026-11-27', id: 'daily-2026-11-27-ev', copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' };
+    },
+  };
+  await verifyAndPrepareEditorial(mock, log, () => editorialModelAccess({ OPENAI_API_KEY: 'fixture' }, async (url, init) => {
+    assert.equal(url, 'https://api.openai.com/v1/models/gpt-6.2-astra');
+    assert.equal(init.method, 'GET'); assert.equal(init.redirect, 'error');
+    return Response.json({ id: 'gpt-6.2-astra', private: 'omitted' });
+  }));
+  assert.deepEqual(ids, [first.date]);
+  assert.deepEqual(JSON.parse(events.at(-2)[1]), { model: 'gpt-6.2-astra', available: true, status: 200 });
+  assert.equal(JSON.parse(events.at(-1)[1]).copyOrigin, 'ai');
+  assert.doesNotMatch(JSON.stringify(events), /fixture|omitted/);
 });
 
 test('an acknowledgement lost after commit, or one transient failure before commit, never changes the published draft', async () => {

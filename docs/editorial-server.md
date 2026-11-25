@@ -14,7 +14,7 @@ A rotina editorial prepara e publica um conteúdo por dia em `@autovalorpt`, sem
 - Os dois Reels usam os vídeos já preparados, adaptados para entrega web. A divulgação de IA está no vídeo, na legenda e no pedido da etiqueta nativa. Se a etiqueta não puder ser confirmada, o painel indica essa limitação sem repetir a publicação.
 - O Reel publicado em 20/11/2026 não está incluído nesta fila.
 
-O servidor compõe as imagens a partir das contas e das condições de cada exemplo. A legenda usa a chave OpenAI da aplicação. O modelo editorial predefinido é `gpt-6.2-astra`. A redação da AutoValorPT fornece uma legenda completa se o modelo estiver indisponível ou introduzir uma afirmação que a aplicação rejeite. A pré-visualização e a publicação reutilizam a mesma edição guardada. A consulta da agenda de sete dias usa os planos locais.
+O servidor compõe as imagens a partir das contas e das condições de cada exemplo. A legenda usa a chave OpenAI da aplicação. O modelo editorial predefinido é `gpt-6.2-astra`. Se a API recusar explicitamente o acesso a esse modelo, o servidor pode escolher o modelo compatível de maior prioridade disponível na conta. O detalhe da legenda identifica o modelo usado quando disponível. A redação da AutoValorPT fornece uma legenda completa se o modelo estiver indisponível ou introduzir uma afirmação que a aplicação rejeite. A pré-visualização e a publicação reutilizam a mesma edição guardada. A consulta da agenda de sete dias usa os planos locais.
 
 ## Configuração
 
@@ -22,7 +22,7 @@ O servidor compõe as imagens a partir das contas e das condições de cada exem
 
 O novo publicador usa `INSTAGRAM_EDITORIAL_GRAPH_VERSION`, com valor predefinido `v27.0`. A versão do publicador de stock e do gestor de renovação da autorização não muda.
 
-O build de produção executa uma verificação da identidade `autovalorpt` e da consulta à quota de publicação quando a rotina editorial está ativada. Só emite o resultado seguro, sem credenciais ou respostas brutas. Pode também preparar o rascunho da próxima edição e registar a origem da legenda. O envio para o Instagram é feito pela rotina ou após confirmação manual no painel. A Meta volta a verificar as permissões ao receber cada publicação; uma ligação validada não equivale a uma publicação confirmada.
+O build de produção executa uma verificação da identidade `autovalorpt` e da consulta à quota de publicação quando a rotina editorial está ativada. Só emite o resultado seguro, sem credenciais ou respostas brutas. Pode também preparar o rascunho da próxima edição e registar a origem da legenda. Quando esse rascunho usa o texto da redação, o build verifica o acesso ao modelo e prepara, no máximo, a edição diária seguinte para validar a escrita assistida. O envio para o Instagram é feito pela rotina ou após confirmação manual no painel. A Meta volta a verificar as permissões ao receber cada publicação; uma ligação validada não equivale a uma publicação confirmada.
 
 ## Acesso e acompanhamento
 
