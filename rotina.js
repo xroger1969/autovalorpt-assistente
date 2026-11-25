@@ -1,12 +1,12 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Retirada de viaturas'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
+  const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Histórico Instagram'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
-  Object.assign(LABELS, { daily_limit_reached: 'Limite diário atingido', other_cycle_in_progress: 'Outra atualização em curso', no_retirements: 'Sem retiradas pendentes', partial: 'Concluído parcialmente', failed: 'Operação não concluída', upload_unknown: 'Importação por confirmar' });
+  Object.assign(LABELS, { preserved: 'Publicações preservadas', daily_limit_reached: 'Limite diário atingido', other_cycle_in_progress: 'Outra atualização em curso', no_retirements: 'Sem retiradas pendentes', partial: 'Concluído parcialmente', failed: 'Operação não concluída', upload_unknown: 'Importação por confirmar' });
   const GOOD = new Set(['source_matches', 'catalog_matches', 'matched', 'synced', 'published', 'mapped', 'no_new_stock', 'retired', 'canceled', 'expired']);
   const ISSUES = new Set(['review_required', 'source_invalid', 'source_blocked', 'mismatch', 'catalog_mismatch', 'check_failed', 'unknown', 'publish_unknown', 'import_unknown', 'products_rejected']);
-  GOOD.add('no_retirements'); for (const code of ['partial', 'failed', 'upload_unknown', 'unverified']) ISSUES.add(code);
+  GOOD.add('no_retirements'); GOOD.add('preserved'); for (const code of ['partial', 'failed', 'upload_unknown', 'unverified']) ISSUES.add(code);
   const ERRORS = { story_state_invalid: 'O histórico das Stories precisa de verificação. Não foi possível consultar o resultado.', story_provider_binding_changed: 'A ligação das Stories precisa de verificação.', morning_flow_unavailable: 'Não foi possível consultar esta execução.', catalog_permission_required: 'Falta acesso de servidor ao catálogo.' };
   let authenticated = false; let busy = false; let closing = false; let generation = 0; let followingToday = true;
   let manualRead = 0; let manualAction = ''; let submitting = false; let acceptedDay = '';
@@ -66,7 +66,7 @@
     }
   }
   function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
-  const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A verificar viaturas retiradas.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
+  const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A preservar o histórico do Instagram.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
   function renderManual(data, message = '') {
     manualAction = 'refresh';
     const state = data?.status;

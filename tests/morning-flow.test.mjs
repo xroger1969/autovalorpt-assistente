@@ -172,3 +172,16 @@ test('new scheduler replaces all independent social crons and preserves unrelate
   assert.ok(config.crons.some(c => c.path === '/api/notify-lead?action=retry-pending' && c.schedule === '0 8 * * *'));
   assert.equal(config.functions['api/stock.js'].maxDuration, 300);
 });
+
+test('intentional Instagram retention is successful while catalogue and posting remain independent', async () => {
+  const f=fixture();
+  f.services.retirements.run=async()=>({ok:true,status:'disabled',retired:0});
+  f.services.retirements.status=async()=>({ok:true,configuration:{enabled:false},lastResult:{status:'retired',retired:4}});
+  await f.start(); await f.drain();
+  const state=await f.flow.status();
+  assert.equal(state.results.retirements.status,'preserved');
+  assert.equal(state.verification.retirements.status,'preserved');
+  assert.equal(state.results.retirements.retired,0);
+  assert.equal(state.results.photo.status,'published'); assert.equal(state.results.story.status,'published');
+  assert.ok(f.calls.includes('catalog'));
+});

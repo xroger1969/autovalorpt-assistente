@@ -17,7 +17,7 @@ function fixture(options = {}) {
   const memory = memoryBlob(); const calls = []; const renders = [];
   let clock = Date.parse('2026-11-11T12:00:00Z');
   const env = { VERCEL_ENV: 'production', INSTAGRAM_USER_ID: '17841400000000000', INSTAGRAM_LOGIN_MODE: 'instagram',
-    INSTAGRAM_STORIES_ENABLED: 'true', INSTAGRAM_FEED_URL: 'https://docs.google.com/spreadsheets/d/synthetic/export?format=csv&gid=0',
+    INSTAGRAM_STORIES_ENABLED: 'true', INSTAGRAM_RETIREMENTS_ENABLED: 'true', INSTAGRAM_FEED_URL: 'https://docs.google.com/spreadsheets/d/synthetic/export?format=csv&gid=0',
     INSTAGRAM_RETIREMENTS_USER_ID: '17841499990000000', INSTAGRAM_RETIREMENTS_PAGE_ID: '99111100000000',
     INSTAGRAM_RETIREMENTS_FACEBOOK_ACCESS_TOKEN: 'synthetic-story-token', INSTAGRAM_RETIREMENTS_GRAPH_VERSION: 'v27.0',
     INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt.example', ADMIN_SESSION_SECRET: 'synthetic-video-signing-secret-32-chars', ...options.env };
@@ -583,4 +583,21 @@ test('changed ledger account binding is rejected before further rendering or pub
   const f = fixture(); await f.stories.run(); f.rewriteLedger(state => { state.facebookId = '17841488880000000'; });
   await assert.rejects(f.stories.run({ sampleId: 'ID8live01' }), { code: 'story_binding_changed' });
   assert.equal(f.posts().length, 0); assert.equal(f.renders.length, 0);
+});
+
+test('historical retention never deletes sold or repriced Stories and keeps their saved video', async () => {
+  for (const change of [{availability:'out of stock'},{price:'33990.00 EUR'}]) {
+    const f=fixture({env:{INSTAGRAM_RETIREMENTS_ENABLED:'false'}});
+    await f.stories.run({sampleId:'ID8live01'});
+    const before=f.ledger().items.ID8live01;
+    f.setItems([car('ID8live01',change),car('ID8old001')]);
+    await f.stories.run();
+    const after=f.ledger().items.ID8live01;
+    assert.equal(f.deletes().length,0); assert.equal(after.status,'published');
+    assert.equal(after.videoPath,before.videoPath); assert.equal(after.instagramMediaId,before.instagramMediaId);
+    assert.equal(f.posts().length,1);
+    f.advance(26*3600_000); await f.stories.run();
+    assert.equal(f.deletes().length,0); assert.equal(f.ledger().items.ID8live01.status,'expired');
+    assert.equal(f.ledger().items.ID8live01.videoPath,before.videoPath);
+  }
 });

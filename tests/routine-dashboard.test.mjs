@@ -351,3 +351,12 @@ test('extra publication is a separate explicitly pressed action and status refre
   await app.get('refreshButton').handlers.click(); assert.equal(sent,0);
   await app.get('extraButton').handlers.click(); await app.get('extraButton').handlers.click(); assert.equal(sent,1); assert.equal(app.get('extraButton').disabled,true);
 });
+
+test('intentional preservation of Instagram posts is not an outstanding retirement',async()=>{
+  const cycle=finishedCycle();
+  cycle.results.retirements={status:'preserved',ok:true,retired:0,at:startedAt};
+  cycle.verification.retirements={status:'preserved',ok:true,retired:0,active:false};
+  const app=await dashboard({cycle});
+  assert.equal(app.get('cycleBadge').textContent,'Etapas do servidor terminadas');
+  assert.equal(app.get('stepsList').children[2].children[1].textContent,'Publicações preservadas');
+});
