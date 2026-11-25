@@ -112,9 +112,10 @@
   </style>
   <link rel="stylesheet" href="/manual-stories.css">
   <script src="/manual-stories.js?v=20261125-5" defer></script>
-  <script src="/editorial-preview.js?v=20261125-5" defer></script>
-  <script src="/routine-calendar.js" defer></script>
-  <script src="/rotina.js?v=20261125-5" defer></script>
+  <script src="/editorial-preview.js?v=20261125-6" defer></script>
+  <script src="/routine-calendar.js?v=20261125-6" defer></script>
+  <script src="/extra-editorial.js" defer></script>
+  <script src="/rotina.js?v=20261125-6" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -145,8 +146,19 @@
       </section>
       <section class="card action" id="manualStories" data-collapsible-preview aria-label="Vídeos de viaturas"></section>
       <section class="card action" aria-label="Publicação criativa extra">
-        <button id="extraButton" type="button" class="primary" disabled>Publicar conteúdo extra agora</button>
-        <p id="extraTitle" class="hint"></p><p id="extraStatus" role="status" class="hint">Uma publicação extra por dia, sem alterar a rotina das 19h00.</p>
+        <button id="extraButton" type="button" class="primary" aria-controls="extraReview" aria-expanded="false" disabled>Publicar conteúdo extra agora</button>
+        <p id="extraTitle" class="hint"></p>
+        <div id="extraReview" hidden>
+          <h3 id="extraReviewTitle" tabindex="-1"></h3>
+          <div id="extraArtwork"></div>
+          <p id="extraReviewCaption" class="status"></p>
+          <p id="extraCopyOrigin" class="hint" hidden></p>
+          <div class="links">
+            <button id="extraBack" type="button" class="secondary">Voltar</button>
+            <button id="extraConfirm" type="button" class="secondary" disabled>Publicar no Instagram</button>
+          </div>
+        </div>
+        <p id="extraStatus" role="status" aria-live="polite" class="hint"></p>
       </section>
       <details id="routineCalendar" class="card calendar">
         <summary><strong>Próximas 7 publicações</strong></summary>
@@ -181,7 +193,7 @@
               <a id="editorialSimulator" class="link" target="_blank" rel="noopener noreferrer" hidden>Simular custos de um elétrico</a>
               <a id="editorialCreditSimulator" class="link" target="_blank" rel="noopener noreferrer" hidden>Simular a prestação</a>
               <details id="editorialSources" hidden><summary>Fontes do conteúdo</summary><ul id="editorialSourceList"></ul></details>
-              <details><summary>Legenda preparada</summary><p id="editorialCaption" class="status editorial-caption"></p></details>
+              <details><summary>Legenda preparada</summary><p id="editorialCaption" class="status editorial-caption"></p><p id="editorialCopyOrigin" class="hint" hidden></p></details>
             </section>
             <details id="editorialHistoryPanel"><summary>Histórico recente</summary><ol id="editorialHistory" class="steps"></ol></details>
             <p class="hint">A publicação diária mantém o horário previsto. Atualizar o painel não antecipa nem repete publicações criativas.</p>

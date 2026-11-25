@@ -4,6 +4,7 @@ import { createInstagramEditorial } from '../lib/instagram-editorial.js';
 import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { editorialPlan } from '../lib/editorial-content.js';
 import { scheduledEditorialPlan } from '../lib/electric-editorial-calendar.js';
+import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const env = { VERCEL_ENV: 'production', INSTAGRAM_EDITORIAL_ENABLED: 'true', INSTAGRAM_USER_ID: '12345678',
@@ -31,7 +32,7 @@ test('one private read returns seven real Lisbon plans and all authored visuals,
   assert.equal(result.blocked, false);
   assert.deepEqual(result.items.map(x => x.date), ['2026-11-26','2026-11-27','2026-11-28','2026-11-29','2026-11-30','2026-12-01','2026-12-02']);
   for (const slot of result.items) {
-    const plan = scheduledEditorialPlan(slot.date);
+    const plan = adviceEditorialPlan(slot.date);
     assert.equal(slot.scheduledAt, slot.date + 'T19:00:00.000Z');
     assert.equal(slot.status, 'scheduled');
     assert.equal(slot.provisional, true);
@@ -59,8 +60,7 @@ test('an actual completed slot moves the first date forward, and Lisbon 19:00 ad
   assert.equal(items[0].date, '2027-03-27');
   assert.equal(items[0].scheduledAt, '2027-03-27T19:00:00.000Z');
   assert.equal(items[1].scheduledAt, '2027-03-28T18:00:00.000Z');
-  assert.ok(items.some(slot => slot.format === 'CAROUSEL' && slot.images.length === 4));
-  for (const slot of items.filter(slot => slot.format === 'CAROUSEL')) assert.equal(slot.altTexts.length, 4);
+  assert.ok(items.every(slot => slot.images.length && slot.images.length === slot.altTexts.length));
 });
 
 test('separates a paused agenda, unavailable deployment and unconfirmed sends; never mistakes extra content for a daily item', async () => {
@@ -73,7 +73,7 @@ test('separates a paused agenda, unavailable deployment and unconfirmed sends; n
   assert.equal(pending.blocked, true);
   assert.ok(pending.items.every(item => item.status === 'review_required' && item.provisional && item.caption !== 'Outro texto'));
   const activeDate = '2026-11-26';
-  const plan = scheduledEditorialPlan(activeDate);
+  const plan = adviceEditorialPlan(activeDate);
   const f = fixture({ time: activeDate + 'T19:15:00Z', state: { active: {
     id: plan.id, date: activeDate, phase: 'preparing', caption: 'Legenda exata da tentativa já preparada.',
     sources: [{ label: 'Fonte', url: 'https://example.org' }],
@@ -98,6 +98,16 @@ test('a claimed pre-deployment v1 post retains its title and original dated slid
   assert.equal(slot.caption, old.caption);
   assert.equal(slot.provisional, false);
   assert.ok(slot.images.every(image => new URL(image).searchParams.get('v') === 'v1'));
+});
+
+test('a claimed v2 post keeps its original electric artwork after v3 is deployed', async () => {
+  const date = '2026-11-26', old = scheduledEditorialPlan(date);
+  const f = fixture({ time: date + 'T19:05:00Z', state: { active: { date, id: old.id, title: old.title, phase: 'creating', caption: old.caption } } });
+  const slot = (await f.publisher.calendar()).items[0];
+  assert.equal(slot.caption, old.caption);
+  assert.equal(slot.provisional, false);
+  assert.equal(slot.id, old.id);
+  assert.ok(slot.images.every(image => new URL(image).searchParams.get('v') === 'v2'));
 });
 
 test('calendar handler enforces private GET and never accepts a caller-supplied date or triggers a write action', async () => {

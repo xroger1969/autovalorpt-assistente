@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scheduledEditorialPlan as planned } from '../lib/electric-editorial-calendar.js';
+import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
 import { editorialPlan } from '../lib/editorial-content.js';
 import { prepareElectricEdition } from '../lib/electric-editorial-edition.js';
 import { renderEditorialImage } from '../lib/editorial-image.js';
@@ -46,19 +47,45 @@ test('all electric cards render at Instagram size within the original layout', a
   }
 });
 
-test('optional angle selection changes only copy and keeps the verified calls to action', async () => {
-  const p = planned('2026-11-30');
+test('an AI edition preserves the checked calculation and the simulator, and reports its origin', async () => {
+  const p = adviceEditorialPlan('2026-11-26');
   let calls = 0;
   const fetchImpl = async () => {
     calls++;
-    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '{"index":1}' }] }] });
+    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({
+      hook: 'Qual é o preço da tua carga?', body: '{{F1}}\nCompara o preço da tua carga.', question: 'Quanto pagas pela energia em casa?',
+    }) }] }] });
   };
-  const alternate = await prepareElectricEdition(p, { env: { OPENAI_API_KEY: 'fixture' }, fetchImpl });
+  const result = await prepareElectricEdition(p, { env: { OPENAI_API_KEY: 'fixture' }, fetchImpl });
   assert.equal(calls, 1);
-  assert.ok(alternate.caption.startsWith(p.alternative.title));
-  assert.ok(alternate.caption.includes(p.slides[0].body) && alternate.caption.includes(p.alternative.cta));
-  for (const link of [p.simulatorUrl, p.creditSimulatorUrl]) assert.ok(alternate.caption.includes(link));
-  assert.deepEqual(alternate.sources, []);
-  assert.deepEqual((await prepareElectricEdition(p, { env: {}, fetchImpl })).caption, p.caption);
+  assert.equal(result.copyOrigin, 'ai');
+  assert.equal(result.copyModel, 'gpt-6.2-astra');
+  assert.ok(result.caption.startsWith('Qual é o preço da tua carga?'));
+  assert.ok(result.caption.includes(p.slides[0].body));
+  assert.ok(result.caption.includes(p.simulatorUrl));
+  const fallback = await prepareElectricEdition(p, { env: {}, fetchImpl });
+  assert.equal(fallback.caption, p.caption);
+  assert.equal(fallback.copyOrigin, 'editorial');
   assert.equal(calls, 1);
+});
+
+test('the new calendar uses all 32 topics in each lane and keeps the approved Reel and source editions', () => {
+  const daily = new Map(), extra = new Map();
+  const ordinary = new Set();
+  for (let i = 0; i < 170; i++) {
+    for (const [isExtra, seen] of [[false, daily], [true, extra]]) {
+      const p = adviceEditorialPlan(day(i), isExtra);
+      if (p.format === 'REELS') { assert.equal(i, 3); assert.equal(isExtra, false); continue; }
+      assert.equal(p.version, 'v3');
+      assert.equal(p.extra === true, isExtra);
+      if (seen.has(p.topicId)) assert.ok(i - seen.get(p.topicId) >= 30, p.topicId);
+      seen.set(p.topicId, i);
+      if (!isExtra && p.electric === 'tip') ordinary.add(p.topicId);
+    }
+  }
+  assert.equal(ordinary.size, 32);
+  assert.equal(extra.size, 32);
+  assert.equal([...extra.keys()].filter(k => daily.has(k)).length, 0);
+  assert.equal(adviceEditorialPlan(day(7)).electric, 'grant');
+  assert.equal(adviceEditorialPlan(day(9)).electric, 'news');
 });

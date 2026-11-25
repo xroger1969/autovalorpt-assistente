@@ -5,6 +5,9 @@ import { createInstagramEditorial, editorialClock, editorialDue, editorialImageU
 import { editorialPlan } from '../lib/editorial-content.js';
 import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
+import { createAdminSession, hashAdminToken, ADMIN_COOKIE_NAME } from '../lib/admin-security.js';
+import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
+import { scheduledEditorialPlan } from '../lib/electric-editorial-calendar.js';
 
 const STATE = 'instagram/editorial/v1/production/state.json';
 const post = (date, format = 'IMAGE') => ({ id: `editorial-${date}-rotina`, date, title: 'Cabe na tua rotina?',
@@ -14,7 +17,7 @@ const post = (date, format = 'IMAGE') => ({ id: `editorial-${date}-rotina`, date
 
 function fixture(options = {}) {
   const memory = memoryBlob(); const calls = [];
-  const env = { VERCEL_ENV: 'production', INSTAGRAM_EDITORIAL_ENABLED: 'true',
+  const env = { VERCEL_ENV: 'production', INSTAGRAM_EDITORIAL_ENABLED: 'true', ADMIN_SESSION_SECRET: 'fixture-only-secret-for-test-purpose',
     INSTAGRAM_ACCESS_TOKEN: 'synthetic-bootstrap-credential-only', INSTAGRAM_USER_ID: '17841400000000000',
     INSTAGRAM_PUBLIC_BASE_URL: 'https://autovalorpt-assistente.vercel.app', ...options.env };
   let clock = Date.parse(options.time || '2026-11-21T19:30:00Z');
@@ -53,6 +56,7 @@ function fixture(options = {}) {
   };
   const publisher = createInstagramEditorial({ env, storage: memory.storage, fetchImpl, now: () => clock,
     pause: async () => {}, pollAttempts: options.pollAttempts ?? 0, planFor: date => planFor(date),
+    extraPlanFor: options.extraPlanFor, prepareElectricEdition: options.prepareElectricEdition,
     tokenManager: { resolve: async () => { tokenResolutions++; return 'synthetic-renewed-token-only'; },
       status: async () => ({ initialized: true, automaticRefresh: true, expired: false }) } });
   return { publisher, memory, calls, env,
@@ -354,46 +358,172 @@ test('public post lookup returns only a confirmed safe stored URL without Meta o
   assert.equal(await f.publisher.postLink('2026-11-21'), null);
 });
 
+const session = hashAdminToken('test-browser-session');
+async function reviewExtra(publisher) {
+  const { post } = await publisher.extraPreview(session);
+  return { extra: true, session, confirmation: { id: post.id, fingerprint: post.fingerprint } };
+}
+
 test('extra manual publication is independent of the 19h calendar and deduplicated', async () => {
   const f=fixture({time:'2026-11-21T10:00:00Z'});
   const before=await f.publisher.status(); assert.equal(before.extra.available,true); assert.notEqual(before.extra.nextPost.id,before.nextPost.id);
-  const result=await f.publisher.run({extra:true}); assert.equal(result.status,'published'); assert.equal(f.posts().length,1);
+  const review = await reviewExtra(f.publisher);
+  assert.equal(f.calls.length, 0); assert.equal(f.tokenResolutions(), 0);
+  const result=await f.publisher.run(review); assert.equal(result.status,'published'); assert.equal(f.posts().length,1);
   const create=f.calls.find(c=>c.method==='POST'&&c.url.endsWith('/media')); assert.equal(new URL(new URLSearchParams(create.body).get('image_url')).searchParams.get('extra'),'1');
   const state=await f.publisher.status(); assert.equal(state.extra.usedToday,true); assert.equal(state.lastResult,null); assert.equal(state.nextPost.date,'2026-11-21'); assert.equal(state.history[0].extra,true);
-  assert.equal((await f.publisher.run({extra:true})).status,'already_published'); assert.equal(f.posts().length,1);
+  await assert.rejects(f.publisher.run(review), { code: 'editorial_review_stale' }); assert.equal(f.posts().length,1);
   assert.equal((await f.publisher.run()).status,'before_schedule');
   f.setTime('2026-11-21T19:01:00Z'); assert.equal((await f.publisher.run()).status,'published'); assert.equal(f.posts().length,2);
   assert.equal((await f.publisher.status()).history.length,2);
 });
 test('extra cannot consume the last quota reserved for the daily publication',async()=>{
   const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setLimits({data:[{quota_usage:99,config:{quota_total:100}}]});
-  assert.equal((await f.publisher.run({extra:true})).reason,'editorial_quota_reserved'); assert.equal(f.posts().length,0); assert.ok(f.calls.every(c=>c.method==='GET'));
+  assert.equal((await f.publisher.run(await reviewExtra(f.publisher))).reason,'editorial_quota_reserved'); assert.equal(f.posts().length,0); assert.ok(f.calls.every(c=>c.method==='GET'));
+});
+
+test('a confirmation is bound to this session, artwork, caption, mode, attempt, and Lisbon day', async () => {
+  let titleOverride;
+  const f = fixture({ time: '2026-11-21T12:00:00Z', extraPlanFor: day => {
+    const extra = adviceEditorialPlan(day, true);
+    return titleOverride ? { ...extra, slides: [{ ...extra.slides[0], title: titleOverride }] } : extra;
+  } });
+  const initial = await reviewExtra(f.publisher);
+  await assert.rejects(f.publisher.run({ extra: true }), { code: 'editorial_confirmation_required' });
+  await assert.rejects(f.publisher.run({ ...initial, session: hashAdminToken('other-session') }), { code: 'editorial_review_stale' });
+  for (const change of [{ id: 'wrong' }, { fingerprint: 'd'.repeat(64) }])
+    await assert.rejects(f.publisher.run({ ...initial, confirmation: { ...initial.confirmation, ...change } }),
+      { code: 'editorial_review_stale' });
+  titleOverride = 'Imagem diferente';
+  await assert.rejects(f.publisher.run(initial), { code: 'editorial_review_stale' });
+  f.setTime('2026-11-22T09:00:00Z'); titleOverride = undefined;
+  await assert.rejects(f.publisher.run(initial), { code: 'editorial_review_stale' });
+  assert.equal(f.calls.length, 0);
+  f.setTime('2026-11-21T12:01:00Z'); f.setContainerStatus('IN_PROGRESS');
+  assert.equal((await f.publisher.run(initial)).status, 'preparing');
+  const whilePreparing = await f.publisher.extraPreview(session);
+  assert.equal(whilePreparing.mode, 'resume');
+  assert.notEqual(whilePreparing.post.fingerprint, initial.confirmation.fingerprint);
+  const resume = await reviewExtra(f.publisher);
+  await assert.rejects(f.publisher.run(initial), { code: 'editorial_review_stale' });
+  f.setContainerStatus('FINISHED');
+  assert.equal((await f.publisher.run(resume)).status, 'published');
+  assert.equal(f.posts().length, 1);
+  assert.equal(f.calls.filter(call => call.method === 'POST' && call.url.endsWith('/media')).length, 1);
+});
+
+test('retries after definite creation failure need a new confirmation; a prior-day uncertain extra verifies only', async () => {
+  const f = fixture({ time: '2026-11-21T11:00:00Z' });
+  const original = await reviewExtra(f.publisher);
+  f.setFailCreate(true); assert.equal((await f.publisher.run(original)).status, 'failed');
+  await assert.rejects(f.publisher.run(original), { code: 'editorial_review_stale' });
+  const retry = await reviewExtra(f.publisher);
+  assert.notEqual(retry.confirmation.fingerprint, original.confirmation.fingerprint);
+  f.setFailCreate(false); f.setFailPublish(true);
+  assert.equal((await f.publisher.run(retry)).status, 'review_required');
+  f.setTime('2026-11-22T10:00:00Z');
+  const pending = await f.publisher.extraPreview(session);
+  assert.equal(pending.mode, 'verify'); assert.equal(pending.post.date, '2026-11-21');
+  assert.equal((await f.publisher.status()).extra.nextPost.id, pending.post.id);
+  const verify = await reviewExtra(f.publisher);
+  f.setFailPublish(false); f.setContainerStatus('PUBLISHED');
+  const count = f.calls.length;
+  assert.equal((await f.publisher.run(verify)).reconciled, true);
+  assert.ok(f.calls.slice(count).every(call => call.method === 'GET'));
+  assert.equal(f.posts().length, 1);
+  const following = await f.publisher.extraPreview(session);
+  assert.equal(following.mode, 'publish'); assert.equal(following.post.date, '2026-11-22');
+});
+
+test('v3 daily and extra use separate frozen captions, media URLs and history attribution', async () => {
+  let prepared = 0;
+  const f = fixture({ time: '2026-11-26T17:00:00Z', planFor: adviceEditorialPlan,
+    prepareElectricEdition: async base => { prepared++; return { caption: 'Legenda ' + base.id, sources: [],
+      copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' }; } });
+  const daily = (await f.publisher.preview()).post, extra = (await f.publisher.extraPreview(session)).post;
+  assert.equal(daily.version, 'v3'); assert.equal(extra.version, 'v3');
+  assert.notEqual(daily.id, extra.id); assert.notEqual(daily.caption, extra.caption);
+  assert.equal(extra.images.length, 1); assert.equal(new URL(extra.images[0]).searchParams.get('extra'), '1');
+  assert.equal(daily.copyOrigin, 'ai'); assert.equal(extra.copyModel, 'gpt-6.2-astra');
+  assert.equal(f.calls.length, 0); assert.equal(f.tokenResolutions(), 0);
+  assert.equal((await f.publisher.run(await reviewExtra(f.publisher))).status, 'published');
+  f.setTime('2026-11-26T19:01:00Z');
+  assert.equal((await f.publisher.run()).status, 'published');
+  assert.equal(prepared, 2);
+  const history = JSON.parse(f.memory.records.get(STATE).text);
+  for (const [review, lane] of [[daily, history.items], [extra, history.extraItems]]) {
+    assert.equal(lane[review.date].caption, review.caption);
+    assert.equal(lane[review.date].version, 'v3');
+    assert.equal(lane[review.date].copyOrigin, 'ai');
+    assert.equal(lane[review.date].copyModel, 'gpt-6.2-astra');
+  }
+  assert.equal((await f.publisher.preview(daily.date)).post.caption, daily.caption);
+  for (const call of f.calls.filter(call => call.method === 'POST' && call.url.endsWith('/media')))
+    assert.equal(new URL(new URLSearchParams(call.body).get('image_url')).searchParams.get('v'), 'v3');
+});
+
+test('a v2 dated container already preparing survives a v3 calendar deployment with its original frozen content', async () => {
+  const time = '2026-11-26T19:02:00Z';
+  let count = 0;
+  const f = fixture({ time, planFor: scheduledEditorialPlan, prepareElectricEdition: async post => {
+    count++; return { caption: 'Legenda v2: ' + post.title, sources: [] };
+  } });
+  f.setContainerStatus('IN_PROGRESS'); await f.publisher.run();
+  f.setPlan(adviceEditorialPlan);
+  const viewed = await f.publisher.preview('2026-11-26');
+  assert.equal(viewed.post.version, 'v2');
+  assert.equal(new URL(viewed.post.images[0]).searchParams.get('v'), 'v2');
+  assert.equal((await f.publisher.calendar()).items[0].id, viewed.post.id);
+  f.setContainerStatus('FINISHED');
+  assert.equal((await f.publisher.run()).status, 'published');
+  assert.equal(count, 1);
+  assert.equal((await f.publisher.preview('2026-11-26')).post.caption, viewed.post.caption);
+  assert.equal(f.posts().length, 1);
 });
 test('uncertain extra cannot be repeated or confused with the daily lane',async()=>{
   const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setFailPublish(true);
-  assert.equal((await f.publisher.run({extra:true})).status,'review_required');
-  assert.equal((await f.publisher.run({extra:true})).status,'busy'); assert.equal(f.posts().length,1);
+  const review = await reviewExtra(f.publisher);
+  assert.equal((await f.publisher.run(review)).status,'review_required');
+  await assert.rejects(f.publisher.run(review), { code: 'editorial_review_stale' }); assert.equal(f.posts().length,1);
   f.setTime('2026-11-21T19:01:00Z');
   assert.equal((await f.publisher.run()).status,'review_required'); assert.equal(f.posts().length,1);
 });
 
 test('scheduled slot safely displaces an old, merely preparing extra without publishing it',async()=>{
   const f=fixture({time:'2026-11-21T10:00:00Z'}); f.setContainerStatus('IN_PROGRESS');
-  assert.equal((await f.publisher.run({extra:true})).status,'preparing');
+  assert.equal((await f.publisher.run(await reviewExtra(f.publisher))).status,'preparing');
   f.setTime('2026-11-21T19:01:00Z'); f.setContainerStatus('FINISHED');
   assert.equal((await f.publisher.run()).status,'published');
   assert.equal(f.posts().length,1); const state=await f.publisher.status();
   assert.equal(state.extra.lastResult.status,'skipped'); assert.equal(state.extra.lastResult.reason,'scheduled_slot_priority');
   assert.equal(state.lastResult.status,'published');
 });
-test('extra route requires authenticated same-origin POST and cannot be triggered by cron GET',async()=>{
-  let calls=0; const env={CRON_SECRET:'synthetic-secret-at-least-32-characters'};
-  const handler=createInstagramEditorialHandler({env,authorizeAdmin:req=>req.headers.admin==='yes',publisher:{run:async args=>{assert.deepEqual(args,{extra:true});calls++;return {ok:true,status:'published',published:1}}},report:()=>{}});
-  async function invoke(method,headers){const res={code:200,setHeader(){},status(code){this.code=code;return this},json(body){this.body=body;return this}};await handler({method,headers,query:{action:'extra-run'}},res);return res.code}
-  assert.equal(await invoke('GET',{admin:'yes',host:'autovalorpt-assistente.vercel.app'}),403);
-  assert.equal(await invoke('GET',{authorization:'Bearer '+env.CRON_SECRET}),403);
-  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://example.com'}),403);
-  assert.equal(await invoke('POST',{host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),401);
-  assert.equal(await invoke('POST',{admin:'yes',host:'autovalorpt-assistente.vercel.app',origin:'https://autovalorpt-assistente.vercel.app'}),200);
-  assert.equal(calls,1);
+test('extra preview and run require the same authenticated browser and an explicit same-origin confirmation', async () => {
+  const env = { CRON_SECRET: 'fixture-secret-at-least-32-characters', ADMIN_ACCESS_HASH: '1'.repeat(64),
+    ADMIN_SESSION_SECRET: 'fixture-signing-secret-at-least-32-characters' };
+  const auth = createAdminSession(env), headers = { cookie: ADMIN_COOKIE_NAME + '=' + auth,
+    host: 'autovalorpt-assistente.vercel.app', origin: 'https://autovalorpt-assistente.vercel.app' };
+  const fingerprint = '5'.repeat(64), id = 'editorial-extra-test', seen = [];
+  const handler = createInstagramEditorialHandler({ env, publisher: {
+    extraPreview(session) { seen.push(session); return { ok: true, post: { id, fingerprint } }; },
+    run(args) { seen.push(args); return { ok: true, status: 'published', published: 1 }; },
+  }, report() {} });
+  async function invoke(action, method, headers, body) {
+    const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(value) { this.body = value; } };
+    await handler({ method, headers, body, query: { action } }, res);
+    return res;
+  }
+  const cron = { authorization: 'Bearer ' + env.CRON_SECRET };
+  assert.equal((await invoke('extra-run', 'GET', headers)).code, 403);
+  assert.equal((await invoke('extra-run', 'POST', cron)).code, 403);
+  assert.equal((await invoke('extra-preview', 'GET', cron)).code, 403);
+  assert.equal((await invoke('extra-preview', 'POST', headers)).code, 405);
+  assert.equal((await invoke('extra-run', 'POST', { ...headers, origin: 'https://example.com' })).code, 403);
+  assert.equal((await invoke('extra-run', 'POST', { ...headers, cookie: '' })).code, 401);
+  for (const body of [{}, { confirmation: { id } }, { confirmation: { id, fingerprint: 'bad' } }])
+    assert.equal((await invoke('extra-run', 'POST', headers, body)).code, 400);
+  assert.deepEqual(seen, []);
+  assert.equal((await invoke('extra-preview', 'GET', headers)).code, 200);
+  assert.equal((await invoke('extra-run', 'POST', headers, { confirmation: { id, fingerprint } })).code, 200);
+  assert.deepEqual(seen, [hashAdminToken(auth), { extra: true, session: hashAdminToken(auth), confirmation: { id, fingerprint } }]);
 });

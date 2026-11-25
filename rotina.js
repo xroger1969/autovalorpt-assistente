@@ -15,7 +15,7 @@
   let followRequest = false; let lastResume = 0;
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
-  let editorialPost = null; let extraAvailable = false; let extraSubmitting = false;
+  let editorialPost = null;
   let channelCheck = null, stockCheck = null, currentCycle = null, pendingManualStories = 0, calendarState = '';
   const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
@@ -56,6 +56,7 @@
     authenticated = value; generation++;
     const expire = () => sessionView(false, 'A sessão terminou. Volta a entrar.');
     globalThis.AutoValorRoutineCalendar?.setSession(value, expire);
+    globalThis.AutoValorExtraEditorial.setSession(value, expire, refreshAll);
     globalThis.AutoValorManualStories?.setSession(value, expire, pending => {
       pendingManualStories = pending;
       showCheckOverview();
@@ -402,7 +403,7 @@
 
   function clearEditorial() {
     renderPreviewLinks();
-    editorialPost = null; extraAvailable = false; $('extraButton').disabled = true; text('extraButton','Publicar conteúdo extra agora'); text('extraTitle',''); text('extraStatus','');
+    editorialPost = null; globalThis.AutoValorExtraEditorial.setStatus(null);
     for (const id of ['editorialSchedule','editorialResult','editorialTitle','editorialDate','editorialCaption','editorialPreviewNote']) text(id, '');
     $('editorialNext').hidden = true; $('editorialImage').hidden = true;
     $('editorialImage').removeAttribute('src'); $('editorialImage').alt = '';
@@ -445,12 +446,7 @@
     const config = data.configuration || {}; const auth = data.authorization || {};
     const configured = config.tokenConfigured === true && config.accountConfigured === true && config.validApi === true && config.imagesConfigured === true && config.production !== false;
     const last = data.lastResult;
-    const extra = data.extra;
-    extraAvailable = extra?.available === true && configured && !auth.expired && !auth.lastError;
-    $('extraButton').disabled = !extraAvailable || extraSubmitting;
-    text('extraButton', extra?.verifyOnly ? 'Verificar publicação extra' : extra?.resumable ? 'Continuar publicação extra' : 'Publicar conteúdo extra agora');
-    text('extraTitle', typeof extra?.nextPost?.title === 'string' ? extra.nextPost.title : '');
-    text('extraStatus', extra?.usedToday ? 'Publicação extra de hoje confirmada. A rotina das 19h00 mantém-se.' : extra?.lastResult?.status === 'publish_unknown' && data.active?.extra === true ? 'Publicação extra por confirmar. Verifica o resultado sem a repetir.' : extraAvailable ? 'Cria e publica uma imagem e legenda diferentes do conteúdo diário.' : 'Publicação extra indisponível ou já em curso.');
+    globalThis.AutoValorExtraEditorial.setStatus(data);
     if (data.active) {
       const uncertain = /unknown|uncertain/.test(data.active.phase || '');
       badge('editorialBadge', uncertain ? 'Publicação por confirmar' : 'Publicação em curso', uncertain ? 'error' : 'pending');
@@ -528,23 +524,6 @@
   function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
   $('runNow').addEventListener('click', submitManual);
   $('editorialPanel').addEventListener('toggle', loadEditorialPreview);
-  $('extraButton').addEventListener('click', async () => {
-    if (!authenticated || extraSubmitting || !extraAvailable || $('extraButton').disabled) return;
-    const version = generation; extraSubmitting = true; extraAvailable = false; $('extraButton').disabled = true;
-    text('extraStatus','A criar e publicar o conteúdo extra…');
-    let result, failed = false;
-    try { result = await api(url('editorial','extra-run'),{method:'POST'},240000); }
-    catch (error) { if (error.status === 401 && generation === version) { sessionView(false,'A sessão terminou. Volta a entrar.'); return; } failed = true; }
-    finally { extraSubmitting = false; }
-    if (!authenticated || generation !== version) return;
-    await refreshAll();
-    if (!authenticated || generation !== version) return;
-    if (failed) text('extraStatus','Pedido sem confirmação. Verifica o estado antes de repetir.');
-    else if (result.status === 'published' || result.status === 'already_published') text('extraStatus','Publicação extra confirmada. A rotina das 19h00 mantém-se.');
-    else if (result.status === 'preparing') text('extraStatus','Imagem em preparação. Continua a publicação quando o botão estiver disponível.');
-    else if (result.status === 'busy') text('extraStatus','Já existe uma publicação em curso. Verifica novamente.');
-    else text('extraStatus','Resultado: ' + editorialResultLabel(result) + '. Consulta o estado antes de repetir.');
-  });
   $('historyPanel').addEventListener('toggle', () => {
     if ($('historyPanel').open) void loadHistory();
     else { historyVersion++; lastSearch = null; }

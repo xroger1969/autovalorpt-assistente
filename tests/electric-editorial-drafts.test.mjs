@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createElectricDrafts } from '../lib/electric-editorial-drafts.js';
+import { verifyAndPrepareEditorial } from '../scripts/validate-editorial-deployment.mjs';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
 const post = { id: 'editorial-extra-2026-11-28-eletrico-cabo', date: '2026-11-28', electric: true, slides: [{ title: 'Cabo' }] };
@@ -62,15 +63,71 @@ test('active lease produces a bounded retryable result; its abandoned holder can
   await entered.wait;
   let waits = 0, calls = 0;
   const replacement = create(m.storage, async () => { calls++; return approved; }, { now: () => time, pause: async () => { waits++; } });
+  time += 59_999;
   await assert.rejects(replacement(post), { code: 'editorial_draft_preparing' });
   assert.equal(waits, 3);
   assert.equal(calls, 0);
-  time += 15001;
+  time += 1;
   const taken = await replacement(post);
   resume.open();
   assert.deepEqual(await delayed, taken);
   assert.deepEqual(JSON.parse(m.records.get(path).text).sources, approved.sources);
   assert.equal(calls, 1);
+});
+
+test('frozen AI, fallback and legacy captions keep their attribution across processes with one read and no generation', async () => {
+  const cases = [
+    [{ copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' }, { copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' }],
+    [{ copyOrigin: 'ai', copyModel: 'gpt-6.2-astra-2026-11-25' }, { copyOrigin: 'ai', copyModel: 'gpt-6.2-astra-2026-11-25' }],
+    [{ copyOrigin: 'editorial', copyModel: 'gpt-6.2-astra' }, { copyOrigin: 'editorial' }],
+    [{ copyOrigin: 'ai', copyModel: 'untrusted-output' }, { copyOrigin: 'ai' }],
+    [{ copyOrigin: 'ai', copyModel: 'gpt-6.2-astra\n' }, { copyOrigin: 'ai' }],
+    [{ copyOrigin: 'other', copyModel: 'gpt-6.2-astra' }, {}],
+    [{}, {}],
+  ];
+  for (const [input, expected] of cases) {
+    const m = memoryBlob();
+    const prepare = create(m.storage, () => ({ ...approved, ...input }));
+    const draft = { ...post, ...approved, ...expected };
+    assert.deepEqual(await prepare(post), draft);
+    assert.deepEqual(JSON.parse(m.records.get(path).text),
+      { version: 1, id: post.id, date: post.date, status: 'ready', ...approved, ...expected });
+    const before = m.calls.length;
+    const other = create(m.storage, () => { throw new Error('duplicate generation'); });
+    const attributedCaller = { ...post, copyOrigin: 'editorial', copyModel: 'stale' };
+    assert.deepEqual(await other(attributedCaller), draft);
+    assert.deepEqual(await other(attributedCaller), draft);
+    assert.deepEqual(m.calls.slice(before).map(x => x.method), ['get']);
+  }
+});
+
+test('production prewarming uses only the normal next preview and logs approved attribution after connection validation', async () => {
+  const calls = [], logs = [];
+  const post = { id: 'editorial-2026-11-28-eletrico', date: '2026-11-28', version: 'v3', copyOrigin: 'ai',
+    copyModel: 'gpt-6.2-astra', caption: 'Private caption', sources: ['private'] };
+  const publisher = {
+    async validate() { calls.push('validate'); return { username: 'autovalorpt', verified: true }; },
+    async preview(...args) { calls.push(['preview', ...args]); return { post }; },
+  };
+  const log = { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) };
+  await verifyAndPrepareEditorial(publisher, log);
+  assert.deepEqual(calls, ['validate', ['preview']]);
+  assert.deepEqual(JSON.parse(logs[1][1]), { date: post.date, id: post.id, copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' });
+  assert.equal(logs[1][0], 'editorial_next_draft_ready');
+  logs.length = 0;
+  post.copyOrigin = 'editorial';
+  await verifyAndPrepareEditorial(publisher, log);
+  assert.deepEqual(JSON.parse(logs[1][1]), { date: post.date, id: post.id, copyOrigin: 'editorial' });
+  logs.length = 0;
+  post.version = 'v2';
+  await verifyAndPrepareEditorial(publisher, log);
+  assert.equal(logs.length, 1);
+  logs.length = 0;
+  publisher.preview = async () => { throw new Error('private failure'); };
+  await verifyAndPrepareEditorial(publisher, log);
+  assert.deepEqual(logs[1], ['editorial_next_draft_pending']);
+  publisher.validate = async () => ({ username: 'another-account', verified: true });
+  await assert.rejects(verifyAndPrepareEditorial(publisher, log), { code: 'wrong_instagram_account' });
 });
 
 test('an acknowledgement lost after commit, or one transient failure before commit, never changes the published draft', async () => {

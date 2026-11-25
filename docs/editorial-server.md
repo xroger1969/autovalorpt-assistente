@@ -8,13 +8,13 @@ A rotina editorial prepara e publica um conteúdo por dia em `@autovalorpt`, sem
 - Primeira execução a partir das **19:00 em Europe/Lisbon**. A infraestrutura pode executar dentro dessa hora; o painel não promete uma hora exata.
 - Uma execução de recuperação às **20:00 locais** retoma a preparação do mesmo conteúdo, ou confirma que já foi publicado. Não publica uma segunda peça.
 - Há dois pares de crons UTC com guardas de estação, para verão e inverno. Cada entrada corre uma vez por dia; só a estação correta avança.
-- O banco contém **42 temas originais em português de Portugal**, em rotação, com perguntas visuais e carrosséis de quatro imagens. São conteúdos educativos gerais: não inventam veículos, preços, testemunhos, disponibilidade ou vendas.
+- O arquivo conserva os temas, as imagens e os carrosséis das primeiras edições. A partir de 26 de novembro de 2026, a agenda usa 32 temas de mobilidade elétrica e as edições extra usam outros 32. A agenda intercala edições sobre apoios e atualidade, com fontes identificadas na legenda quando disponíveis.
 - **22/11/2026:** Reel «O carro cabe na tua rotina?».
 - **29/11/2026:** Reel «O que observas num test drive?».
 - Os dois Reels usam os vídeos já preparados, adaptados para entrega web. A divulgação de IA está no vídeo, na legenda e no pedido da etiqueta nativa. Se a etiqueta não puder ser confirmada, o painel indica essa limitação sem repetir a publicação.
 - O Reel publicado em 20/11/2026 não está incluído nesta fila.
 
-As imagens são geradas por código com a fonte incluída no projeto. Não há chamadas a modelos de IA, geração paga ou contratação de serviços neste fluxo. Aplicam-se os limites e condições da infraestrutura e da conta Meta existentes.
+O servidor compõe as imagens a partir das contas e das condições de cada exemplo. A legenda usa a chave OpenAI da aplicação. O modelo editorial predefinido é `gpt-6.2-astra`. A redação da AutoValorPT fornece uma legenda completa se o modelo estiver indisponível ou introduzir uma afirmação que a aplicação rejeite. A pré-visualização e a publicação reutilizam a mesma edição guardada. A consulta da agenda de sete dias usa os planos locais.
 
 ## Configuração
 
@@ -22,7 +22,7 @@ As imagens são geradas por código com a fonte incluída no projeto. Não há c
 
 O novo publicador usa `INSTAGRAM_EDITORIAL_GRAPH_VERSION`, com valor predefinido `v27.0`. A versão do publicador de stock e do gestor de renovação da autorização não muda.
 
-O build de produção executa uma verificação da identidade `autovalorpt` e da consulta à quota de publicação quando a rotina editorial está ativada. Só emite o resultado seguro, sem credenciais ou respostas brutas. Não cria nem publica conteúdos durante o build. A Meta volta a verificar as permissões ao receber cada publicação; uma ligação validada não equivale a uma publicação confirmada.
+O build de produção executa uma verificação da identidade `autovalorpt` e da consulta à quota de publicação quando a rotina editorial está ativada. Só emite o resultado seguro, sem credenciais ou respostas brutas. Pode também preparar o rascunho da próxima edição e registar a origem da legenda. O envio para o Instagram é feito pela rotina ou após confirmação manual no painel. A Meta volta a verificar as permissões ao receber cada publicação; uma ligação validada não equivale a uma publicação confirmada.
 
 ## Acesso e acompanhamento
 
@@ -32,6 +32,8 @@ As ações privadas passam pela função existente:
 | --- | --- |
 | `integration=editorial&action=status` | Consulta privada de estado e histórico. |
 | `integration=editorial&action=preview&date=YYYY-MM-DD` | Consulta privada da peça preparada. |
+| `integration=editorial&action=extra-preview` | `GET` na sessão de administrador. Mostra a imagem e a legenda completas e prepara a confirmação dessa edição. |
+| `integration=editorial&action=extra-run` | `POST` da mesma sessão e origem, com o identificador e a confirmação da edição revista. |
 | `integration=editorial&action=settings` | `POST` de administrador, com origem coincidente e `{ "enabled": true/false }`. |
 | `integration=editorial&action=validate` | Verifica ligação, conta e quota; não publica. |
 | `integration=editorial&action=run&season=summer/winter` | Cron autenticado, ou `POST` administrativo com a mesma origem. A data vem sempre do servidor. |

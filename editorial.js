@@ -80,6 +80,7 @@
     } finally { clearTimeout(timeout); }
   }
   function clearPrivateView() {
+    globalThis.AutoValorExtraEditorial.setStatus(null);
     renderPreviewLinks();
     current = null; slide = 0;
     for (const id of ['dashboardStatus', 'readAt', 'resultDescription', 'resultTime', 'previewDate', 'captionText', 'copyStatus', 'imageStatus']) text(id);
@@ -96,6 +97,7 @@
   }
   function sessionView(value, message = '') {
     authenticated = value; generation++;
+    globalThis.AutoValorExtraEditorial.setSession(value, () => sessionView(false, 'A sessão terminou. Volta a entrar.'), refresh);
     $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) clearPrivateView();
@@ -203,6 +205,7 @@
     text('nextRun', data.enabled === false ? 'Rotina pausada' : data.schedule?.nextRunAt ? date(data.schedule.nextRunAt) : 'Horário por confirmar');
     const configured = config.tokenConfigured === true && config.accountConfigured === true && config.validApi === true && config.imagesConfigured === true;
     text('connectionStatus', config.production === false ? 'A publicação automática está disponível no site principal.' : auth.expired === true ? 'O acesso ao Instagram expirou e precisa de renovação.' : auth.lastError ? 'A renovação do acesso ao Instagram precisa de verificação.' : configured ? 'Ligação ao Instagram configurada. Cada publicação será confirmada no histórico.' : 'A configuração da ligação ao Instagram precisa de verificação.');
+    globalThis.AutoValorExtraEditorial.setStatus(data);
     renderPreview(data.nextPost); renderResult(data); renderHistory(data.history);
     text('readAt', `Última consulta: ${date(new Date().toISOString())}.`);
   }

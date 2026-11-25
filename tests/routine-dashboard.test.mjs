@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = (await Promise.all(['editorial-preview.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
+const script = (await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const startedAt = `${today()}T08:00:00Z`;
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
@@ -343,13 +343,32 @@ test('editorial private details are cleared on session expiry',async()=>{
   assert.equal(app.get('dashboardView').hidden,true); assert.equal(app.get('editorialCaption').textContent,''); assert.equal(app.get('editorialHistory').children.length,0);
 });
 
-test('extra publication is a separate explicitly pressed action and status refresh never publishes',async()=>{
-  const state={ok:true,enabled:true,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},extra:{available:true,nextPost:{title:'Nova pergunta'}}};
-  let sent=0;
-  const app=await dashboard({editorial:state,fetch:(path,init)=>{if(path.includes('action=extra-run')){assert.equal(init.method,'POST'); sent++; state.extra={available:false,usedToday:true}; return response({ok:true,status:'published'});} return null;}});
-  assert.equal(sent,0); assert.equal(app.get('extraButton').disabled,false);
-  await app.get('refreshButton').handlers.click(); assert.equal(sent,0);
-  await app.get('extraButton').handlers.click(); await app.get('extraButton').handlers.click(); assert.equal(sent,1); assert.equal(app.get('extraButton').disabled,true);
+test('extra publication previews artwork and full caption, cancel is safe, double confirm sends the reviewed digest once', async () => {
+  const state = { ok: true, enabled: true, configuration: { production: true, tokenConfigured: true, accountConfigured: true, validApi: true, imagesConfigured: true }, extra: { available: true } };
+  const date = today(), id = 'editorial-extra-' + date + '-new', fingerprint = '1'.repeat(64);
+  const post = { id, date, fingerprint, extra: true, copyOrigin: 'ai', copyModel: 'gpt-6.2-astra', format: 'IMAGE', slideCount: 1, title: 'Nova pergunta', caption: 'Legenda completa.\n\n#AutoValorPT',
+    images: ['/api/stock?integration=editorial-image&date=' + date + '&slide=1&v=v3&extra=1'] };
+  let sent = 0, previews = 0;
+  const app = await dashboard({ editorial: state, fetch: (path, init) => {
+    if (path.includes('action=extra-preview')) { previews++; assert.equal(init.method, 'GET'); return response({ ok: true, mode: 'publish', post }); }
+    if (path.includes('action=extra-run')) {
+      assert.equal(init.method, 'POST'); assert.deepEqual(JSON.parse(init.body), { confirmation: { id, fingerprint } });
+      sent++; state.extra = { available: false, usedToday: true }; return response({ ok: true, status: 'published' });
+    }
+    return null;
+  } });
+  await app.get('refreshButton').handlers.click(); assert.equal(sent, 0); assert.equal(previews, 0);
+  await app.get('extraButton').handlers.click(); assert.equal(previews, 1); assert.equal(sent, 0);
+  assert.equal(app.get('extraReviewCaption').textContent, post.caption);
+  assert.equal(app.get('extraCopyOrigin').textContent, 'Legenda preparada com GPT-6.2 Astra.');
+  assert.match(app.get('extraArtwork').children[0].src, /v=v3&extra=1$/);
+  await app.get('extraConfirm').handlers.click(); assert.equal(sent, 0);
+  app.get('extraArtwork').children[0].handlers.load(); assert.equal(app.get('extraConfirm').disabled, false);
+  app.get('extraBack').handlers.click(); assert.equal(app.get('extraCopyOrigin').hidden, true); assert.equal(app.get('extraReview').hidden, true); assert.equal(sent, 0);
+  await app.get('extraButton').handlers.click(); app.get('extraArtwork').children[0].handlers.load();
+  await Promise.all([app.get('extraConfirm').handlers.click(), app.get('extraConfirm').handlers.click()]);
+  assert.equal(previews, 2); assert.equal(sent, 1); assert.equal(app.get('extraButton').disabled, true);
+  assert.match(app.get('extraStatus').textContent, /confirmada pelo Instagram/);
 });
 
 test('intentional preservation of Instagram posts is not an outstanding retirement',async()=>{

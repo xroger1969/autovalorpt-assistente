@@ -27,8 +27,9 @@
         }
       } catch { /* Use the date, slide and version from the preview. */ }
     }
-    if (extra) { query.set('v', 'v1'); query.set('extra', '1'); }
-    else if (version === 'v1' || version === 'v2') query.set('v', version);
+    if (['v1', 'v2', 'v3'].includes(version)) query.set('v', version);
+    else if (extra) query.set('v', 'v1');
+    if (extra) query.set('extra', '1');
     return '/api/stock?' + query;
   }
 
@@ -58,7 +59,22 @@
     if (link.hidden) link.removeAttribute('href');
     else link.href = approvedUrl;
   }
+  function copyCredit(post) {
+    if (post?.copyOrigin === 'editorial') return 'Legenda da redação AutoValorPT.';
+    if (post?.copyOrigin !== 'ai') return '';
+    const model = typeof post.copyModel === 'string' && /^(gpt-\d+(?:\.\d+)?|o[134])(?:-(astra|sol|luna|terra|pro|mini|nano))?(?:-\d{4}-\d{2}-\d{2})?$/.exec(post.copyModel);
+    if (!model) return 'Legenda preparada com inteligência artificial.';
+    const name = model[1].replace(/^gpt-/, 'GPT-');
+    const variant = { astra: 'Astra', sol: 'Sol', luna: 'Luna', terra: 'Terra', pro: 'Pro', mini: 'mini', nano: 'nano' }[model[2]];
+    return 'Legenda preparada com ' + name + (variant ? ' ' + variant : '') + '.';
+  }
+  function renderCopyCredit(element, post) {
+    if (!element) return;
+    const value = copyCredit(post);
+    element.hidden = !value; element.textContent = value;
+  }
   function renderPreviewLinks(post) {
+    renderCopyCredit(document.getElementById('editorialCopyOrigin'), post);
     renderSources(post?.sources);
     simulatorLink('editorialSimulator', post?.simulatorUrl, 'https://carregador.vercel.app/');
     simulatorLink('editorialCreditSimulator', post?.creditSimulatorUrl, 'https://credicarros.vercel.app/simulador-ano.html');
@@ -71,5 +87,5 @@
       return ['/assets/editorial/rotina-web-v1.mp4', '/assets/editorial/test-drive-web-v1.mp4'].includes(url.pathname) ? url.pathname : null;
     } catch { return null; }
   }
-  globalThis.AutoValorEditorialPreview = { validDay, imageUrl, videoUrl, renderSources, renderPreviewLinks };
+  globalThis.AutoValorEditorialPreview = { validDay, imageUrl, videoUrl, renderSources, renderCopyCredit, renderPreviewLinks };
 })();

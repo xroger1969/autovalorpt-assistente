@@ -90,7 +90,7 @@ test('errors, paused schedule and private session expiry are explicit and no uns
 
 test('prepared caption and sources merge by date and ID without re-reading, replacing media or moving slides', async () => {
   const calendar = plans(), item = calendar.items[0];
-  const prepared = { id: item.id, date: item.date, caption: 'Texto final', sources: [{ label: 'ACP', url: 'https://www.acp.pt/noticia' }],
+  const prepared = { id: item.id, date: item.date, caption: 'Texto final', copyOrigin: 'editorial', sources: [{ label: 'ACP', url: 'https://www.acp.pt/noticia' }],
     title: 'Outro título', status: 'failed', scheduledAt: '2000-01-01T00:00:00Z', images: ['/different'], format: 'REELS' };
   for (const first of ['calendar', 'status']) {
     const app = dashboard(); app.api.setSession(true);
@@ -103,6 +103,7 @@ test('prepared caption and sources merge by date and ID without re-reading, repl
     assert.doesNotMatch(day.children[0].children[2].textContent, /Provisório|falhada/);
     assert.ok(day.querySelectorAll('p').some(p => p.textContent === prepared.caption));
     assert.equal(day.querySelector('a').href, prepared.sources[0].url);
+    assert.ok(day.querySelectorAll('p').some(p => p.textContent === 'Legenda da redação AutoValorPT.'));
     assert.equal(day.querySelector('img'), img); assert.match(img.src, /slide=2&v=v2$/); assert.equal(app.calls.length, 1);
 
     for (const mismatch of [{ ...prepared, date: '2027-07-06' }, { ...prepared, id: 'other' }, { ...prepared, provisional: true }]) {
@@ -110,6 +111,7 @@ test('prepared caption and sources merge by date and ID without re-reading, repl
       assert.match(day.children[0].children[2].textContent, /Provisório/);
       assert.ok(day.querySelectorAll('p').some(p => p.textContent === item.caption));
       assert.equal(day.querySelector('a'), undefined);
+      assert.ok(!day.querySelectorAll('p').some(p => p.textContent === 'Legenda da redação AutoValorPT.'));
     }
     app.api.setNextPost({ ...prepared, id: calendar.items[1].id, date: calendar.items[1].date });
     app.toggle(app.list.children[1], true);

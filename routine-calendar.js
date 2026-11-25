@@ -5,7 +5,7 @@
   const list = document.getElementById('calendarItems');
   const status = document.getElementById('calendarStatus');
   const refresh = document.getElementById('calendarRefresh');
-  const { validDay, imageUrl, videoUrl, renderSources } = globalThis.AutoValorEditorialPreview;
+  const { validDay, imageUrl, videoUrl, renderSources, renderCopyCredit } = globalThis.AutoValorEditorialPreview;
   const locale = { timeZone: 'Europe/Lisbon' };
   const dayLabel = new Intl.DateTimeFormat('pt-PT', { ...locale, weekday: 'short', day: 'numeric', month: 'long' });
   const clock = new Intl.DateTimeFormat('pt-PT', { ...locale, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -83,7 +83,7 @@
     summary.appendChild(element('strong', post.title || 'Conteúdo por confirmar'));
     const info = element('span', '', 'hint'), area = element('div', '', 'calendar-preview');
     const caption = element('p', '', 'calendar-caption'), sources = element('details');
-    const links = element('ul');
+    const links = element('ul'), credit = element('p', '', 'hint');
     sources.append(element('summary', 'Fontes do conteúdo'), links);
     summary.appendChild(info); detail.append(summary, area);
     let previousSources;
@@ -94,6 +94,7 @@
       info.hidden = !tags;
       if (info.textContent !== tags) info.textContent = tags;
       const copy = prepared || post;
+      renderCopyCredit(credit, copy);
       const content = typeof copy.caption === 'string' ? copy.caption : '';
       caption.hidden = !content;
       if (caption.textContent !== content) caption.textContent = content;
@@ -106,7 +107,7 @@
     detail.addEventListener('toggle', () => {
       if (!detail.open) { area.querySelector('video')?.pause(); return; }
       if (authenticated && panel.open && !area.firstChild) {
-        media(post, area); area.append(caption, sources);
+        media(post, area); area.append(caption, credit, sources);
       }
     });
     return detail;
@@ -151,7 +152,7 @@
   function setNextPost(post) {
     nextPost = authenticated && post?.provisional !== true && typeof post?.id === 'string' && post.id &&
       validDay(post.date) && typeof post.caption === 'string' && post.caption.trim()
-      ? { id: post.id, date: post.date, caption: post.caption, sources: Array.isArray(post.sources) ? post.sources : undefined } : null;
+      ? { id: post.id, date: post.date, caption: post.caption, copyOrigin: post.copyOrigin, copyModel: post.copyModel, sources: Array.isArray(post.sources) ? post.sources : undefined } : null;
     for (const update of updateRows) update();
   }
   function setSession(value, expire) {

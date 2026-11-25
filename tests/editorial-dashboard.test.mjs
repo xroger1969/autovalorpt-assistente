@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = (await Promise.all(['editorial-preview.js', 'editorial.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
+const script = (await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'editorial.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const ready = () => ({
@@ -201,7 +201,7 @@ test('editorial preview shows verified sources and clears them on a later provis
 });
 
 test('only supported image versions and the extra flag are retained on the editorial preview', async () => {
-  for (const [metadata, expected] of [['v=v2&extra=0', '&v=v2'], ['version=v1&extra=1', '&v=v1&extra=1'], ['v=v9&x=invalid', '']]) {
+  for (const [metadata, expected] of [['v=v2&extra=0', '&v=v2'], ['v=v3', '&v=v3'], ['v=v3&extra=1', '&v=v3&extra=1'], ['version=v1&extra=1', '&v=v1&extra=1'], ['v=v9&x=invalid', '']]) {
     const data = ready(); data.nextPost.images = ['/api/stock?integration=editorial-image&' + metadata];
     const app = await dashboard({ status: data });
     assert.equal(app.get('previewImage').src, '/api/stock?integration=editorial-image&date=2026-11-21&slide=1' + expected);
@@ -225,5 +225,51 @@ test('only the exact AutoValorPT simulator opens from a distinct preview link', 
     await app.get('refreshButton').handlers.click();
     assert.equal(link.hidden, true); assert.equal(link.href, undefined);
     assert.equal(credit.hidden, true); assert.equal(credit.href, undefined);
+  }
+});
+
+
+test('editorial extra fails closed on invalid preview or failed artwork, and verifies only a reviewed previous attempt', async () => {
+  const data = ready(); data.extra = { available: true, resumable: true, verifyOnly: true };
+  const post = { extra: true, date: data.nextPost.date, id: 'extra-saved', title: 'Apoio', caption: 'Legenda final', format: 'IMAGE',
+    slideCount: 1, fingerprint: 'a'.repeat(64), images: ['/api/stock?integration=editorial-image&date=' + data.nextPost.date + '&slide=1&extra=1&v=v1'] };
+  let previews = 0, sent = 0;
+  const app = await dashboard({ status: data, fetch: (url, init) => {
+    if (url.includes('action=extra-preview')) {
+      previews++;
+      return previews === 1 ? response({ ok: false }, 503) : response({ ok: true, mode: 'verify', post });
+    }
+    if (url.includes('action=extra-run')) {
+      sent++; assert.deepEqual(JSON.parse(init.body), { confirmation: { id: post.id, fingerprint: post.fingerprint } });
+      return response({ ok: false, status: 'review_required' });
+    }
+    return null;
+  } });
+  assert.equal(previews, 0); assert.equal(app.get('extraButton').textContent, 'Verificar publicação extra');
+  await app.get('extraButton').handlers.click(); assert.match(app.get('extraStatus').textContent, /Não foi possível abrir/);
+  await app.get('extraConfirm').handlers.click(); assert.equal(sent, 0);
+  await app.get('extraButton').handlers.click(); assert.equal(app.get('extraConfirm').textContent, 'Verificar envio anterior');
+  app.get('extraArtwork').children[0].handlers.error(); await app.get('extraConfirm').handlers.click();
+  assert.equal(sent, 0); assert.match(app.get('extraStatus').textContent, /Não foi possível carregar/);
+  app.get('extraBack').handlers.click(); await app.get('extraButton').handlers.click();
+  app.get('extraArtwork').children[0].handlers.load(); await app.get('extraConfirm').handlers.click();
+  assert.equal(sent, 1); assert.match(app.get('extraStatus').textContent, /não confirmou/);
+});
+
+
+test('author credit follows the returned caption origin and recognizes dated Astra snapshots', async () => {
+  const data = ready(), app = await dashboard({ status: data });
+  const line = app.get('editorialCopyOrigin');
+  assert.equal(line.hidden, true);
+  for (const [copyOrigin, copyModel, expected] of [
+    ['ai', 'gpt-6.2-astra', 'Legenda preparada com GPT-6.2 Astra.'],
+    ['ai', 'gpt-6.2-astra-2026-11-24', 'Legenda preparada com GPT-6.2 Astra.'],
+    ['ai', undefined, 'Legenda preparada com inteligência artificial.'],
+    ['editorial', undefined, 'Legenda da redação AutoValorPT.'],
+    [undefined, 'gpt-6.2-astra', ''],
+  ]) {
+    Object.assign(data.nextPost, { copyOrigin, copyModel, provisional: !copyOrigin });
+    await app.get('refreshButton').handlers.click();
+    assert.equal(line.textContent, expected); assert.equal(line.hidden, !expected);
   }
 });
