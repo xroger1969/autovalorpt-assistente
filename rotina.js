@@ -53,7 +53,7 @@
     if (!value) {
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
       manualRead++; manualAction = ''; acceptedDay = ''; submitting = false; followRequest = false; lastResume = 0;
-      $('runNow').disabled = true; text('runNow', 'Atualizar stock agora'); text('manualStatus', ''); text('manualOutcome', '');
+      $('runNow').disabled = true; text('runNow', 'Atualizar tudo'); text('manualStatus', ''); text('manualOutcome', '');
       badge('instagramBrief', 'Por consultar'); $('historyPanel').open = false;
       for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
@@ -63,28 +63,28 @@
   function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
   const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A verificar viaturas retiradas.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
   function renderManual(data, message = '') {
-    manualAction = '';
+    manualAction = 'refresh';
     const state = data?.status;
     const age = Date.now() - Date.parse(data?.startedAt);
     const idle = Date.now() - Date.parse(data?.updatedAt);
     const resumable = state === 'queued' && age >= 0 && age < 3600000 && (data.stalled || idle > 60000);
-    let title = 'Atualizar stock agora';
-    let hint = 'Não foi possível ler a atualização extra. Toca em «Consultar estado» para voltar a verificar.';
+    let title = 'Verificar tudo';
+    let hint = 'Não foi possível consultar a atualização. Toca no botão para verificar novamente.';
     let result = '';
     if (state === 'not_started' && acceptedDay !== today()) {
-      manualAction = 'manual-start';
-      hint = 'Podes pedir uma atualização extra por dia. O Estado do WhatsApp é tratado à parte.';
+      manualAction = 'manual-start'; title = 'Atualizar tudo';
+      hint = 'Stock Samucar e AutoValorPT, catálogo WhatsApp e Instagram. Uma atualização extra por dia.';
     } else if (resumable) {
       manualAction = 'resume'; title = 'Continuar atualização';
       hint = 'O pedido ficou em fila. Podes continuar a partir da etapa onde parou.';
     } else if (state === 'blocked' || state === 'interrupted' || data?.stalled || state === 'queued' && age >= 3600000) {
-      title = 'Atualização por verificar';
-      hint = 'A atualização parou antes de ser confirmada. Consulta os resultados abaixo antes de repetir qualquer publicação.';
+      title = 'Verificar atualização';
+      hint = 'A atualização não foi confirmada. O botão consulta o resultado sem repetir publicações.';
     } else if (['queued', 'running', 'already_started'].includes(state) || state === 'not_started' && acceptedDay === today()) {
-      title = 'Atualização em curso'; hint = progressText[data?.step] || 'Pedido registado. O painel acompanha o progresso.';
+      title = 'Ver progresso'; hint = progressText[data?.step] || 'Atualização em curso. O painel acompanha o progresso.';
     } else if (state === 'finished') {
-      title = 'Atualização extra já utilizada';
-      hint = 'O pedido de hoje terminou. A próxima rotina está prevista para as 08h00.';
+      title = 'Verificar tudo';
+      hint = 'Atualização extra de hoje terminada. O botão consulta os resultados sem repetir publicações. Próxima rotina às 08h00.';
       const catalog = data.verification?.catalog;
       const confirmed = catalog?.catalogConfirmed === true && !catalog.active && !ISSUES.has(catalog.status);
       const detail = [['photo', 'Fotografia'], ['story', 'Story']].map(([key, name]) => {
@@ -122,6 +122,7 @@
     if (!authenticated || submitting || !manualAction || $('runNow').disabled) return;
     const version = generation;
     const action = manualAction;
+    if (action === 'refresh') { await refreshAll(); return; }
     manualRead++; manualAction = ''; submitting = true; $('runNow').disabled = true;
     if (action === 'resume') lastResume = Date.now();
     text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
@@ -138,9 +139,9 @@
       if (version !== generation) return;
       if (error.status === 401) { sessionView(false, 'A sessão terminou. Volta a entrar.'); return; }
       followRequest = false;
-      renderManual(null, 'O pedido ficou sem confirmação. Toca em «Consultar estado» para saber se chegou ao servidor.');
+      renderManual(null, 'Pedido por confirmar. Toca em «Verificar tudo» para saber se chegou ao servidor.');
       return;
-    } finally { if (version === generation) submitting = false; }
+    } finally { if (version === generation) { submitting = false; $('runNow').disabled = !manualAction; } }
     if (authenticated) await refreshAll();
   }
   function showCycle(data, error) {
@@ -259,7 +260,8 @@
     const short = s => s?.configuration?.enabled !== true ? 'por configurar'
       : ['published', 'mapped'].includes(s?.lastResult?.status) ? 'publicada'
       : s?.lastResult?.status === 'no_new_stock' ? 'sem novidades' : s?.lastResult ? label(s.lastResult).toLowerCase() : 'por confirmar';
-    badge('instagramBrief', 'Foto ' + short(photos) + ' · Story ' + short(stories));
+    const confirmed = services.every(s => s?.configuration?.enabled === true && ['published', 'mapped', 'no_new_stock'].includes(s?.lastResult?.status));
+    badge('instagramBrief', 'Foto ' + short(photos) + ' · Story ' + short(stories), confirmed ? 'good' : 'pending');
   }
   async function refresh() {
     if (!authenticated || busy) return;
