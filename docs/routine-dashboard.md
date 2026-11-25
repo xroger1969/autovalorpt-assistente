@@ -2,7 +2,7 @@
 
 A página `/rotina.html` reúne o stock e as publicações. Abre no iPhone e no computador com o código de acesso da aplicação. Depois de entrar, estão disponíveis três ações.
 
-- **Atualizar tudo** inicia ou acompanha a atualização do stock e das publicações. O painel mostra o resultado de cada canal e assinala as etapas que ficaram por confirmar.
+- **Atualizar tudo** inicia ou acompanha a atualização do stock e das publicações. Depois da atualização extra do dia, o botão passa a **Verificar tudo**. Ao tocar, o painel consulta o stock atual nos dois stands e os últimos registos dos canais. A hora, as contagens e eventuais falhas de leitura aparecem junto ao botão.
 - **Criar vídeo de outra viatura** abre a pesquisa nos inventários da Samucar e da AutoValorPT. Selecionar a viatura prepara um MP4 privado. Depois de rever o vídeo, é possível descarregá-lo ou escolher **Publicar Story agora** e confirmar o envio para @autovalorpt.
 - **Publicar conteúdo extra agora** usa o banco de temas extra. O painel indica quando já foi usada a publicação extra do dia.
 

@@ -360,3 +360,88 @@ test('intentional preservation of Instagram posts is not an outstanding retireme
   assert.equal(app.get('cycleBadge').textContent,'Etapas do servidor terminadas');
   assert.equal(app.get('stepsList').children[2].children[1].textContent,'Publicações preservadas');
 });
+
+const manualStockAction = 'action=stories-manual-stock';
+const dualInventory = { ok: true, items: [
+  { id: 'IDstock01', sources: ['Samucar', 'AutoValorPT'] },
+  { id: 'IDstock02', sources: ['Samucar'] },
+  { id: 'IDstock03', sources: ['Samucar'] }
+] };
+const readOnly = calls => calls.every(({ init }) => !init.method || init.method === 'GET');
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('full check shows progress, deduplicates clicks and waits for the live inventory before reporting results', async () => {
+  const stock = Promise.withResolvers();
+  const app = await dashboard({ cycle: finishedCycle(), fetch: path => path.includes(manualStockAction) ? stock.promise : null });
+  assert.equal(app.calls.some(c => c.endpoint.includes(manualStockAction)), false);
+  const start = app.calls.length;
+  const button = app.get('runNow');
+  const check = button.handlers.click();
+  const second = button.handlers.click();
+  try {
+    await settle();
+    assert.equal(button.disabled, true);
+    assert.match(app.get('checkStatus').textContent, /verific|consult/i);
+    const calls = app.calls.slice(start);
+    assert.equal(calls.length, 8);
+    assert.equal(new Set(calls.map(c => c.endpoint)).size, 8);
+    assert.ok(readOnly(calls));
+  } finally { stock.resolve(response(dualInventory)); }
+  await Promise.all([check, second]);
+  const result = app.get('checkStatus').textContent;
+  assert.match(result, /\d{2}:\d{2}:\d{2}/);
+  assert.match(result, /3\s+viaturas?|viaturas?\D{0,5}3/i);
+  assert.match(result, /Samucar\D{0,8}3|3\D{0,8}Samucar/i);
+  assert.match(result, /AutoValorPT\D{0,8}1|1\D{0,8}AutoValorPT/i);
+  assert.equal(button.disabled, false);
+});
+
+test('full check joins the initial channel reads and waits for the last slow channel without a duplicate GET', async () => {
+  const catalog = Promise.withResolvers();
+  const app = await dashboard({ cycle: finishedCycle(), fetch: path => {
+    if (path.includes(manualStockAction)) return response(dualInventory);
+    if (path.includes('integration=meta-catalog&action=status')) return catalog.promise;
+    return null;
+  } });
+  const button = app.get('runNow');
+  const check = button.handlers.click();
+  try {
+    await settle(); assert.equal(button.disabled, true);
+    assert.equal(app.calls.filter(c => c.endpoint.includes('integration=meta-catalog&action=status')).length, 1);
+    assert.equal(app.calls.filter(c => c.endpoint.includes(manualStockAction)).length, 1);
+  } finally { catalog.resolve(response({ configuration: { enabled: true } })); }
+  await check;
+  assert.match(app.get('checkStatus').textContent, /Samucar/i);
+  assert.equal(button.disabled, false);
+  assert.ok(readOnly(app.calls));
+});
+
+test('full check exposes a failed catalog lookup and a failed live inventory lookup beside the button', async () => {
+  let rejectReads = false;
+  const app = await dashboard({ cycle: finishedCycle(), fetch: path => {
+    if (rejectReads && path.includes('integration=meta-catalog&action=status')) return response({ error: 'unavailable' }, 503);
+    if (path.includes(manualStockAction)) return response({ error: 'source_timeout' }, 503);
+    return null;
+  } });
+  rejectReads = true;
+  await app.get('runNow').handlers.click();
+  const result = app.get('checkStatus').textContent;
+  assert.match(result, /catálogo/i);
+  assert.match(result, /stock|inventári|Standvirtual/i);
+  assert.match(result, /incomplet|por consultar|parcial|indisponíve|sem resposta|não foi possível|por confirmar|falh/i);
+  assert.doesNotMatch(result, /0 viaturas/);
+  assert.ok(readOnly(app.calls));
+});
+
+test('checking results from the installed shortcut cannot resume a cycle that changes state during the check', async () => {
+  let state = finishedCycle();
+  const app = await dashboard({ hash: '#atalho', fetch: path => {
+    if (path.includes('mode=manual')) return response(state);
+    if (path.includes(manualStockAction)) return response(dualInventory);
+    return null;
+  } });
+  state = { ok: true, status: 'queued', stalled: true, day: today(), startedAt: new Date(Date.now() - 180000).toISOString() };
+  await app.get('runNow').handlers.click();
+  assert.ok(readOnly(app.calls));
+  assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+});

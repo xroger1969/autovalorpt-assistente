@@ -10,6 +10,7 @@
   const ERRORS = { story_state_invalid: 'O histórico das Stories precisa de verificação. Não foi possível consultar o resultado.', story_provider_binding_changed: 'A ligação das Stories precisa de verificação.', morning_flow_unavailable: 'Não foi possível consultar esta execução.', catalog_permission_required: 'Falta acesso de servidor ao catálogo.' };
   let authenticated = false; let busy = false; let closing = false; let generation = 0; let followingToday = true;
   let manualRead = 0; let manualAction = ''; let submitting = false; let acceptedDay = '';
+  let verifying = false, manualTitle = 'Atualizar tudo', manualRequest = null, dashboardRequest = null;
   let followRequest = false; let lastResume = 0;
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
@@ -56,6 +57,7 @@
     $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     if (!value) {
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
+      verifying = false; manualRequest = null; dashboardRequest = null; setBusy(false); text('checkStatus', '');
       manualRead++; manualAction = ''; acceptedDay = ''; submitting = false; followRequest = false; lastResume = 0;
       manualInProgress = false; manualPollingUntil = 0; lastDashboardRead = 0;
       $('runNow').disabled = true; text('runNow', 'Atualizar tudo'); text('manualStatus', ''); text('manualOutcome', '');
@@ -68,8 +70,12 @@
   }
   function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
   const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A preservar o histórico do Instagram.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
+  function showManualButton() {
+    text('runNow', verifying ? 'A verificar…' : manualTitle);
+    $('runNow').disabled = verifying || submitting || !manualAction;
+  }
   function renderManual(data, message = '') {
-    manualAction = 'refresh';
+    manualAction = 'verify';
     const state = data?.status;
     const wasInProgress = manualInProgress;
     manualInProgress = ['queued', 'running', 'already_started'].includes(state) || state === 'not_started' && acceptedDay === today();
@@ -89,13 +95,13 @@
       manualAction = 'resume'; title = 'Continuar atualização';
       hint = 'O pedido ficou em fila. Podes continuar a partir da etapa onde parou.';
     } else if (state === 'blocked' || state === 'interrupted' || data?.stalled || state === 'queued' && age >= 3600000) {
-      title = 'Verificar atualização';
+      manualAction = 'refresh'; title = 'Verificar atualização';
       hint = 'A atualização não foi confirmada. O botão consulta o resultado sem repetir publicações.';
     } else if (['queued', 'running', 'already_started'].includes(state) || state === 'not_started' && acceptedDay === today()) {
-      title = 'Ver progresso'; hint = progressText[data?.step] || 'Atualização em curso. O painel acompanha o progresso.';
+      manualAction = 'refresh'; title = 'Ver progresso'; hint = progressText[data?.step] || 'Atualização em curso. O painel acompanha o progresso.';
     } else if (state === 'finished') {
       title = 'Verificar tudo';
-      hint = 'Atualização extra de hoje terminada. O botão consulta os resultados sem repetir publicações. Próxima rotina às 08h00.';
+      hint = 'A atualização extra de hoje terminou. Podes consultar o stock atual e os últimos resultados dos canais. Próxima rotina às 08h00.';
       const catalog = data.verification?.catalog;
       const confirmed = catalog?.catalogConfirmed === true && !catalog.active && !ISSUES.has(catalog.status);
       const detail = [['photo', 'Fotografia'], ['story', 'Story']].map(([key, name]) => {
@@ -107,34 +113,72 @@
     } else if (state === 'production_only') {
       hint = 'A atualização só está disponível no painel de produção.';
     }
-    text('runNow', title); $('runNow').disabled = !manualAction || submitting;
+    manualTitle = title; showManualButton();
     text('manualStatus', message || hint); text('manualOutcome', result);
+  }
+  function readManualStatus() {
+    if (manualRequest) return manualRequest;
+    const request = ++manualRead;
+    const version = generation;
+    manualRequest = api(url('morning-flow', 'status') + '&mode=manual').then(data => {
+      if (request !== manualRead || version !== generation) return false;
+      renderManual(data); return true;
+    }).catch(error => {
+      if (request === manualRead && version === generation) {
+        if (error.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar.');
+        else renderManual(null);
+      }
+      return false;
+    }).finally(() => { if (request === manualRead) manualRequest = null; });
+    return manualRequest;
   }
   async function refreshManual() {
     if (!authenticated || submitting) return;
-    const request = ++manualRead;
     const version = generation;
-    try {
-      const data = await api(url('morning-flow', 'status') + '&mode=manual');
-      if (request !== manualRead || version !== generation) return;
-      renderManual(data);
-      // The installed shortcut and an explicitly started request can continue an
-      // existing unclaimed step. Opening the regular dashboard only reads.
-      if ((fromShortcut || followRequest) && manualAction === 'resume' && Date.now() - lastResume > 90000) {
-        await submitManual();
-      }
-    } catch (error) {
-      if (request !== manualRead || version !== generation) return;
-      if (error.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar.');
-      else renderManual(null);
+    const success = await readManualStatus();
+    if (success && version === generation && !verifying && (fromShortcut || followRequest) &&
+        manualAction === 'resume' && Date.now() - lastResume > 90000) await submitManual();
+  }
+  function stockSummary(data) {
+    const stands = ['Samucar', 'AutoValorPT'];
+    if (data?.ok !== true || !Array.isArray(data.items) || !data.items.every(item =>
+      Array.isArray(item?.sources) && item.sources.length && item.sources.every(name => stands.includes(name)))) {
+      throw new Error('stock_unavailable');
     }
+    const counts = stands.map(name => name + ' · ' + data.items.filter(item => item.sources.includes(name)).length);
+    const total = data.items.length;
+    return 'Stock atual: ' + total + (total === 1 ? ' viatura' : ' viaturas') + ' (' + counts.join(', ') + ').';
+  }
+  async function verifyPanel(checkStock) {
+    if (verifying) return;
+    const version = generation;
+    verifying = true; showManualButton();
+    text('checkStatus', checkStock ? 'A consultar os dois inventários e os registos dos canais…' : 'A consultar o progresso da atualização…');
+    try {
+      const stock = checkStock ? api(url('instagram-sync', 'stories-manual-stock')).then(stockSummary) : null;
+      const [manual, channels, inventory] = await Promise.allSettled([readManualStatus(), refresh(), stock]);
+      if (version !== generation) return;
+      if (inventory.status === 'rejected' && inventory.reason?.status === 401) {
+        sessionView(false, 'A sessão terminou. Volta a entrar.'); return;
+      }
+      const missing = [];
+      if (checkStock && inventory.status === 'rejected') missing.push('stock Standvirtual');
+      if (manual.status !== 'fulfilled' || !manual.value) missing.push('atualização manual');
+      if (channels.status !== 'fulfilled' || !Array.isArray(channels.value)) missing.push('registos dos canais');
+      else missing.push(...channels.value);
+      const time = new Intl.DateTimeFormat('pt-PT', { timeZone: 'Europe/Lisbon', timeStyle: 'medium' }).format(new Date());
+      const summary = [missing.length ? 'Consulta incompleta às ' + time + '.' : 'Consulta concluída às ' + time + '.'];
+      if (checkStock && inventory.status === 'fulfilled') summary.push(inventory.value);
+      if (missing.length) summary.push('Por consultar: ' + missing.join(', ') + '.');
+      text('checkStatus', summary.join('\n'));
+    } finally { if (version === generation) { verifying = false; showManualButton(); } }
   }
   async function submitManual() {
     if (!authenticated || submitting || !manualAction || $('runNow').disabled) return;
     const version = generation;
     const action = manualAction;
-    if (action === 'refresh') { await refreshAll(); return; }
-    manualRead++; manualAction = ''; submitting = true; $('runNow').disabled = true;
+    if (action === 'verify' || action === 'refresh') { await verifyPanel(action === 'verify'); return; }
+    manualRead++; manualRequest = null; text('checkStatus', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
     if (action === 'resume') lastResume = Date.now();
     text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
     try {
@@ -367,27 +411,35 @@
       history.appendChild(item);
     }
   }
-  async function refresh() {
-    if (!authenticated || busy) return;
+  function refresh() {
+    if (!authenticated) return;
+    if (dashboardRequest) return dashboardRequest;
+    const version = generation;
+    dashboardRequest = readDashboard().finally(() => {
+      if (version === generation) { dashboardRequest = null; setBusy(false); }
+    });
+    return dashboardRequest;
+  }
+  async function readDashboard() {
     $('cycleDay').max = today(); if (followingToday) $('cycleDay').value = today();
     const day = $('cycleDay').value; if (!validDay(day)) return;
     setBusy(true); lastDashboardRead = Date.now(); const version = generation; text('dashboardStatus', 'A consultar os registos…');
-    try {
-      const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status')), api(url('editorial', 'status'))]);
-      if (version !== generation) return;
-      if (results.some(r => r.status === 'rejected' && r.reason.status === 401)) { sessionView(false, 'A sessão terminou. Volte a entrar para consultar os resultados.'); return; }
-      const value = index => results[index].status === 'fulfilled' ? results[index].value : null;
-      const error = index => results[index].status === 'rejected' ? results[index].reason : null;
-      showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
-      showInstagram(value(2), value(3), error(2), error(3)); showEditorial(value(5), error(5));
-      text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
-      text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
-      if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {
-        historyVersion++; lastSearch = null; text('latestCycle', '');
-      }
-      viewedCycle = { day, current: value(0) };
-      void loadHistory();
-    } finally { if (version === generation || !authenticated) setBusy(false); }
+    const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status')), api(url('editorial', 'status'))]);
+    if (version !== generation) return;
+    if (results.some(r => r.status === 'rejected' && r.reason.status === 401)) { sessionView(false, 'A sessão terminou. Volte a entrar para consultar os resultados.'); return; }
+    const value = index => results[index].status === 'fulfilled' ? results[index].value : null;
+    const error = index => results[index].status === 'rejected' ? results[index].reason : null;
+    showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
+    showInstagram(value(2), value(3), error(2), error(3)); showEditorial(value(5), error(5));
+    text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
+    text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
+    if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {
+      historyVersion++; lastSearch = null; text('latestCycle', '');
+    }
+    viewedCycle = { day, current: value(0) };
+    void loadHistory();
+    const sections = ['rotina das 08h00', 'catálogo WhatsApp', 'fotografias do Instagram', 'Stories do Instagram', 'Estado WhatsApp', 'publicações criativas'];
+    return sections.filter((_, index) => error(index));
   }
   function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
   $('runNow').addEventListener('click', submitManual);
