@@ -175,9 +175,9 @@ test('closed WhatsApp attempt does not claim publication and read failure does n
 
 test('WhatsApp private observation is cleared when authentication expires', async () => {
   let expired = false;
-  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, observation: 'Uma observação privada.' } }, fetch: endpoint => expired && endpoint.includes('integration=whatsapp-status') ? response({ error: 'status_unauthorized' }, 401) : null });
+  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, observation: 'Uma observação privada.' } }, fetch: endpoint => endpoint.includes('mode=manual') ? response({ status: 'finished', results: {} }) : expired && endpoint.includes('integration=whatsapp-status') ? response({ error: 'status_unauthorized' }, 401) : null });
   assert.match(app.get('whatsappLast').textContent, /observação privada/);
-  expired = true; app.tick(); await new Promise(resolve => setImmediate(resolve));
+  expired = true; await app.get('runNow').handlers.click();
   assert.equal(app.get('dashboardView').hidden, true);
   assert.equal(app.get('whatsappLast').textContent, '');
   assert.equal(app.get('whatsappBadge').textContent, 'Por consultar');
@@ -278,4 +278,32 @@ test('the installed shortcut loads the same panel and only resumes existing queu
 test('a matching label without explicit Meta confirmation stays unconfirmed', async () => {
   const app = await dashboard({ catalog: { lastResult: { status: 'catalog_matches', catalogConfirmed: false } } });
   assert.equal(app.get('catalogBadge').textContent, 'Catálogo por confirmar');
+});
+
+test('idle and unreadable dashboards do not poll Blob automatically', async () => {
+  for (const app of [
+    await dashboard(),
+    await dashboard({ fetch: endpoint => endpoint.includes('mode=manual') ? response({ error: 'unavailable' }, 503) : null })
+  ]) {
+    const before = app.calls.length;
+    for (let i = 0; i < 10; i++) { app.tick(); await new Promise(resolve => setImmediate(resolve)); }
+    assert.equal(app.calls.length, before);
+  }
+});
+
+test('active cycle polls only its own status and refreshes channels once after completion', async () => {
+  let state = { status: 'running' };
+  const app = await dashboard({ fetch: endpoint => endpoint.includes('mode=manual') ? response(state) : null });
+  const before = app.calls.length;
+  app.tick(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.calls.length, before + 1);
+  assert.match(app.calls.at(-1).endpoint, /mode=manual/);
+  state = { status: 'finished', results: {} };
+  app.tick(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.calls.length, before + 7);
+  assert.equal(app.get('runNow').textContent, 'Verificar tudo');
+  const completed = app.calls.length;
+  app.tick(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.calls.length, completed);
+  assert.ok(app.calls.every(c => !c.init.method || c.init.method === 'GET'));
 });

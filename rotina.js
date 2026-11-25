@@ -11,6 +11,7 @@
   let authenticated = false; let busy = false; let closing = false; let generation = 0; let followingToday = true;
   let manualRead = 0; let manualAction = ''; let submitting = false; let acceptedDay = '';
   let followRequest = false; let lastResume = 0;
+  let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
   const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
@@ -53,6 +54,7 @@
     if (!value) {
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
       manualRead++; manualAction = ''; acceptedDay = ''; submitting = false; followRequest = false; lastResume = 0;
+      manualInProgress = false; manualPollingUntil = 0; lastDashboardRead = 0;
       $('runNow').disabled = true; text('runNow', 'Atualizar tudo'); text('manualStatus', ''); text('manualOutcome', '');
       badge('instagramBrief', 'Por consultar'); $('historyPanel').open = false;
       for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
@@ -65,6 +67,11 @@
   function renderManual(data, message = '') {
     manualAction = 'refresh';
     const state = data?.status;
+    const wasInProgress = manualInProgress;
+    manualInProgress = ['queued', 'running', 'already_started'].includes(state) || state === 'not_started' && acceptedDay === today();
+    if (data?.stalled && state !== 'queued') manualInProgress = false;
+    if (!manualInProgress) manualPollingUntil = 0;
+    else if (!wasInProgress) manualPollingUntil = Date.now() + 15 * 60_000;
     const age = Date.now() - Date.parse(data?.startedAt);
     const idle = Date.now() - Date.parse(data?.updatedAt);
     const resumable = state === 'queued' && age >= 0 && age < 3600000 && (data.stalled || idle > 60000);
@@ -267,7 +274,7 @@
     if (!authenticated || busy) return;
     $('cycleDay').max = today(); if (followingToday) $('cycleDay').value = today();
     const day = $('cycleDay').value; if (!validDay(day)) return;
-    setBusy(true); const version = generation; text('dashboardStatus', 'A consultar os registos…');
+    setBusy(true); lastDashboardRead = Date.now(); const version = generation; text('dashboardStatus', 'A consultar os registos…');
     try {
       const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status'))]);
       if (version !== generation) return;
@@ -308,8 +315,23 @@
   $('cycleDay').value = today(); $('cycleDay').max = today();
   $('cycleDay').addEventListener('change', () => { followingToday = false; refresh(); });
   $('todayButton').addEventListener('click', () => { followingToday = true; refresh(); });
-  document.addEventListener?.('visibilitychange', () => { if (!document.hidden) void refreshAll(); });
-  setInterval(() => { if (!document.hidden) void refreshAll(); }, 30000);
+  // Idle dashboards never poll Blob: each channel is read on explicit request,
+  // initial load, or return to the page after a one-minute cooldown.
+  document.addEventListener?.('visibilitychange', () => {
+    if (!document.hidden && authenticated && Date.now() - lastDashboardRead >= 60_000) void refreshAll();
+  });
+  // Only an active manual cycle is followed, with a bounded read budget.
+  // The scheduled routine continues on the server independently of the panel.
+  async function pollActive() {
+    if (document.hidden || !authenticated || !manualInProgress || Date.now() >= manualPollingUntil || pollingManual || submitting || busy) return;
+    pollingManual = true;
+    const version = generation;
+    try {
+      await refreshManual();
+      if (authenticated && generation === version && !manualInProgress) await refresh();
+    } finally { pollingManual = false; }
+  }
+  setInterval(() => { void pollActive(); }, 60_000);
   api('/api/admin-session').then(async session => {
     sessionView(session.authenticated === true, session.configured === false ? 'O acesso privado ainda está a ser configurado.' : '');
     if (session.configured === false) $('loginButton').disabled = true;
