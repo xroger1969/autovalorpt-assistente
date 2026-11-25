@@ -218,11 +218,15 @@ test('the main action submits one manual request, including a double tap and a s
   assert.equal(app.get('runNow').disabled, true);
   resolveStart(response({ status: 'queued', day: today() }, 202));
   await first;
-  assert.equal(app.get('runNow').disabled, true);
-  assert.match(app.get('runNow').textContent, /em curso/);
+  assert.equal(app.get('runNow').disabled, false);
+  assert.equal(app.get('runNow').textContent, 'Ver progresso');
+  await app.get('runNow').handlers.click();
+  assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
   state = { status: 'finished', verification: { catalog: { catalogConfirmed: false } }, results: { photo: { status: 'published' }, story: { status: 'no_new_stock' } } };
-  await app.get('refreshButton').handlers.click();
-  assert.match(app.get('runNow').textContent, /já utilizada/);
+  await app.get('runNow').handlers.click();
+  assert.equal(app.get('runNow').textContent, 'Verificar tudo');
+  await app.get('runNow').handlers.click();
+  assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
   assert.match(app.get('manualOutcome').textContent, /Catálogo · Por confirmar/);
   assert.match(app.get('manualOutcome').textContent, /Publicação confirmada/);
   assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
@@ -245,13 +249,16 @@ test('consultation of stalled manual work is read-only and an explicit continuat
   assert.equal(app.calls.some(c => c.endpoint.includes('manual-start')), false);
 });
 
-test('an unreadable manual state blocks the action without hiding other channels', async () => {
+test('an unreadable manual state allows only read-only retry without hiding other channels', async () => {
   const app = await dashboard({ fetch: path => path.includes('mode=manual') ? response({ error: 'unavailable' }, 503) : null });
-  assert.equal(app.get('runNow').disabled, true);
-  assert.match(app.get('manualStatus').textContent, /Consultar estado/);
+  assert.equal(app.get('runNow').disabled, false);
+  assert.equal(app.get('runNow').textContent, 'Verificar tudo');
+  assert.match(app.get('manualStatus').textContent, /verificar novamente/);
   assert.equal(app.get('dashboardView').hidden, false);
   assert.equal(app.get('sourceCount').textContent, '9');
+  const readsBefore = app.calls.filter(c => c.endpoint.includes('mode=manual')).length;
   await app.get('runNow').handlers.click();
+  assert.ok(app.calls.filter(c => c.endpoint.includes('mode=manual')).length > readsBefore);
   assert.equal(app.calls.some(c => c.init.method === 'POST'), false);
 });
 
