@@ -19,7 +19,7 @@
     header { background: var(--navy); color: white; }
     .top, main { max-width: 760px; margin: auto; padding-inline: clamp(16px, 4vw, 30px); }
     .top, .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .top { min-height: 62px; }
+    .top { min-height: calc(62px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
     .brand { font-size: 21px; font-weight: 800; letter-spacing: -.045em; }
     .brand span { color: var(--orange); }
     main { padding-top: 26px; padding-bottom: max(44px, env(safe-area-inset-bottom)); }
@@ -42,8 +42,12 @@
     .login input, .primary { width: 100%; }
     .primary { min-height: 52px; margin-top: 18px; font-size: 17px; font-weight: 750; background: var(--orange); color: #182432; }
     .primary:disabled { background: #d9e0e6; color: #425568; }
-    .action { padding: clamp(17px, 3vw, 25px); border-left: 4px solid #d87633; margin-top: 20px; }
+    .action { padding: clamp(17px, 3vw, 25px); margin-top: 20px; }
     .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
+    .action .primary { margin-top: 0; }
+    .channel-note { font-size: 13px; color: var(--muted); grid-column: 1; }
+    .advanced > summary { font-weight: 650; }
+    .advanced .rows { margin: 0 12px 12px; }
     .hint, .time, .status, .details-body { overflow-wrap: anywhere; }
     .hint, .time { font-size: 14px; color: var(--muted); }
     .hint { margin-top: 9px; }
@@ -100,15 +104,13 @@
     </section>
     <section id="dashboardView" aria-labelledby="pageTitle" hidden>
       <h1 id="pageTitle">O meu stock</h1>
-      <p class="lead">Rotina diária prevista para as <strong>08h00</strong>, hora de Portugal.</p>
-      <section class="card action" aria-labelledby="actionTitle">
-        <h2 id="actionTitle">Entrou uma viatura?</h2>
-        <p>Procura novidades na Samucar e na AutoValorPT, sincroniza o catálogo e pode publicar as novas viaturas no Instagram.</p>
-        <button id="runNow" class="primary" type="button" aria-describedby="manualStatus" disabled>Atualizar stock agora</button>
-        <p id="manualStatus" class="hint" role="status">A verificar se podes iniciar a atualização extra…</p>
+      <p class="lead">Atualização automática diária às <strong>08h00</strong>.</p>
+      <section class="card action" aria-label="Atualizar stock e publicações">
+        <button id="runNow" class="primary" type="button" aria-describedby="manualStatus" disabled>Atualizar tudo</button>
+        <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
         <p id="manualOutcome" class="status"></p>
       </section>
-      <div class="section-head"><h2>Últimos resultados</h2><button id="refreshButton" class="secondary" type="button">Consultar estado</button></div>
+      <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button" hidden>Consultar estado</button></div>
       <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
       <div class="rows">
         <details><summary><strong>Catálogo WhatsApp</strong><span id="catalogBadge" class="badge">Por consultar</span></summary>
@@ -123,7 +125,7 @@
             <div class="links"><a class="link" href="/stories.html">Ver vídeos e Stories</a><a class="link" href="/editorial.html">Publicações criativas</a></div>
           </div>
         </details>
-        <details><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span></summary>
+        <details><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span><span class="channel-note">Envio no WhatsApp Business</span></summary>
           <div class="details-body"><p>Prepara aqui o vídeo. O envio é feito no WhatsApp Business. Depois podes registar o que ficou visível em «O meu estado».</p>
             <div class="links"><a class="link" href="/estado-whatsapp.html">Preparar ou consultar o Estado</a></div>
             <p id="whatsappLast" class="status"></p><p id="whatsappTime" class="time"></p>
@@ -131,6 +133,7 @@
           </div>
         </details>
       </div>
+      <details class="card advanced"><summary>Mais detalhes e definições</summary>
       <div class="rows">
         <details id="historyPanel"><summary><strong>Histórico das 08h00</strong><span id="cycleBadge" class="badge">Por consultar</span></summary>
           <div class="details-body"><p id="cycleSummary" class="status"></p><p id="cycleTime" class="time"></p><p id="latestCycle" class="time"></p>
@@ -144,6 +147,7 @@
           <li>O botão <strong>Sair</strong> termina a sessão neste navegador. A rotina das 08h00 continua agendada.</li>
         </ul></div></details>
       </div>
+      </details>
     </section>
     <noscript><p>Ativa o JavaScript para abrir o painel.</p></noscript>
   </main>
