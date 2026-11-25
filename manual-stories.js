@@ -101,10 +101,13 @@
   function canPublish() {
     return authenticated && !busy && preview?.publicationEnabled === true && !preview.mediaError && $('vehicleVideo').readyState >= 1 && ['ready', 'preparing'].includes(phase);
   }
+  function canPrepareAnother() {
+    return authenticated && !busy && preview?.publicationEnabled === true && phase === 'published';
+  }
   function updateControls() {
     $('chooseVehicle').disabled = !authenticated || busy;
-    $('publishStory').disabled = !canPublish();
-    $('publishStory').textContent = phase === 'preparing' ? 'Continuar este envio' : 'Publicar Story agora';
+    $('publishStory').disabled = !canPublish() && !canPrepareAnother();
+    $('publishStory').textContent = phase === 'published' ? 'Preparar novo Story desta viatura' : phase === 'preparing' ? 'Continuar este envio' : 'Publicar Story agora';
     $('sendStory').disabled = !confirmation || !canPublish();
     for (const button of host.querySelectorAll('.ms-row, #pendingStories button')) button.disabled = busy;
   }
@@ -316,6 +319,10 @@
     preview.mediaError = true; updateControls(); message('O vídeo não abriu. Volta a selecionar a viatura para renovar a ligação ao MP4.', 'error');
   });
   $('publishStory').addEventListener('click', () => {
+    if (canPrepareAnother()) {
+      void openStock(preview.id);
+      return;
+    }
     if (!canPublish() || $('confirmStory').open) return;
     confirmation = preview;
     $('vehicleVideo').pause();

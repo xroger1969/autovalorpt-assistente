@@ -90,7 +90,12 @@ test('preview/download and canceled confirmation never publish; repeated confirm
   assert.deepEqual(app.calls.filter(call => call.action === 'publish').map(call => call.body), [
     { id: stock[1].id, fingerprint, reviewToken: 'review-' + stock[1].id, confirmed: true }
   ]);
-  assert.equal(app.element('publishStory').disabled, true);
+  assert.equal(app.element('publishStory').disabled, false);
+  assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
+  app.click('publishStory'); app.click('publishStory'); await flush();
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview', 'publish', 'preview']);
+  assert.equal(app.calls.at(-1).body.id, stock[1].id);
+  assert.equal(app.element('confirmStory').open, false);
 });
 
 test('a lost publication response survives reload and only queries the original receipt', async () => {
