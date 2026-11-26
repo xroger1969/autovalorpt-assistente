@@ -6,19 +6,23 @@ O projeto usa Expo e TypeScript. As versões concretas das dependências estão 
 
 ## Estado da entrega
 
-Este diretório contém a preparação da aplicação e os ficheiros necessários para continuar o desenvolvimento e configurar uma build. A existência do código, de `eas.json` ou de um bundle JavaScript não comprova que exista uma aplicação iOS compilada, assinada ou publicada.
+Em **26/11/2026**, a aplicação foi compilada com sucesso pelo EAS para o **simulador iOS**. Existe, portanto, uma build nativa de simulador; ainda não existe uma IPA assinada, uma build no TestFlight ou uma publicação na App Store. A interface ainda não foi executada num dispositivo ou simulador nativo.
 
-| Etapa | Estado a registar antes de publicar |
+| Etapa | Estado verificado em 26/11/2026 |
 | --- | --- |
 | TypeScript e testes de lógica | Aprovados em 26/11/2026: verificação de tipos e 8 testes nativos; 710 testes do projeto web/backend também aprovados. |
-| Versões das dependências | Conferidas com os metadados incluídos no Expo SDK 58. A consulta online ao diretório React Native esteve indisponível neste ambiente. |
+| Expo Doctor | 19 de 20 verificações aprovadas. O único aviso refere-se a `eas-cli` como dependência local de desenvolvimento; não impediu a compilação. |
 | Exportação dos bundles iOS e Android | Concluída para ambas as plataformas em 26/11/2026. Produz JavaScript/Hermes e recursos, não uma IPA ou um APK. |
-| Geração dos projetos nativos | Expo Prebuild para iOS e Android concluído; não foram instalados Pods nem compilados binários. |
+| Geração e compilação nativas | Expo Prebuild para iOS e Android concluído; build nativa iOS de simulador concluída pelo EAS com Expo SDK 58.0.26. Ainda não foi compilado um binário Android. |
 | Teste da interface em iPhone e iPad | Pendente de evidência em dispositivos ou simuladores nativos. |
+| Catálogo web existente | Publicado e verificado em desktop e larguras de 390 e 320 px, com oito viaturas e sem transbordo horizontal. Estas verificações não validam a interface nativa. A correção de acessibilidade dos filtros está acompanhada no [PR #70](https://github.com/xroger1969/autovalorpt-assistente/pull/70). |
 | Conta Expo e projeto EAS | Projeto `autovalorpt-catalogo` criado na conta `cvasconcelos1969s-team`; ID `99e2814b-559a-42fe-899b-19b167c1c05c`. GitHub ligado ao repositório atual e pasta `/mobile`. A sessão CLI local continua sem login. |
 | Conta Apple, equipa e identificadores | Registo criado em 26/11/2026: Carlos Vasconcelos, equipa `QBU2Z3YJ88`, bundle `pt.autovalor.catalogo`, Apple ID `6839660385`. |
-| IPA assinada e TestFlight | Não confirmados por este documento. Registar a build e a ligação reais quando existirem. |
-| App Store e screenshots | Ficha 1.0.0 criada em português de Portugal, descrição/apoio/notas guardados e lançamento manual selecionado. Faltam screenshots nativas e submissão. |
+| Perfil de assinatura App Store | Criado na Apple para esta app; o carregamento do perfil no Expo ainda está pendente. |
+| IPA assinada e TestFlight | Pendentes. A build de simulador não pode ser enviada para TestFlight. |
+| App Store e screenshots | Ficha 1.0.0 em rascunho PT-PT, com lançamento manual. Descrição, apoio e notas guardados; subtítulo, categoria Compras e URL de privacidade confirmados como guardados. Faltam screenshots nativas e submissão. |
+
+**Build nativa de referência:** [EAS `ae9ca583-0113-4179-90c2-86bb90af9117`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/ae9ca583-0113-4179-90c2-86bb90af9117), estado **Succeeded**, versão **1.0.0 (1)**, a partir do commit `e7f0cb0e7f04498c45bc4aa6bf0cc9460d1b661a`. A compilação demorou **2 min 44 s**, com **3 min 33 s** de duração total. O serviço Expo Simulators estava indisponível para esta conta, pelo que não foi executado um teste visual nativo.
 
 Guardar o resultado e a data das verificações efetuadas no relatório da entrega ou no pull request. Não substituir a validação num dispositivo nativo por capturas de uma versão web.
 
@@ -77,21 +81,28 @@ O projeto Expo **`autovalorpt-catalogo`** foi criado na conta **`cvasconcelos196
 
 [Projeto Expo AutoValorPT](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo). Não criar um segundo projeto nem substituir os identificadores Apple por valores de outra app. A sessão do navegador foi suficiente para este registo; não foi extraída para autenticar o terminal.
 
-Com a conta Expo selecionada, o EAS CLI instalado pelo projeto pode ser usado para consultar a sessão e associar o projeto:
+O EAS CLI instalado pelo projeto permite consultar a sessão e o projeto já associado:
 
 ```sh
 npx eas whoami
-npx eas login
 npx eas project:info
 ```
 
-O login é necessário apenas quando não existe uma sessão válida. Se a app ainda não estiver associada, usar `npx eas init` para selecionar um projeto existente ou criar o projeto correto após a verificação. O comando poderá atualizar a configuração com o EAS Project ID real.
+O login é necessário apenas quando não existe uma sessão válida. Num ambiente com o browser separado do terminal, o fluxo oficial de dispositivo permite autorizar a sessão sem copiar cookies ou tokens:
+
+```sh
+npx eas login --device --non-interactive
+```
+
+Depois da aprovação no endereço apresentado, retomar com `npx eas login --device --non-interactive --resume REQUEST_ID`; acrescentar `--match NUMERO_APRESENTADO` apenas se o fluxo pedir essa confirmação. A build de simulador de referência foi iniciada pela interface web Expo a partir do GitHub, sem autenticar o CLI local.
 
 As credenciais Apple e Expo devem ser introduzidas através dos fluxos oficiais ou do armazenamento seguro de segredos do serviço. Não colocar palavras-passe, códigos de autenticação, chaves `.p8`, certificados ou tokens neste repositório, em `app.json`, no código da app ou em variáveis `EXPO_PUBLIC_*`.
 
 O uso anterior de Expo ou Apple Developer noutras apps não confirma, por si só, que esta sessão tenha acesso à mesma conta ou equipa.
 
 ## Build iOS, TestFlight e publicação
+
+O perfil Apple **`AutoValorPT Catalogo App Store 20261126`** foi gerado para **`QBU2Z3YJ88.pt.autovalor.catalogo`**, com validade até **14/10/2027**, usando um certificado iOS Distribution já existente na equipa Apple. **Falta descarregar o perfil na Apple e carregá-lo nas credenciais iOS do projeto Expo.** A correspondência com o certificado guardado no Expo deve ser confirmada nessa importação. O perfil ainda não está disponível no Expo para esta app; não foi gerada uma IPA assinada. O ficheiro de perfil e os restantes materiais de assinatura não devem ser adicionados ao repositório.
 
 O perfil `production` de `eas.json` usa distribuição de loja. Depois de confirmar conta, identificadores, assinatura e condições de utilização do serviço:
 
@@ -107,7 +118,7 @@ Para enviar uma build de produção concluída:
 npm run submit:ios
 ```
 
-Confirmar o registo de app correto no App Store Connect. Se for configurado `ascAppId` no perfil de submissão, usar apenas o ID real devolvido pela Apple. A submissão do binário permite o processamento no App Store Connect e no TestFlight; a publicação pública exige os metadados, a revisão Apple e a opção de lançamento escolhida.
+O perfil de submissão já usa o `ascAppId` real **`6839660385`**. A submissão de uma IPA assinada permite o processamento no App Store Connect e no TestFlight; a publicação pública exige os metadados, a revisão Apple e a opção de lançamento escolhida.
 
 Testadores externos do TestFlight precisam de um grupo e da revisão beta aplicável. A ligação de teste só deve ser apresentada como disponível depois de a build estar processada e atribuída ao grupo correto.
 
@@ -117,9 +128,9 @@ O perfil `simulator` permite preparar uma build iOS de simulador, sem assinatura
 npx eas build --platform ios --profile simulator
 ```
 
-Uma build de simulador não pode ser enviada para TestFlight. O simulador iOS local exige Mac. A alternativa Expo Simulators permite controlo remoto a partir de Linux, mas depende de uma conta elegível num plano pago; confirmar o acesso e as condições antes de iniciar uma sessão.
+Uma build de simulador não pode ser enviada para TestFlight. O simulador iOS local exige Mac. A alternativa Expo Simulators permite controlo remoto a partir de Linux, mas depende da disponibilidade do serviço para a conta; não foi possível executar essa validação nesta entrega.
 
-Para uma fase Android posterior, estão disponíveis `npm run preview:android` e `npm run build:android`. O APK de pré-visualização e a build de loja têm destinos diferentes; confirmar a assinatura e o registo Google Play antes de distribuir.
+Para uma fase Android posterior, estão disponíveis `npm run preview:android` e `npm run build:android`. Ainda não foi executada uma build nativa Android. O APK de pré-visualização e a build de loja têm destinos diferentes; confirmar a assinatura e o registo Google Play antes de distribuir.
 
 ## Privacidade e materiais da loja
 
@@ -127,12 +138,12 @@ Os dados locais incluem favoritos, seleção para comparação e a última cópi
 
 Rever os manifests de privacidade das dependências efetivamente instaladas e as razões de acesso exigidas pela Apple. As declarações devem corresponder ao binário final. A definição de exportação de encriptação também deve ser confirmada para essa build.
 
-Endereços previstos para a entrega:
+Endereços da entrega:
 
 - Privacidade: <https://autovalorpt-assistente.vercel.app/app/privacidade.html>
 - Apoio: <https://autovalorpt-assistente.vercel.app/app/apoio.html>
 
-Confirmar que ambos abrem publicamente e correspondem à versão nativa antes da submissão. A ficha PT-PT, as notas para revisão e os campos ainda pendentes estão em `store/pt-PT.md`.
+O URL de privacidade foi guardado no App Store Connect e verificado em produção com resposta **HTTP 200**, em 26/11/2026. O URL de apoio também está guardado na ficha. Rever o conteúdo de ambos contra a versão nativa final antes da submissão. A ficha PT-PT, as notas para revisão e os campos ainda pendentes estão em `store/pt-PT.md`.
 
 ## Fontes oficiais
 
@@ -140,7 +151,9 @@ Documentação consultada em 26 de novembro de 2026; confirmar alterações ante
 
 - [Compatibilidade Expo SDK](https://docs.expo.dev/versions/latest/)
 - [Expo CLI: exportação e compilação](https://docs.expo.dev/more/expo-cli/)
+- [EAS CLI: autenticação e comandos](https://docs.expo.dev/eas/cli/)
 - [Builds locais](https://docs.expo.dev/guides/local-app-development/)
+- [Certificados e perfis de assinatura](https://docs.expo.dev/app-signing/app-credentials/)
 - [Submissão iOS a partir de Expo](https://docs.expo.dev/submit/ios/)
 - [Distribuição através do TestFlight](https://docs.expo.dev/submit/testflight/)
 - [Simulador iOS sem Mac próprio](https://docs.expo.dev/eas/simulators/how-to/work-without-a-mac/)
