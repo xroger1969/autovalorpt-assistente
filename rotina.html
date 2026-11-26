@@ -120,7 +120,7 @@
   <script src="/editorial-preview.js?v=20261126-1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
-  <script src="/whatsapp-editorial.js?v=20261126-1" defer></script>
+  <script src="/whatsapp-editorial.js?v=20261126-2" defer></script>
   <script src="/rotina.js?v=20261126-2" defer></script>
 </head>
 <body>
@@ -216,7 +216,6 @@
             <p id="whatsappLast" class="status"></p><p id="whatsappTime" class="time"></p>
             <h3>Dicas publicadas no Instagram</h3>
             <button id="waTipRefresh" type="button" class="secondary">Atualizar lista de dicas</button>
-            <p id="waTipMessage" class="status" role="status" aria-live="polite"></p>
             <div id="waTipPicker" hidden>
               <label for="waTipSelect">Escolher dica</label>
               <select id="waTipSelect"></select>
@@ -227,15 +226,16 @@
               <p id="waTipCopyStatus" role="status" class="hint"></p>
               <button id="waTipPrepare" type="button" class="secondary" hidden>Preparar dica para o Estado</button>
               <div id="waTipHandoff" hidden>
-                <p>Escolhe o WhatsApp Business e depois «O meu estado». Também podes descarregar o ficheiro e adicioná-lo em Atualizações no WhatsApp.</p>
-                <div class="links"><button id="waTipShare" type="button" class="secondary" hidden>Partilhar ficheiros…</button><span id="waTipDownloads" class="links"></span></div>
+                <p id="waTipGuide"></p>
+                <div class="links"><button id="waTipShare" type="button" class="primary" hidden>Partilhar no WhatsApp…</button><span id="waTipDownloads" class="links"></span></div>
               </div>
               <div id="waTipReview" hidden>
-                <p>Abre «O meu estado» na conta +351 965 637 736 e verifica se a dica está visível.</p>
+                <p id="waTipReviewHint">Verifica se a dica está visível em «O meu estado» na conta AutoValorPT (+351 965 637 736).</p>
                 <div class="links"><button id="waTipConfirm" type="button" class="secondary">Vi esta dica no meu Estado</button>
-                  <button id="waTipRelease" type="button" class="secondary">Confirmo que não enviei</button></div>
+                  <button id="waTipRelease" type="button" class="secondary">Não enviei · retomar partilha</button></div>
               </div>
             </div>
+            <p id="waTipMessage" class="status" role="status" aria-live="polite"></p>
             <details><summary>Detalhes do dispositivo</summary><div class="details-body"><p id="whatsappAccess" class="status"></p><p id="whatsappSummary" class="status"></p><p id="whatsappWithdrawal" class="status"></p></div></details>
           </div>
         </details>

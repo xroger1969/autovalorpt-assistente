@@ -29,12 +29,21 @@
       return source.href === expected.href;
     });
   }
+  function canReview() {
+    // Old reservations may already have reached WhatsApp on another device.
+    return selected?.status === 'unconfirmed' && (!prepared || prepared.review);
+  }
   function controls() {
     const item = selected;
     select.disabled = busy; $('waTipRefresh').disabled = busy || !authenticated;
     $('waTipPicker').hidden = !item;
     $('waTipPrepare').hidden = item?.status !== 'ready'; $('waTipPrepare').disabled = busy;
-    $('waTipReview').hidden = item?.status !== 'unconfirmed';
+    $('waTipReview').hidden = !canReview();
+    $('waTipReviewHint').textContent = prepared
+      ? 'Depois de enviares, verifica se a dica ficou visível em «O meu estado» no WhatsApp Business da AutoValorPT.'
+      : 'Ficou uma tentativa anterior por confirmar. Verifica «O meu estado» da AutoValorPT. Se a dica não está lá e não há outro envio em curso, toca em «Não enviei · retomar partilha».';
+    $('waTipHandoff').hidden = !prepared || prepared.shared;
+    $('waTipShare').hidden = !prepared?.files.length || prepared.shared || prepared.nativeFailed;
     $('waTipConfirm').disabled = $('waTipRelease').disabled = busy;
     $('waTipShare').disabled = busy;
   }
@@ -87,7 +96,7 @@
     for (const item of items) {
       const opt = document.createElement('option'); opt.value = item.id;
       const day = item.date.split('-').reverse().join('/');
-      opt.textContent = day + (item.extra ? ' · Extra · ' : ' · Diária · ') + item.title + ' · ' + stateLabels[item.status];
+      opt.textContent = day + (item.extra ? ' · Extra · ' : ' · Diária · ') + item.title + ' · ' + (prepared?.item === item && !prepared.review ? 'Pronta a partilhar' : stateLabels[item.status]);
       select.appendChild(opt);
     }
   }
@@ -108,8 +117,11 @@
   }
   async function filesFor(item) {
     if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || typeof File !== 'function') return [];
-    const supported = item.media.map((media, i) => new File([], nameFor(item, i), { type: media.mime }));
-    if (!navigator.canShare({ files: supported })) return [];
+    const supports = files => {
+      try { return navigator.canShare({ files }); } catch { return false; }
+    };
+    const sample = item.media.map((media, i) => new File([' '], nameFor(item, i), { type: media.mime }));
+    if (!supports(sample)) return [];
     const files = [];
     for (const [index, media] of item.media.entries()) {
       const response = await fetch(media.url, { credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(45000) });
@@ -118,54 +130,85 @@
       if (!blob.size) throw new Error('media_empty');
       files.push(new File([blob], nameFor(item, index), { type: media.mime }));
     }
-    return navigator.canShare({ files }) ? files : [];
+    return supports(files) ? files : [];
+  }
+  async function prepareItem(item, current) {
+    note('A preparar os ficheiros para o Estado…');
+    let files = [];
+    try { files = await filesFor(item); }
+    catch {
+      if (current()) note('Não foi possível carregar o ficheiro. Toca novamente em «Preparar dica para o Estado».');
+      return;
+    }
+    if (!current()) return;
+    const result = await api('claim', { id: item.id, requestId: crypto.randomUUID() });
+    if (!current()) return;
+    if (result.status !== 'unconfirmed' || !result.attemptId) throw new Error('claim_unconfirmed');
+    item.status = result.status; item.attemptId = result.attemptId;
+    const handoff = { item, files, review: false, shared: false, nativeFailed: false };
+    prepared = handoff; options(); select.value = item.id;
+    for (const [index, media] of item.media.entries()) {
+      const a = document.createElement('a'); a.className = 'link'; a.href = media.url; a.download = nameFor(item, index);
+      a.textContent = media.mime === 'video/mp4' ? 'Descarregar vídeo' : 'Descarregar imagem' + (item.media.length > 1 ? ' ' + (index + 1) : '');
+      a.addEventListener('click', event => {
+        if (busy || prepared !== handoff || !authenticated) { event.preventDefault(); return; }
+        handoff.review = true;
+        options(); controls();
+        note('Depois de guardares o ficheiro, abre WhatsApp Business → Atualizações → Adicionar estado. Escolhe o ficheiro, cola a legenda e toca na seta de envio.');
+      });
+      $('waTipDownloads').appendChild(a);
+    }
+    $('waTipGuide').textContent = files.length
+      ? 'Toca em «Partilhar no WhatsApp…». Na janela de partilha, escolhe WhatsApp Business → O meu estado e toca na seta de envio.'
+      : 'Guarda o ficheiro em Fotografias. No WhatsApp Business, abre Atualizações → Adicionar estado, escolhe a dica e toca na seta de envio.';
+    note(files.length ? 'Dica pronta para partilhar.' : 'A partilha direta está indisponível neste navegador. Usa a opção de download.');
+    controls();
   }
   function prepare() {
     const item = selected;
     if (!item || item.status !== 'ready') return;
-    return work(async current => {
-      note('A preparar os ficheiros para o Estado…');
-      const files = await filesFor(item);
-      if (!current()) return;
-      const result = await api('claim', { id: item.id, requestId: crypto.randomUUID() });
-      if (!current()) return;
-      if (result.status !== 'unconfirmed' || !result.attemptId) throw new Error('claim_unconfirmed');
-      item.status = result.status; item.attemptId = result.attemptId; options(); select.value = item.id;
-      prepared = { item, files };
-      for (const [index, media] of item.media.entries()) {
-        const a = document.createElement('a'); a.className = 'link'; a.href = media.url; a.download = nameFor(item, index);
-        a.textContent = media.mime === 'video/mp4' ? 'Descarregar vídeo' : 'Descarregar imagem' + (item.media.length > 1 ? ' ' + (index + 1) : '');
-        $('waTipDownloads').appendChild(a);
-      }
-      $('waTipHandoff').hidden = false; $('waTipShare').hidden = !files.length;
-      note('Dica preparada. Copia a legenda para a colares no WhatsApp.');
-    }, 'Não foi possível preparar a dica. Atualiza a lista para verificar o registo.');
+    return work(current => prepareItem(item, current), 'Não foi possível preparar a dica. Atualiza a lista para verificar o registo.');
   }
   async function share() {
-    if (!authenticated || busy || prepared?.item !== selected || !prepared?.files.length) return;
-    const files = prepared.files, seen = revision;
-    // Call the native picker during the tap; network work would consume iOS user activation.
-    busy = true; controls(); clearFiles();
+    const handoff = prepared;
+    if (!authenticated || busy || !handoff || handoff.item !== selected || !handoff.files.length || handoff.shared || handoff.nativeFailed) return;
+    const seen = revision;
+    // Invoke the picker during the user's tap, before doing any asynchronous work.
+    busy = true;
     try {
-      await navigator.share({ files });
-      if (seen === revision) note('Verifica se a dica ficou visível em «O meu estado».');
+      const opened = navigator.share({ files: handoff.files });
+      controls();
+      await opened;
+      if (seen !== revision || prepared !== handoff) return;
+      handoff.shared = true; handoff.review = true; handoff.files = [];
+      note('A janela de partilha fechou. Confirma a publicação só se vires a dica em «O meu estado».');
     } catch (error) {
-      if (seen === revision) note(error.name === 'AbortError' ? 'Partilha fechada. Se não enviaste, confirma abaixo para voltar a preparar.' :
-        'O resultado da partilha é desconhecido. Verifica «O meu estado» antes de continuar.');
-    } finally { if (seen === revision) { busy = false; controls(); } }
+      if (seen !== revision || prepared !== handoff) return;
+      if (error.name === 'AbortError') {
+        note('A partilha foi cancelada ou não havia uma aplicação disponível. Se não enviaste, podes voltar a partilhar ou guardar o ficheiro.');
+      } else {
+        handoff.nativeFailed = true; handoff.review = true;
+        $('waTipGuide').textContent = 'Se a dica não estiver no Estado, guarda o ficheiro em Fotografias. Abre WhatsApp Business → Atualizações → Adicionar estado e toca na seta de envio.';
+        note('O navegador não confirmou a partilha. Verifica o WhatsApp antes de repetir.');
+      }
+    } finally {
+      if (seen === revision) { busy = false; options(); controls(); }
+    }
   }
   function verify(observed) {
     const item = selected;
-    if (!authenticated || busy || item?.status !== 'unconfirmed' || !confirm(observed ?
+    if (!authenticated || busy || !canReview() || !confirm(observed ?
       'Viste esta dica publicada em «O meu estado» na conta AutoValorPT?' :
-      'Confirmas que esta dica não foi enviada e que pode voltar a ser preparada?')) return;
+      'Confirmas que a dica não está no teu Estado e que ninguém a está a enviar noutro dispositivo?')) return;
     return work(async current => {
       const result = await api(observed ? 'confirm' : 'release', { id: item.id, attemptId: item.attemptId,
         ...(observed ? { observed: true } : { notSent: true }) });
       if (!current()) return;
       if (result.status !== (observed ? 'confirmed' : 'ready')) throw new Error('status_mismatch');
       item.status = result.status; item.attemptId = result.attemptId;
-      options(); show(item); note(observed ? 'Dica registada como visível no teu Estado.' : 'Envio cancelado. A dica pode voltar a ser preparada.');
+      options(); show(item);
+      if (observed) note('Dica registada como visível no teu Estado.');
+      else await prepareItem(item, current);
     }, 'Não foi possível confirmar o registo. Atualiza a lista antes de continuar.');
   }
   async function copy(link) {

@@ -11,7 +11,7 @@ const mediaUrl = '/api/stock?integration=editorial-image&date=2026-11-26&slide=1
 const tip = { id: 'editorial-day', date: '2026-11-26', title: 'Custo por 100 km', caption: 'Link do perfil.',
   shareCaption: 'Simulador ' + simulatorUrl, simulatorUrl, media: [{ url: mediaUrl, mime: 'image/jpeg' }], status: 'ready' };
 
-function harness({ shared = async () => {}, list = () => [tip], claim, canShare = true } = {}) {
+function harness({ shared = async () => {}, list = () => [tip], claim, canShare = true, media, confirm = () => true } = {}) {
   const elements = new Map(), requests = [], clipboard = [], native = [];
   class Element {
     constructor() { this.hidden = false; this.children = []; this.events = {}; }
@@ -22,11 +22,11 @@ function harness({ shared = async () => {}, list = () => [tip], claim, canShare 
   const get = id => { assert.ok(html.includes('id="' + id + '"'), id); if (!elements.has(id)) elements.set(id,new Element()); return elements.get(id); };
   const ctx = vm.createContext({ document: {getElementById:get,createElement:()=>new Element()},
     location: { origin, hash: '#estado-whatsapp' }, addEventListener() {}, AbortSignal, File, URL, URLSearchParams, crypto,
-    confirm: () => true, navigator: { clipboard: { writeText: async x=>clipboard.push(x) },
+    confirm, navigator: { clipboard: { writeText: async x=>clipboard.push(x) },
       canShare:()=>canShare, share: async content=>{native.push(content.files); await shared();} },
     fetch: async (url, init) => {
       const action = new URL(url, origin).searchParams.get('action'); requests.push({ action, init });
-      if (!action) return new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'image/jpeg'}});
+      if (!action) return media?.() || new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'image/jpeg'}});
       const body = init.body && JSON.parse(init.body);
       if (action === 'tip-list') return Response.json({ok:true,items:structuredClone(list())});
       if (action === 'tip-claim') return claim?.(body) || Response.json({ok:true,status:'unconfirmed',attemptId: body.requestId});
@@ -45,6 +45,9 @@ test('a daily or extra tip is loaded on demand; preparing, opening the share she
   await Promise.all([app.click('waTipPrepare'),app.click('waTipPrepare')]);
   assert.equal(app.get('waTipShare').hidden,false); assert.equal(app.get('waTipDownloads').children.length,1);
   assert.deepEqual(app.requests.map(r=>r.action),['tip-list',null,'tip-claim']);
+  assert.equal(app.get('waTipReview').hidden,true);
+  await app.click('waTipConfirm'); await app.click('waTipRelease');
+  assert.deepEqual(app.requests.map(r=>r.action),['tip-list',null,'tip-claim']);
   await Promise.all([app.click('waTipShare'),app.click('waTipShare')]);
   assert.equal(app.native.length,1); assert.equal(app.native[0][0].type,'image/jpeg');
   assert.equal(app.get('waTipHandoff').hidden,true); assert.equal(app.get('waTipReview').hidden,false);
@@ -59,8 +62,12 @@ test('a previous uncertain handoff cannot be shared again on refresh; releasing 
   const app=harness({list:()=>[row]});app.api.setSession(true); await app.click('waTipRefresh');
   assert.equal(app.get('waTipPrepare').hidden,true);
   await app.click('waTipPrepare');await app.click('waTipShare');assert.equal(app.requests.length,1);
-  await app.click('waTipRelease');assert.equal(app.get('waTipPrepare').hidden,false);
-  assert.deepEqual(JSON.parse(app.requests.at(-1).init.body),{id:row.id,attemptId:row.attemptId,notSent:true});
+  await app.click('waTipRelease');
+  assert.equal(app.get('waTipShare').hidden,false); assert.equal(app.get('waTipReview').hidden,true);
+  assert.equal(app.native.length,0);
+  assert.deepEqual(app.requests.map(r=>r.action),['tip-list','tip-release',null,'tip-claim']);
+  assert.deepEqual(JSON.parse(app.requests[1].init.body),{id:row.id,attemptId:row.attemptId,notSent:true});
+  assert.notEqual(JSON.parse(app.requests.at(-1).init.body).requestId,row.attemptId);
 });
 
 test('a claim conflict exposes no files; unsupported native share provides a download, and logout clears private captions and controls',async () => {
@@ -69,6 +76,41 @@ test('a claim conflict exposes no files; unsupported native share provides a dow
   const desktop=harness({canShare:false,list:()=>[{...tip,media:[{url:'https://wrong.example/image.jpg',mime:'image/jpeg'}]},tip]});
   desktop.api.setSession(true);await desktop.click('waTipRefresh');await desktop.click('waTipPrepare');
   assert.equal(desktop.get('waTipSelect').children.length,1);assert.equal(desktop.get('waTipShare').hidden,true);
-  assert.equal(desktop.get('waTipDownloads').children[0].href,mediaUrl);
+  const download=desktop.get('waTipDownloads').children[0];
+  assert.equal(download.href,mediaUrl); assert.equal(desktop.get('waTipReview').hidden,true);
+  download.events.click(); assert.equal(desktop.get('waTipReview').hidden,false);
+  assert.match(desktop.get('waTipMessage').textContent,/seta de envio/);
+  assert.ok(!desktop.requests.some(r=>r.action==='tip-confirm'));
   desktop.api.setSession(false);assert.equal(desktop.get('waTipCaption').textContent,'');assert.equal(desktop.get('waTipPicker').hidden,true);
+});
+
+
+test('closing the picker without sharing keeps the same files available and does not ask for publication evidence', async () => {
+  let canceled = true;
+  const app = harness({ shared: async () => { if (canceled) throw new DOMException('Cancelado', 'AbortError'); } });
+  app.api.setSession(true); await app.click('waTipRefresh'); await app.click('waTipPrepare');
+  await app.click('waTipShare');
+  assert.equal(app.get('waTipReview').hidden, true); assert.equal(app.get('waTipShare').hidden, false);
+  assert.equal(app.get('waTipDownloads').children.length, 1); assert.match(app.get('waTipMessage').textContent, /cancelada/);
+  canceled = false; await app.click('waTipShare');
+  assert.equal(app.native.length, 2); assert.equal(app.native[0][0], app.native[1][0]);
+  assert.equal(app.get('waTipReview').hidden, false);
+  assert.deepEqual(app.requests.map(r => r.action), ['tip-list', null, 'tip-claim']);
+});
+
+test('if the browser rejects the share, manual downloads remain available and delivery is never inferred', async () => {
+  const app = harness({ shared: async () => { throw new DOMException('Indisponível', 'NotAllowedError'); } });
+  app.api.setSession(true); await app.click('waTipRefresh'); await app.click('waTipPrepare'); await app.click('waTipShare');
+  assert.equal(app.get('waTipShare').hidden, true); assert.equal(app.get('waTipHandoff').hidden, false);
+  assert.equal(app.get('waTipDownloads').children[0].href, mediaUrl);
+  assert.match(app.get('waTipGuide').textContent,/Atualizações/);
+  assert.ok(!app.requests.some(r => ['tip-release', 'tip-confirm'].includes(r.action)));
+});
+
+test('an unavailable image can be prepared again and does not start an attempt', async () => {
+  const app = harness({ media: () => new Response(null, { status: 503 }) });
+  app.api.setSession(true); await app.click('waTipRefresh'); await app.click('waTipPrepare');
+  assert.equal(app.get('waTipPrepare').hidden, false); assert.equal(app.get('waTipReview').hidden, true);
+  assert.match(app.get('waTipMessage').textContent, /carregar o ficheiro/);
+  assert.deepEqual(app.requests.map(r=>r.action), ['tip-list',null]);
 });
