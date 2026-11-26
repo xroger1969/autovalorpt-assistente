@@ -36,7 +36,7 @@ function fixture(overrides = {}) {
     }, ...overrides.provider,
   };
   const service = createManualStoryPublisher({ env: { ...env, ...overrides.env }, storage: memory.storage,
-    now: () => clock, pollAttempts: 0, provider, videos });
+    now: () => clock, pollAttempts: 0, provider, videos, waitUntil: overrides.waitUntil, report: overrides.report });
   const review = async () => ({ ...await service.preview(id), confirmed: true });
   return { service, memory, calls, state, review, advance: ms => { clock += ms; }, provider, videos };
 }
@@ -219,4 +219,174 @@ test('full admin route uses the verified Instagram account and resolves the priv
   assert.equal(resolutions, 1);
   assert.deepEqual(posts, ['media', 'media_publish']);
   assert.equal(polls, 3);
+});
+
+test('confirmed background submission acknowledges a durable claim before the provider responds; simultaneous retries and status never publish twice', async () => {
+  const jobs = [], auth = Promise.withResolvers();
+  const f = fixture({ waitUntil: work => jobs.push(work), provider: { authorize: () => auth.promise } });
+  const first = { ...await f.review(), background: true };
+  const results = await Promise.all([f.service.publish(first), f.service.publish(first)]);
+  assert.deepEqual(results.map(result => result.status), ['busy', 'busy']);
+  assert.equal(jobs.length, 1);
+  assert.equal(f.state().attempts.length, 1);
+  assert.equal((await f.service.status(first)).status, 'busy');
+  assert.equal((await f.review()).publicationStatus, 'busy');
+  auth.resolve({ ready: true, publishingQuota: { total: 100, usage: 5 } });
+  await jobs[0];
+  const result = await f.service.status(first);
+  assert.equal(result.status, 'published');
+  assert.ok(Date.parse(result.publishedAt));
+  assert.equal((await f.service.publish(first)).status, 'published');
+  assert.equal(f.calls.filter(call => call === 'publish').length, 1);
+});
+
+test('after a worker finishes its polling budget, an expired status receipt can recover the same container for an explicit new confirmation', async () => {
+  const jobs = [];
+  let remote = 'IN_PROGRESS';
+  const f = fixture({ waitUntil: work => jobs.push(work), provider: { inspect: async () => ({ status_code: remote }) } });
+  const original = { ...await f.review(), background: true };
+  assert.equal((await f.service.publish(original)).status, 'busy');
+  await jobs[0];
+  f.advance(2 * 3600000 + 10);
+  const pending = await f.service.status(original);
+  assert.equal(pending.status, 'preparing');
+  assert.equal(pending.pendingPublication.fingerprint, fingerprint);
+  assert.notEqual(pending.pendingPublication.reviewToken, original.reviewToken);
+  assert.deepEqual(f.calls.filter(call => call === 'publish'), []);
+  remote = 'FINISHED';
+  await f.service.publish({ ...pending.pendingPublication, confirmed: true, background: true });
+  await jobs[1];
+  assert.equal((await f.service.status(original)).status, 'published');
+  assert.equal(f.state().attempts.length, 1);
+  assert.equal(f.calls.filter(call => call === 'create').length, 1);
+});
+
+test('failed worker registration and pre-publish interruption release ownership; uncertain sends remain blocked', async () => {
+  const jobs = [];
+  let canRegister = false, canInspect = false, remote = 'FINISHED', sends = 0;
+  const f = fixture({ report: () => {}, waitUntil: work => {
+    if (!canRegister) throw new Error('registration failed');
+    jobs.push(work);
+  }, provider: {
+    inspect: async () => { if (!canInspect) throw new Error('network failure'); return { status_code: remote }; },
+    publish: async () => { sends++; throw new Error('confirmation lost'); },
+  } });
+  const review = { ...await f.review(), background: true };
+  await assert.rejects(f.service.publish(review), /registration failed/);
+  assert.deepEqual(f.calls, []);
+  assert.equal((await f.service.status(review)).status, 'preparing');
+  canRegister = true;
+  await f.service.publish(review);
+  await jobs[0];
+  assert.equal((await f.service.status(review)).status, 'preparing');
+  canInspect = true;
+  await f.service.publish(review);
+  await jobs[1];
+  assert.equal((await f.service.publish(review)).status, 'review_required');
+  assert.equal(jobs.length, 2);
+  assert.equal(sends, 1);
+  assert.equal(f.calls.filter(call => call === 'create').length, 1);
+  remote = 'PUBLISHED';
+  assert.equal((await f.service.status(review)).status, 'published');
+});
+
+test('a paused worker whose lease expires cannot publish after another worker resumes the existing container', async () => {
+  const jobs = [], started = Promise.withResolvers(), resumeOld = Promise.withResolvers();
+  let first = true;
+  const f = fixture({ waitUntil: work => jobs.push(work), report: () => {}, provider: {
+    inspect: async () => {
+      if (first) {
+        first = false;
+        started.resolve();
+        await resumeOld.promise;
+      }
+      return { status_code: 'FINISHED' };
+    },
+  } });
+  const reviewed = { ...await f.review(), background: true };
+  await f.service.publish(reviewed);
+  await started.promise;
+  assert.equal((await f.service.status(reviewed)).status, 'busy');
+  f.advance(300001);
+  const pending = await f.service.status(reviewed);
+  assert.equal(pending.status, 'preparing');
+  await f.service.publish({ ...pending.pendingPublication, confirmed: true, background: true });
+  await jobs[1];
+  resumeOld.resolve();
+  await jobs[0];
+  assert.equal((await f.service.status(reviewed)).status, 'published');
+  assert.equal(f.calls.filter(call => call === 'publish').length, 1);
+  assert.equal(f.calls.filter(call => call === 'create').length, 1);
+});
+
+test('automatic continuation requires a normal IN_PROGRESS result and the original unexpired consent for this generation', async () => {
+  const jobs = [];
+  let remote = 'IN_PROGRESS';
+  const f = fixture({ waitUntil: work => jobs.push(work), provider: { inspect: async () => ({ status_code: remote }) } });
+  const reviewed = { ...await f.review(), background: true };
+  assert.equal((await f.service.publish({ ...reviewed, automatic: true })).status, 'ready');
+  assert.equal(jobs.length, 0);
+  await f.service.publish(reviewed);
+  await jobs[0];
+  const originalExpiry = f.state().attempts[0].confirmedUntil;
+  f.advance(60000);
+  const waiting = await f.service.status(reviewed);
+  assert.equal(waiting.canContinueAutomatically, true);
+  await f.service.publish({ ...waiting.pendingPublication, confirmed: true, background: true, automatic: true });
+  await jobs[1];
+  assert.equal(f.state().attempts[0].confirmedUntil, originalExpiry); // status returned a later token
+  f.advance(7200000);
+  const expired = await f.service.status(reviewed);
+  assert.equal(expired.status, 'preparing');
+  assert.equal(expired.canContinueAutomatically, undefined);
+  remote = 'FINISHED';
+  await f.service.publish({ ...expired.pendingPublication, confirmed: true, background: true, automatic: true });
+  assert.equal(jobs.length, 2);
+  assert.equal(f.calls.filter(call => call === 'publish').length, 0);
+  await f.service.publish({ ...expired.pendingPublication, confirmed: true, background: true });
+  await jobs[2];
+  assert.equal((await f.service.status(reviewed)).status, 'published');
+});
+
+test('interrupted and legacy preparing attempts require confirmation even when polled using a renewed receipt', async () => {
+  const jobs = [];
+  let failInspect = false;
+  const f = fixture({ waitUntil: work => jobs.push(work), report: () => {}, provider: {
+    inspect: async () => { if (failInspect) throw new Error('interrupted'); return { status_code: 'IN_PROGRESS' }; },
+  } });
+  const reviewed = await f.review();
+  await f.service.publish(reviewed); // a synchronous, legacy client
+  for (const interrupted of [false, true]) {
+    if (interrupted) {
+      failInspect = true;
+      await f.service.publish({ ...reviewed, background: true });
+      await jobs[0];
+    }
+    const status = await f.service.status(reviewed);
+    assert.equal(status.canContinueAutomatically, undefined);
+    await f.service.publish({ ...status.pendingPublication, confirmed: true, background: true, automatic: true });
+    assert.equal(jobs.length, interrupted ? 1 : 0);
+    assert.equal(f.calls.filter(call => call === 'publish').length, 0);
+  }
+});
+
+test('multiple tabs and reloads share the automatic continuation limit on the original confirmation', async () => {
+  const jobs = [];
+  const f = fixture({ waitUntil: work => jobs.push(work), provider: { inspect: async () => ({ status_code: 'IN_PROGRESS' }) } });
+  const confirmed = { ...await f.review(), background: true };
+  await f.service.publish(confirmed);
+  await jobs[0];
+  for (let i = 1; i <= 3; i++) {
+    const status = await f.service.status(confirmed);
+    assert.equal(status.canContinueAutomatically, true);
+    const automatic = { ...confirmed, automatic: true };
+    await Promise.all([f.service.publish(automatic), f.service.publish(automatic)]);
+    assert.equal(jobs.length, i + 1);
+    await jobs[i];
+  }
+  assert.equal((await f.service.status(confirmed)).canContinueAutomatically, undefined);
+  await f.service.publish({ ...confirmed, automatic: true });
+  assert.equal(jobs.length, 4);
+  assert.equal(f.calls.filter(call => call === 'create').length, 1);
+  assert.equal(f.calls.includes('publish'), false);
 });
