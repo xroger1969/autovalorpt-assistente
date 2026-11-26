@@ -10,6 +10,7 @@ const stock = [
   { id: 'ID8demo02', title: 'Renault Zoe', brand: 'Renault', model: 'Zoe', price: '12990 EUR', sources: ['AutoValorPT'] }
 ];
 const fingerprint = 'f'.repeat(64);
+const jobId = '12345678-1234-4234-8234-123456789abc';
 function preview(id) {
   const videoUrl = '/api/stock?integration=instagram-video&id=' + id + '&fingerprint=' + fingerprint;
   return { ok: true, id, fingerprint, reviewToken: 'review-' + id, status: 'preview_ready', publicationStatus: 'ready',
@@ -36,21 +37,28 @@ class Element {
   load() { this.readyState = 0; }
 }
 
-function dashboard(overrides = {}, storage = new Map(), collapsible = false) {
+function dashboard(overrides = {}, storage = new Map(), collapsible = false, preparationStorage = storage) {
   const elements = new Map(); const calls = [];
+  const timers = new Map(); let nextTimer = 0;
+  const documentEvents = new Map();
   function element(id) {
     if (!elements.has(id)) elements.set(id, new Element());
     return elements.get(id);
   }
-  const handlers = { stock: () => ({ ok: true, items: stock }), preview: ({ id }) => preview(id),
+  const handlers = { stock: () => ({ ok: true, items: stock }),
+    create: ({ id }) => ({ ok: true, status: 'preparing', id, jobId }),
+    progress: ({ id }) => ({ ...preview(id), jobId }),
     publish: ({ id }) => ({ id, status: 'published' }), ...overrides };
-  const context = { document: { getElementById: element, createElement: () => new Element() },
+  const context = { document: { hidden: false, getElementById: element, createElement: () => new Element(),
+    addEventListener: (name, callback) => documentEvents.set(name, callback) },
     fetch: async (url, options) => {
       const action = new URL(url, 'https://example.test').searchParams.get('action').replace('stories-manual-', '');
       const body = options.body ? JSON.parse(options.body) : undefined;
       calls.push({ action, body }); const result = await handlers[action](body);
       return { ok: true, status: 200, json: async () => result };
-    }, location: { origin: 'https://example.test' }, URL, AbortController, clearTimeout, setTimeout,
+    }, location: { origin: 'https://example.test' }, URL, AbortController,
+    clearTimeout: id => timers.delete(id), setTimeout: (callback, delay) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; },
+    localStorage: { getItem: key => preparationStorage.get(key), setItem: (key, value) => preparationStorage.set(key, value), removeItem: key => preparationStorage.delete(key) },
     sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } };
   if (collapsible) element('manualStories').setAttribute('data-collapsible-preview', '');
   vm.runInNewContext(script, context);
@@ -65,7 +73,12 @@ function dashboard(overrides = {}, storage = new Map(), collapsible = false) {
     player.readyState = 1; player.currentSrc = new URL(player.src, context.location.origin).href;
     player.emit('loadedmetadata');
   }
-  return { element, click, open, select, calls, results, setSession: context.AutoValorManualStories.setSession };
+  async function tick(delay = 8000) {
+    for (const [id, timer] of [...timers]) if (timer.delay === delay) { timers.delete(id); timer.callback(); }
+    await flush();
+  }
+  function visibility(hidden) { context.document.hidden = hidden; documentEvents.get('visibilitychange')?.(); }
+  return { element, click, open, select, calls, results, tick, visibility, timers, setSession: context.AutoValorManualStories.setSession };
 }
 
 test('manual stock is fetched on demand and searched by make, model, ID and unformatted plate', async () => {
@@ -85,7 +98,7 @@ test('preview/download and canceled confirmation never publish; repeated confirm
   app.click('publishStory');
   assert.match(app.element('confirmStoryText').textContent, /Renault Zoe.*ID8demo02.*@autovalorpt/);
   app.click('cancelStory'); app.click('sendStory');
-  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview']);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress']);
   app.click('publishStory'); app.click('sendStory'); app.click('sendStory'); await flush();
   assert.deepEqual(app.calls.filter(call => call.action === 'publish').map(call => call.body), [
     { id: stock[1].id, fingerprint, reviewToken: 'review-' + stock[1].id, confirmed: true }
@@ -93,7 +106,7 @@ test('preview/download and canceled confirmation never publish; repeated confirm
   assert.equal(app.element('publishStory').disabled, false);
   assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
   app.click('publishStory'); app.click('publishStory'); await flush();
-  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview', 'publish', 'preview']);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress', 'publish', 'create', 'progress']);
   assert.equal(app.calls.at(-1).body.id, stock[1].id);
   assert.equal(app.element('confirmStory').open, false);
 });
@@ -139,7 +152,7 @@ test('the confirmation stays closed before the video loads and after a playback 
   player.readyState = 1; player.emit('loadedmetadata'); assert.equal(app.element('publishStory').disabled, false);
   player.error = { code: 4 }; player.emit('error'); assert.equal(app.element('publishStory').disabled, true);
   app.click('publishStory'); assert.ok(!app.element('confirmStory').open);
-  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview']);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress']);
 });
 
 test('the routine preview opens after selection, folds without fetching, pauses playback and resets on logout', async () => {
@@ -157,7 +170,7 @@ test('the routine preview opens after selection, folds without fetching, pauses 
   assert.equal(player.paused, true); assert.equal(app.element('vehicleStatus').textContent, '');
   previewPanel.open = true; previewPanel.emit('toggle');
   assert.equal(player.src, src); assert.equal(app.element('vehicleDownload').href, download);
-  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'preview']); assert.equal(storage.size, 0);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress']); assert.equal(storage.size, 0);
   app.setSession(false);
   assert.equal(previewPanel.open, false); assert.equal(previewPanel.hidden, true);
   assert.equal(player.hasAttribute('src'), false); assert.equal(app.element('vehicleDownload').hasAttribute('href'), false);
@@ -172,4 +185,113 @@ test('the Stories page keeps the expanded video section and existing review prom
   assert.equal(app.element('vehiclePreview').hidden, false);
   assert.match(app.element('vehicleStatus').textContent, /rever o vídeo/);
   assert.equal(app.element('vehiclePreview').events.has('toggle'), false);
+});
+
+test('a slow video is acknowledged, followed with short requests and shown only when complete', async () => {
+  const storage = new Map(); let reads = 0;
+  const app = dashboard({ progress: ({ id }) => ++reads === 1 ? { ok: true, id, jobId, status: 'preparing' } : { ...preview(id), jobId } }, storage);
+  await app.open(); await app.select(0, false);
+  assert.equal(app.element('vehiclePreview').hidden, true);
+  assert.equal(app.element('chooseVehicle').disabled, true);
+  assert.match(app.element('vehicleStatus').textContent, /Podes sair desta página/);
+  assert.equal(storage.size, 1);
+  await app.tick();
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  assert.equal(app.element('chooseVehicle').disabled, false);
+  assert.equal(storage.size, 0);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress', 'progress']);
+  assert.equal(app.calls.filter(call => call.action === 'publish').length, 0);
+});
+
+test('a dropped progress response has a Portuguese recovery action that checks the same job', async () => {
+  let reads = 0;
+  const app = dashboard({ progress: ({ id }) => {
+    if (++reads === 1) throw new TypeError('Load failed');
+    return { ...preview(id), jobId };
+  } });
+  await app.open(); await app.select(0, false);
+  assert.doesNotMatch(app.element('vehicleStatus').textContent, /Load failed/);
+  assert.match(app.element('vehicleStatus').textContent, /ligação ao servidor foi interrompida/);
+  assert.equal(app.element('resumeVideo').hidden, false);
+  app.click('resumeVideo'); await flush();
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress', 'progress']);
+  assert.deepEqual(app.calls.at(-1).body, { id: stock[0].id, jobId });
+});
+
+test('reopening in a new tab recovers the saved video with progress only and never publishes', async () => {
+  const storage = new Map();
+  const first = dashboard({ progress: ({ id }) => ({ ok: true, id, jobId, status: 'preparing' }) }, new Map(), false, storage);
+  await first.open(); await first.select(1, false);
+  first.visibility(true);
+  const next = dashboard({}, new Map(), false, storage); await flush();
+  assert.deepEqual(next.calls, [{ action: 'progress', body: { id: stock[1].id, jobId } }]);
+  assert.equal(next.element('vehiclePreview').hidden, false);
+  assert.equal(next.element('vehicleName').textContent, 'Renault Zoe');
+  assert.equal(storage.size, 0);
+});
+
+test('a lost creation acknowledgement preserves the selection for an explicit idempotent retry', async () => {
+  let starts = 0; const storage = new Map();
+  const app = dashboard({ create: ({ id }) => {
+    if (++starts === 1) throw new TypeError('Load failed');
+    return { ok: true, id, jobId, status: 'preparing' };
+  } }, storage);
+  await app.open(); await app.select(1, false);
+  assert.equal(storage.size, 1);
+  assert.equal(app.element('resumeVideo').hidden, false);
+  app.click('resumeVideo'); await flush();
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'create', 'progress']);
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  assert.equal(storage.size, 0);
+});
+
+test('an interrupted server job offers an explicit retry without endless polling', async () => {
+  let reads = 0;
+  const app = dashboard({ progress: ({ id }) => ++reads === 1 ?
+    { ok: false, id, jobId, status: 'failed', reason: 'manual_video_job_interrupted' } : { ...preview(id), jobId } });
+  await app.open(); await app.select(0, false);
+  assert.match(app.element('vehicleStatus').textContent, /foi interrompida/);
+  assert.equal(app.element('resumeVideo').textContent, 'Tentar criar novamente');
+  await app.tick(); assert.equal(reads, 1);
+  app.click('resumeVideo'); await flush();
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress', 'create', 'progress']);
+  assert.equal(app.element('vehiclePreview').hidden, false);
+});
+
+test('a hidden page pauses progress polling and resumes on return', async () => {
+  const app = dashboard({ progress: ({ id }) => ({ ok: true, id, jobId, status: 'preparing' }) });
+  await app.open(); await app.select(0, false);
+  app.visibility(true); await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 1);
+  app.visibility(false); await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 2);
+  app.setSession(false); await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 2);
+  assert.equal(app.element('resumeVideo').hidden, true);
+});
+
+test('logout ignores a late completion and clears the recovery reference', async () => {
+  const storage = new Map(); let complete;
+  const app = dashboard({ progress: () => new Promise(resolve => { complete = resolve; }) }, storage);
+  await app.open(); await app.select(0, false);
+  app.setSession(false);
+  complete({ ...preview(stock[0].id), jobId }); await flush();
+  assert.equal(app.element('vehiclePreview').hidden, true);
+  assert.equal(app.element('resumeVideo').hidden, true);
+  assert.equal(storage.size, 0);
+});
+
+test('returning to the page during a slow progress request never starts a parallel request', async () => {
+  let complete;
+  const app = dashboard({ progress: () => new Promise(resolve => { complete = resolve; }) });
+  await app.open(); await app.select(0, false);
+  app.visibility(true); app.visibility(false); await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 1);
+  complete({ ok: true, id: stock[0].id, jobId, status: 'preparing' }); await flush();
+  await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 2);
+  complete({ ...preview(stock[0].id), jobId }); await flush();
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  assert.equal(app.timers.size, 0);
 });
