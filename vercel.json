@@ -1,270 +1,30 @@
 {
-  "cleanUrls": false,
-  "trailingSlash": false,
-  "rewrites": [
+  "builds": [
     {
-      "source": "/stock-rapido.html",
-      "destination": "/rotina.html"
-    },
-    {
-      "source": "/api/chat",
-      "destination": "/api/chat-smart"
-    },
-    {
-      "source": "/api/archive-retoma",
-      "destination": "/api/archive-retomas?action=open"
-    },
-    {
-      "source": "/api/archive-retoma-delete",
-      "destination": "/api/archive-retomas?action=delete"
-    },
-    {
-      "source": "/",
-      "destination": "/welcome.html"
+      "src": "api/ensaio-partilha.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["ensaios/*", "editorial-preview.js", "whatsapp-editorial.js", "rotina.css"]
+      }
     }
   ],
-  "functions": {
-    "api/notify-lead.js": {
-      "maxDuration": 60
-    },
-    "api/stock.js": {
-      "maxDuration": 300,
-      "includeFiles": "{node_modules/ffmpeg-static/ffmpeg,assets/{fonts/**,editorial/qr-*.svg,catalog-backgrounds/*.jpg,models/u2netp.onnx},node_modules/onnxruntime-web/dist/{ort.node.min.mjs,ort-wasm-simd-threaded.{mjs,wasm}}}",
-      "excludeFiles": "node_modules/onnxruntime-web/dist/{*.map,*jsep*,*jspi*,*asyncify*,ort.all*,ort.webgl*,ort.webgpu*,ort.wasm*}"
-    }
-  },
-  "crons": [
+  "routes": [
+    { "src": "^/(?:ensaio-partilha/?)?$", "dest": "/api/ensaio-partilha.js" },
     {
-      "path": "/api/notify-lead?action=retry-pending",
-      "schedule": "0 8 * * *"
+      "src": "^/ensaio-partilha/(editorial-preview\\.js|whatsapp-editorial\\.js|rotina\\.css|ensaio\\.css|guia\\.js)$",
+      "dest": "/api/ensaio-partilha.js?recurso=$1"
     },
     {
-      "path": "/api/stock?integration=morning-flow&action=start&season=summer",
-      "schedule": "0 7 * * *"
+      "src": "^/api/stock$",
+      "has": [
+        { "type": "query", "key": "integration", "value": "editorial-image" },
+        { "type": "query", "key": "date", "value": "2099-01-01" },
+        { "type": "query", "key": "slide", "value": "1" },
+        { "type": "query", "key": "v", "value": "v4" },
+        { "type": "query", "key": "variant", "value": "wa1" }
+      ],
+      "dest": "/api/ensaio-partilha.js?recurso=amostra.jpg"
     },
-    {
-      "path": "/api/stock?integration=morning-flow&action=start&season=winter",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/stock?integration=editorial&action=run&season=summer",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/stock?integration=editorial&action=run&season=winter",
-      "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/stock?integration=editorial&action=run&season=summer&recovery=1",
-      "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/stock?integration=editorial&action=run&season=winter&recovery=1",
-      "schedule": "0 20 * * *"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/app/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/app/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/app/" }
-      ]
-    },
-    {
-      "source": "/editorial.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self'; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/catalogo.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        }
-      ]
-    },
-    {
-      "source": "/rotina.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/stock-rapido.html",
-      "headers": [
-        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/aviso-lead.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    },
-    {
-      "source": "/leads.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' data: https://*.private.blob.vercel-storage.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    },
-    {
-      "source": "/stories.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    },
-    {
-      "source": "/fotos.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        }
-      ]
-    },
-    {
-      "source": "/arquivo-retomas.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        }
-      ]
-    },
-    {
-      "source": "/retomas.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' data: https://*.private.blob.vercel-storage.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    }
+    { "src": "^/.*$", "status": 404 }
   ]
 }

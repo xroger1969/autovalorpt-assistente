@@ -1,0 +1,5 @@
+.rehearsal-steps { padding-inline-start: 22px; }
+.rehearsal-steps li + li { margin-top: 8px; }
+.rehearsal-note { padding: 10px 12px; background: #fff3df; color: #674113; border-radius: 10px; }
+#waTipSelect { width: 100%; margin-block: 6px; }
+#waTipGuide, #waTipReviewHint, #waTipConfirm { display: none !important; }

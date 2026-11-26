@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Ensaio de partilha · AutoValorPT</title>
+  <link rel="stylesheet" href="/ensaio-partilha/rotina.css">
+  <link rel="stylesheet" href="/ensaio-partilha/ensaio.css">
+  <script defer src="/ensaio-partilha/guia.js"></script>
+  <script defer src="/ensaio-partilha/editorial-preview.js"></script>
+  <script defer src="/ensaio-partilha/whatsapp-editorial.js"></script>
+</head>
+<body>
+  <header><div class="top"><div class="brand">AutoValor<span>PT</span></div></div></header>
+  <main>
+    <h1>Ensaio de partilha em telemóvel</h1>
+    <p class="lead">Usa a imagem e a legenda fictícias para verificar a partilha e o cancelamento.</p>
+    <ol class="rehearsal-steps">
+      <li>Prepara a dica e confirma que consegues ver a imagem e copiar a legenda.</li>
+      <li>Toca em <strong>Partilhar no WhatsApp…</strong> e fecha a folha de partilha antes de escolher uma aplicação.</li>
+      <li>No painel, escolhe <strong>Cancelar tentativa de partilha</strong>. Confirma que a dica volta a ficar pronta para preparar.</li>
+    </ol>
+    <p class="notice rehearsal-note">Ensaio com dados fictícios. No compositor do WhatsApp Business de teste, volta atrás antes de tocar na seta de envio.</p>
+    <details id="estado-whatsapp" class="card action" open>
+      <summary><strong>Dica fictícia</strong></summary>
+      <div class="details-body">
+        <button id="waTipRefresh" type="button" class="secondary">Atualizar lista de dicas</button>
+        <div id="waTipPicker" hidden>
+          <label for="waTipSelect">Escolher dica</label>
+          <select id="waTipSelect"></select>
+          <div id="waTipMedia"></div>
+          <button id="waTipPrepare" type="button" class="secondary" hidden>Preparar dica e copiar legenda</button>
+          <div id="waTipHandoff" hidden>
+            <p id="waTipGuide"></p>
+            <div class="links"><button id="waTipShare" type="button" class="primary" hidden>Partilhar no WhatsApp…</button><span id="waTipDownloads" class="links"></span></div>
+          </div>
+          <div id="waTipReview" hidden>
+            <p id="waTipReviewHint"></p>
+            <div class="links"><button id="waTipConfirm" type="button" hidden>Registar publicação</button>
+              <button id="waTipRelease" type="button" class="secondary">Não enviei · retomar partilha</button></div>
+          </div>
+          <details id="waTipText"><summary>Legenda completa para o Estado</summary><p id="waTipCaption"></p></details>
+          <div class="links"><button id="waTipCopy" type="button" class="secondary">Copiar legenda</button>
+            <button id="waTipCopyLink" type="button" class="secondary" hidden>Copiar ligação do simulador</button></div>
+          <p id="waTipCopyStatus" role="status" class="hint"></p>
+        </div>
+        <p id="waTipMessage" class="status" role="status" aria-live="polite"></p>
+      </div>
+    </details>
+  </main>
+</body>
+</html>
