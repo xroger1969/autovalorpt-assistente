@@ -5,8 +5,8 @@
   "start_url": "/stock-rapido.html",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f4f6fa",
-  "theme_color": "#102139",
+  "background_color": "#F8F7F4",
+  "theme_color": "#0B2030",
   "lang": "pt-PT",
   "icons": [
     {
