@@ -1,0 +1,38 @@
+appId: pt.autovalor.catalogo
+name: AutoValorPT — actual catalogue, vehicle and tools
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: '[1-9][0-9]* viaturas? em stock'
+    timeout: 60000
+- assertVisible: Encontra a tua viatura
+- assertNotVisible: Não foi possível abrir o catálogo
+- assertNotVisible: Fotografia indisponível
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: 01-catalogue
+
+- tapOn:
+    text: 'Ver .+'
+    index: 0
+- extendedWaitUntil:
+    visible: A tua próxima viatura
+    timeout: 15000
+- assertVisible: Pedir informações
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertNotVisible: Fotografia indisponível
+- takeScreenshot: 02-viatura
+- tapOn: Fechar viatura
+
+- tapOn: Mais
+- extendedWaitUntil:
+    visible: Tudo à mão
+    timeout: 15000
+- assertVisible: Avaliar o meu usado
+- assertVisible: Simular crédito
+- assertVisible: Simular carregamento
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: 03-mais

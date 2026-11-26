@@ -1,0 +1,85 @@
+name: AutoValorPT build 3 — native App Store screenshots
+
+# Manual only. This branch is based on the exact source of TestFlight 1.0.0 (3).
+# Expo project base directory: mobile. No submit or update job is present.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build_ios_simulator:
+    name: Build the tested app for iOS Simulator
+    type: build
+    runs_on: macos-medium
+    image: sdk-58
+    params:
+      platform: ios
+      profile: simulator
+      message: Native screenshots of source 877654a (TestFlight build 3)
+    hooks:
+      before_install_node_modules:
+        - name: Verify exact build 3 application sources
+          run: node .eas/screenshots/verify-source.mjs
+
+  capture_iphone:
+    name: iPhone 16 Pro — 1206 × 2622
+    type: maestro
+    needs: [build_ios_simulator]
+    runs_on: macos-medium
+    image: sdk-58
+    env:
+      CAPTURE_DEVICE: iphone
+      CAPTURE_BUILD_ID: ${{ needs.build_ios_simulator.outputs.build_id }}
+    params:
+      build_id: ${{ needs.build_ios_simulator.outputs.build_id }}
+      flow_path: .eas/screenshots/flows/appstore.yml
+      device_identifier: AutoValorPT Screenshot iPhone
+      shards: 1
+      retries: 0
+      record_screen: false
+    hooks:
+      after_checkout:
+        - name: Verify sources and prepare the iPhone device
+          run: |
+            node .eas/screenshots/verify-source.mjs
+            node .eas/screenshots/prepare-device.mjs
+      after_maestro_tests:
+        - name: Validate capture dimensions and prepare opaque JPEGs
+          run: node .eas/screenshots/collect-captures.mjs
+        - name: Upload iPhone screenshots for review
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-screenshots
+            path: .eas/screenshots/output/**/*
+
+  capture_ipad:
+    name: iPad Pro 13-inch — 2064 × 2752
+    type: maestro
+    needs: [build_ios_simulator]
+    runs_on: macos-medium
+    image: sdk-58
+    env:
+      CAPTURE_DEVICE: ipad
+      CAPTURE_BUILD_ID: ${{ needs.build_ios_simulator.outputs.build_id }}
+    params:
+      build_id: ${{ needs.build_ios_simulator.outputs.build_id }}
+      flow_path: .eas/screenshots/flows/appstore.yml
+      device_identifier: AutoValorPT Screenshot iPad
+      shards: 1
+      retries: 0
+      record_screen: false
+    hooks:
+      after_checkout:
+        - name: Verify sources and prepare the iPad device
+          run: |
+            node .eas/screenshots/verify-source.mjs
+            node .eas/screenshots/prepare-device.mjs
+      after_maestro_tests:
+        - name: Validate capture dimensions and prepare opaque JPEGs
+          run: node .eas/screenshots/collect-captures.mjs
+        - name: Upload iPad screenshots for review
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-screenshots
+            path: .eas/screenshots/output/**/*
