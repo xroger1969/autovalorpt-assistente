@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B2030">
   <meta name="description" content="Descubra as viaturas AutoValorPT. Consulte preços, guarde os seus favoritos e fale connosco por WhatsApp.">
-  <meta name="autovalor-app-build" content="20261126-1">
+  <meta name="autovalor-app-build" content="20261126-2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="AutoValorPT">
@@ -15,9 +15,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/app/icons/app-192.png">
   <link rel="apple-touch-icon" href="/app/icons/apple-touch-icon.png">
   <link rel="canonical" href="https://autovalorpt-assistente.vercel.app/app/index.html">
-  <link rel="stylesheet" href="/app/styles.css?v=20261126-1">
+  <link rel="stylesheet" href="/app/styles.css?v=20261126-2">
   <title>AutoValorPT · O seu próximo carro</title>
-  <script type="module" src="/app/catalogue.js?v=20261126-1"></script>
+  <script type="module" src="/app/catalogue.js?v=20261126-2"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -39,6 +39,11 @@
   <header class="app-header">
     <div class="header-inner">
       <a class="brand" href="/app/index.html" aria-label="AutoValorPT — início"><span class="brand-mark" aria-hidden="true">AV</span><span>AutoValor<span class="brand-pt">PT</span></span></a>
+      <nav class="bottom-nav" aria-label="Navegação principal">
+        <button type="button" class="nav-item active" data-view="stock" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>Viaturas</span></button>
+        <button type="button" class="nav-item" data-view="favorites"><span class="nav-icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg><span id="favorite-count" class="favorite-count" hidden>0</span></span><span>Favoritos</span></button>
+        <button type="button" class="nav-item" data-view="contact"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Contacto</span></button>
+      </nav>
       <button class="header-install install-trigger" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Instalar app</span></button>
     </div>
   </header>
@@ -80,11 +85,6 @@
       <footer class="app-footer"><span class="footer-brand">AutoValor<span>PT</span></span><p>Viaturas. Pessoas. Confiança.</p></footer>
     </div>
   </main>
-  <nav class="bottom-nav" aria-label="Navegação principal">
-    <button type="button" class="nav-item active" data-view="stock" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>Viaturas</span></button>
-    <button type="button" class="nav-item" data-view="favorites"><span class="nav-icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg><span id="favorite-count" class="favorite-count" hidden>0</span></span><span>Favoritos</span></button>
-    <button type="button" class="nav-item" data-view="contact"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Contacto</span></button>
-  </nav>
   <dialog id="filter-dialog" class="sheet" aria-labelledby="filter-title">
     <div class="dialog-heading"><div><p class="eyebrow">À SUA MEDIDA</p><h2 id="filter-title">Filtrar viaturas</h2></div><button type="button" class="icon-button" data-close="filter-dialog" aria-label="Fechar filtros"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <form id="filter-form" class="filter-form">
