@@ -1,0 +1,106 @@
+name: AutoValorPT build 3 — capture existing simulator build
+
+# Reuse the successful simulator binary built from unchanged source 877654a.
+# Manual only; no build, submit, OTA update or application code changes.
+# Expo project base directory: mobile.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  capture_iphone:
+    name: iPhone Dynamic Island — native screenshots
+    type: maestro
+    runs_on: macos-medium
+    image: sdk-58
+    env:
+      CAPTURE_DEVICE: iphone
+      CAPTURE_BUILD_ID: c678705c-7f83-476a-9a20-d02dee71c36b
+    params:
+      build_id: c678705c-7f83-476a-9a20-d02dee71c36b
+      flow_path: .eas/screenshots/flows/appstore.yml
+      device_identifier: AutoValorPT Screenshot iPhone
+      shards: 1
+      retries: 0
+      record_screen: false
+    hooks:
+      after_checkout:
+        - name: Verify sources and prepare the iPhone device
+          run: |
+            node .eas/screenshots/verify-source.mjs
+            node .eas/screenshots/prepare-device.mjs
+      after_maestro_tests:
+        - name: Validate capture dimensions and prepare opaque JPEGs
+          run: node .eas/screenshots/collect-captures.mjs
+        - name: Upload iPhone 01-catalogue JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-01-catalogue.jpg
+            path: .eas/screenshots/output/iphone-01-catalogue.jpg
+        - name: Upload iPhone 02-viatura JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-02-viatura.jpg
+            path: .eas/screenshots/output/iphone-02-viatura.jpg
+        - name: Upload iPhone 03-mais JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-03-mais.jpg
+            path: .eas/screenshots/output/iphone-03-mais.jpg
+        - name: Upload iPhone capture manifest
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-manifest.json
+            path: .eas/screenshots/output/capture-manifest.json
+
+  capture_ipad:
+    name: iPad 13-inch — native screenshots
+    type: maestro
+    runs_on: macos-medium
+    image: sdk-58
+    env:
+      CAPTURE_DEVICE: ipad
+      CAPTURE_BUILD_ID: c678705c-7f83-476a-9a20-d02dee71c36b
+    params:
+      build_id: c678705c-7f83-476a-9a20-d02dee71c36b
+      flow_path: .eas/screenshots/flows/appstore.yml
+      device_identifier: AutoValorPT Screenshot iPad
+      shards: 1
+      retries: 0
+      record_screen: false
+    hooks:
+      after_checkout:
+        - name: Verify sources and prepare the iPad device
+          run: |
+            node .eas/screenshots/verify-source.mjs
+            node .eas/screenshots/prepare-device.mjs
+      after_maestro_tests:
+        - name: Validate capture dimensions and prepare opaque JPEGs
+          run: node .eas/screenshots/collect-captures.mjs
+        - name: Upload iPad 01-catalogue JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-01-catalogue.jpg
+            path: .eas/screenshots/output/ipad-01-catalogue.jpg
+        - name: Upload iPad 02-viatura JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-02-viatura.jpg
+            path: .eas/screenshots/output/ipad-02-viatura.jpg
+        - name: Upload iPad 03-mais JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-03-mais.jpg
+            path: .eas/screenshots/output/ipad-03-mais.jpg
+        - name: Upload iPad capture manifest
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-manifest.json
+            path: .eas/screenshots/output/capture-manifest.json

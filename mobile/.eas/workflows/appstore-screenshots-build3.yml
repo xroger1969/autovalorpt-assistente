@@ -21,7 +21,7 @@ jobs:
           run: node .eas/screenshots/verify-source.mjs
 
   capture_iphone:
-    name: iPhone 16 Pro — 1206 × 2622
+    name: iPhone Dynamic Island — native screenshots
     type: maestro
     needs: [build_ios_simulator]
     runs_on: macos-medium
@@ -45,15 +45,33 @@ jobs:
       after_maestro_tests:
         - name: Validate capture dimensions and prepare opaque JPEGs
           run: node .eas/screenshots/collect-captures.mjs
-        - name: Upload iPhone screenshots for review
+        - name: Upload iPhone 01-catalogue JPEG
           uses: eas/upload_artifact
           with:
             type: other
-            name: autovalorpt-build3-iphone-screenshots
-            path: .eas/screenshots/output/**/*
+            name: autovalorpt-build3-iphone-01-catalogue.jpg
+            path: .eas/screenshots/output/iphone-01-catalogue.jpg
+        - name: Upload iPhone 02-viatura JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-02-viatura.jpg
+            path: .eas/screenshots/output/iphone-02-viatura.jpg
+        - name: Upload iPhone 03-mais JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-03-mais.jpg
+            path: .eas/screenshots/output/iphone-03-mais.jpg
+        - name: Upload iPhone capture manifest
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-iphone-manifest.json
+            path: .eas/screenshots/output/capture-manifest.json
 
   capture_ipad:
-    name: iPad Pro 13-inch — 2064 × 2752
+    name: iPad 13-inch — native screenshots
     type: maestro
     needs: [build_ios_simulator]
     runs_on: macos-medium
@@ -77,9 +95,27 @@ jobs:
       after_maestro_tests:
         - name: Validate capture dimensions and prepare opaque JPEGs
           run: node .eas/screenshots/collect-captures.mjs
-        - name: Upload iPad screenshots for review
+        - name: Upload iPad 01-catalogue JPEG
           uses: eas/upload_artifact
           with:
             type: other
-            name: autovalorpt-build3-ipad-screenshots
-            path: .eas/screenshots/output/**/*
+            name: autovalorpt-build3-ipad-01-catalogue.jpg
+            path: .eas/screenshots/output/ipad-01-catalogue.jpg
+        - name: Upload iPad 02-viatura JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-02-viatura.jpg
+            path: .eas/screenshots/output/ipad-02-viatura.jpg
+        - name: Upload iPad 03-mais JPEG
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-03-mais.jpg
+            path: .eas/screenshots/output/ipad-03-mais.jpg
+        - name: Upload iPad capture manifest
+          uses: eas/upload_artifact
+          with:
+            type: other
+            name: autovalorpt-build3-ipad-manifest.json
+            path: .eas/screenshots/output/capture-manifest.json

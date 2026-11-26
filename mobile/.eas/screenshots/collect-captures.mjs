@@ -5,6 +5,7 @@ import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acceptedCaptureSize } from './device-selection.mjs';
 
 assert.equal(process.platform, 'darwin', 'Capture conversion must run beside the real iOS Simulator');
 const output = fileURLToPath(new URL('./output/', import.meta.url));
@@ -32,8 +33,10 @@ for (const name of expected) {
   const bytes = await readFile(original);
   assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `Invalid PNG: ${name}`);
   const width = bytes.readUInt32BE(16); const height = bytes.readUInt32BE(20);
-  assert.equal(width, device.width, `${name}: wrong width; do not resize a different device capture`);
-  assert.equal(height, device.height, `${name}: wrong height; do not resize a different device capture`);
+  assert(acceptedCaptureSize(device.kind, width, height),
+    `${name}: unsupported native ${device.kind} size ${width} × ${height}; do not resize the capture`);
+  if (captures.length) assert(captures[0].width === width && captures[0].height === height,
+    'All captures must have the same native dimensions');
   const pngName = `${device.kind}-${name}`;
   const jpegName = pngName.replace(/\.png$/, '.jpg');
   await copyFile(original, path.join(output, pngName));
@@ -57,4 +60,4 @@ await writeFile(path.join(output, 'capture-manifest.json'), `${JSON.stringify({
   processing: 'JPEG format conversion only; no resizing, cropping, replacement, retouching or synthetic UI',
   review: 'Human visual review is still required before uploading to App Store Connect',
 }, null, 2)}\n`);
-console.log(`Prepared ${captures.length} native ${device.kind} captures at ${device.width} × ${device.height}`);
+console.log(`Prepared ${captures.length} native ${device.kind} captures at ${captures[0].width} × ${captures[0].height}`);
