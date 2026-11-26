@@ -11,12 +11,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
 import { useCatalogue } from './src/useCatalogue';
 import { usePreferences } from './src/storage';
+import { BIO_LINKS } from './src/links';
 import {
   filterVehicles, formatMileage, formatPrice, fuelCategory, FUEL_LABELS,
   whatsappUrl, vehicleShareMessage, vehicleShareUrl, WHATSAPP_NUMBER,
   type FuelCategory, type SortOrder, type Vehicle,
 } from './src/catalogue';
-import { Button, Chip, colors, EmptyState, Icon, IconButton, Notice, VehicleImage, type IconName } from './src/ui';
+import { BrandMark, Button, Chip, colors, EmptyState, Icon, IconButton, Notice, VehicleImage, type IconName } from './src/ui';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const ORIGIN = 'https://autovalorpt-assistente.vercel.app';
@@ -25,7 +26,12 @@ const TABS: { id: Tab; label: string; icon: IconName; selectedIcon: IconName }[]
   { id: 'stock', label: 'Viaturas', icon: 'car-outline', selectedIcon: 'car' },
   { id: 'favorites', label: 'Favoritos', icon: 'heart-outline', selectedIcon: 'heart' },
   { id: 'compare', label: 'Comparar', icon: 'swap-horizontal-outline', selectedIcon: 'swap-horizontal' },
-  { id: 'contact', label: 'Contacto', icon: 'chatbubble-ellipses-outline', selectedIcon: 'chatbubble-ellipses' },
+  { id: 'contact', label: 'Mais', icon: 'grid-outline', selectedIcon: 'grid' },
+];
+const TOOLS: { title: string; description: string; url: string; icon: IconName }[] = [
+  { title: 'Avaliar o meu usado', description: 'Envia os dados da tua viatura para pedir uma avaliação.', url: BIO_LINKS.valuation, icon: 'car-sport-outline' },
+  { title: 'Simular crédito', description: 'Explora o valor, a entrada e o prazo de financiamento.', url: BIO_LINKS.credit, icon: 'calculator-outline' },
+  { title: 'Simular carregamento', description: 'Compara custos de carregamento e de utilização de um elétrico.', url: BIO_LINKS.charging, icon: 'flash-outline' },
 ];
 const SORTS: { id: SortOrder; label: string }[] = [
   { id: 'price-asc', label: 'Preço: menor primeiro' }, { id: 'price-desc', label: 'Preço: maior primeiro' },
@@ -141,13 +147,18 @@ function CatalogueApp() {
             <Pressable onPress={() => void catalogue.refresh()} accessibilityRole="button" accessibilityLabel="Atualizar stock" style={s.refreshButton}>
               <Icon name="refresh-outline" size={15} color={colors.muted} /><Text style={s.updatedLabel}>{catalogue.isRefreshing ? 'A atualizar…' : dateLabel(catalogue.snapshot?.updatedAt)}</Text>
             </Pressable></View>
+          {tab === 'stock' && <Pressable onPress={() => changeTab('contact')} accessibilityRole="button"
+            accessibilityLabel="Abrir simuladores e avaliação do usado" style={({ pressed }) => [s.toolsShortcut, pressed && { opacity: 0.7 }]}>
+            <Icon name="calculator-outline" size={20} color={colors.navy} /><Text style={s.toolsShortcutText}>Simuladores e avaliação do usado</Text>
+            <Icon name="chevron-forward" size={18} color={colors.navy} />
+          </Pressable>}
         </View>);
 
   return <View style={s.root}>
     <StatusBar style="light" />
     <View style={{ backgroundColor: colors.navy }}><SafeAreaView edges={['top', 'left', 'right']}>
       <View style={s.header}>
-        <View style={s.brandIcon}><Text style={s.brandLetters}>AV</Text><View style={s.brandUnderline} /></View>
+        <BrandMark size={42} />
         <View style={s.headerText}><Text style={s.brandName}>AutoValor<Text style={{ color: colors.gold }}>PT</Text></Text>
           <Text style={s.brandSubtitle}>O teu próximo automóvel</Text></View>
         <IconButton name="call-outline" label="Telefonar para a AutoValorPT" light onPress={() => void openExternal(`tel:+${WHATSAPP_NUMBER}`)} />
@@ -208,13 +219,19 @@ function CatalogueApp() {
         </>}
       </ScrollView>}
       {tab === 'contact' && <ScrollView contentContainerStyle={[s.pageContent, { maxWidth: 700 }]}>
-        <Text style={s.eyebrow}>ESTAMOS POR PERTO</Text><Text accessibilityRole="header" style={s.pageTitle}>Fala connosco</Text>
-        <Text style={s.lead}>Encontraste uma viatura? Ajudamos-te a esclarecer os detalhes e a combinar uma visita.</Text>
-        <View style={s.contactCard}><View style={s.contactAvatar}><Icon name="chatbubbles-outline" size={34} color={colors.gold} /></View>
+        <Text style={s.eyebrow}>FERRAMENTAS E CONTACTOS</Text><Text accessibilityRole="header" style={s.pageTitle}>Tudo à mão</Text>
+        <Text style={s.lead}>As ferramentas da AutoValorPT para preparares a tua próxima escolha.</Text>
+        {TOOLS.map(tool => <ExternalLink key={tool.url} title={tool.title} description={tool.description}
+          icon={tool.icon} onPress={() => void openExternal(tool.url)} />)}
+        <Text style={s.externalHint}>Os simuladores e a avaliação abrem no navegador e precisam de Internet.</Text>
+        <Text accessibilityRole="header" style={s.sectionTitle}>Fala connosco</Text>
+        <View style={s.contactCard}><BrandMark size={70} style={s.contactAvatar} />
           <Text style={s.contactName}>AutoValorPT</Text><Text style={s.contactNumber}>+351 965 637 736</Text>
           <Button title="Conversar no WhatsApp" icon="logo-whatsapp" variant="whatsapp" onPress={() => void openExternal(whatsappUrl())} />
           <Button title="Telefonar" icon="call-outline" variant="secondary" onPress={() => void openExternal(`tel:+${WHATSAPP_NUMBER}`)} />
         </View>
+        <ExternalLink title="Instagram · @autovalorpt" description="Dicas, novidades e todas as ligações da bio."
+          icon="logo-instagram" onPress={() => void openExternal(BIO_LINKS.instagram)} />
         <View style={s.infoCard}><Icon name="shield-checkmark-outline" size={26} color={colors.green} /><View style={s.flex}>
           <Text style={s.infoTitle}>A tua seleção, no teu dispositivo</Text><Text style={s.infoCopy}>Podes consultar o catálogo, guardar favoritos e comparar viaturas sem criar uma conta.</Text></View></View>
         <View style={s.infoCard}><Icon name="sync-outline" size={26} color={colors.green} /><View style={s.flex}>
@@ -304,6 +321,16 @@ function CatalogueApp() {
   </View>;
 }
 
+function ExternalLink({ title, description, icon, onPress }: { title: string; description: string; icon: IconName; onPress: () => void }) {
+  return <Pressable onPress={onPress} accessibilityRole="link" accessibilityLabel={title}
+    accessibilityHint={`${description} Abre um serviço externo.`}
+    style={({ pressed }) => [s.externalCard, pressed && { opacity: 0.7 }]}>
+    <View style={s.externalIcon}><Icon name={icon} size={25} color={colors.navy} /></View>
+    <View style={s.flex}><Text style={s.externalTitle}>{title}</Text><Text style={s.externalDescription}>{description}</Text></View>
+    <Icon name="open-outline" size={18} color={colors.muted} />
+  </Pressable>;
+}
+
 function VehicleCard({ vehicle, width, favorite, comparing, preferencesReady, onOpen, onFavorite, onCompare }: {
   vehicle: Vehicle; width: number; favorite: boolean; comparing: boolean; preferencesReady: boolean; onOpen: () => void; onFavorite: () => void; onCompare: () => void;
 }) {
@@ -338,8 +365,6 @@ function Spec({ icon, label, value }: { icon: IconName; label: string; value: st
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.paper }, flex: { flex: 1 }, main: { flex: 1 },
   header: { width: '100%', maxWidth: 1180, alignSelf: 'center', paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  brandIcon: { width: 42, height: 42, backgroundColor: colors.navyLight, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  brandLetters: { color: colors.white, fontSize: 20, fontWeight: '900', letterSpacing: -2 }, brandUnderline: { width: 24, height: 2, borderRadius: 2, backgroundColor: colors.gold, marginTop: 2 },
   headerText: { flex: 1 }, brandName: { color: colors.white, fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
   brandSubtitle: { fontSize: 11, marginTop: 3, color: '#B8C8D1' },
   catalogueHeader: { paddingHorizontal: 0, paddingTop: 19, alignSelf: 'center', width: '100%' },
@@ -352,6 +377,7 @@ const s = StyleSheet.create({
   filterButton: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: colors.navy }, filterDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.gold, position: 'absolute', top: 8, right: 8 },
   chips: { gap: 8, paddingVertical: 12 }, resultRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 5, paddingBottom: 8 },
   resultLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' }, refreshButton: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 4 }, updatedLabel: { color: colors.muted, fontSize: 11 },
+  toolsShortcut: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, backgroundColor: '#F1EBDD', borderRadius: 13, paddingHorizontal: 14, paddingVertical: 11, marginTop: 5 }, toolsShortcutText: { flex: 1, color: colors.navy, fontSize: 13, lineHeight: 20, fontWeight: '600' },
   list: { flex: 1 }, listContent: { paddingHorizontal: 20, paddingBottom: 20, gap: 16 }, cardRow: { gap: 16, alignItems: 'stretch' }, notices: { gap: 10 }, activeFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   card: { backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
   cardFuel: { position: 'absolute', left: 12, top: 12, backgroundColor: '#FFFFFFF0', borderRadius: 7, paddingVertical: 5, paddingHorizontal: 9, maxWidth: '70%' }, cardFuelText: { fontSize: 11, fontWeight: '700', color: colors.green },
@@ -366,6 +392,8 @@ const s = StyleSheet.create({
   compareTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, compareBrand: { fontSize: 10, color: colors.muted, letterSpacing: 1.4, fontWeight: '700' }, compareTitle: { fontSize: 19, lineHeight: 25, minHeight: 75, fontWeight: '700', color: colors.ink, marginBottom: 12 },
   compareRow: { minHeight: 78, borderTopColor: colors.line, borderTopWidth: 1, paddingVertical: 13, gap: 6 }, compareRowLabel: { fontSize: 12, color: colors.muted }, compareRowValue: { fontSize: 16, lineHeight: 22, color: colors.ink, fontWeight: '600' }, comparePrice: { fontSize: 25, fontWeight: '800', lineHeight: 30 },
   contactCard: { padding: 24, gap: 14, borderRadius: 20, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line }, contactAvatar: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  externalCard: { minHeight: 98, flexDirection: 'row', alignItems: 'center', gap: 13, padding: 16, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white },
+  externalIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#F1EBDD', alignItems: 'center', justifyContent: 'center' }, externalTitle: { color: colors.ink, fontSize: 17, lineHeight: 23, fontWeight: '700' }, externalDescription: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 4 }, externalHint: { color: colors.muted, fontSize: 12, lineHeight: 19, marginBottom: 6 },
   contactName: { color: colors.ink, fontSize: 24, fontWeight: '800', textAlign: 'center' }, contactNumber: { color: colors.muted, fontSize: 17, textAlign: 'center', marginBottom: 7 }, infoCard: { flexDirection: 'row', gap: 13, paddingVertical: 12 }, infoTitle: { color: colors.ink, fontSize: 15, fontWeight: '700', marginBottom: 5 }, infoCopy: { color: colors.muted, fontSize: 14, lineHeight: 22 },
   tabBar: { backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8, flexDirection: 'row', gap: 4 }, tabItem: { flex: 1, minHeight: 54, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, gap: 4 }, tabItemActive: { backgroundColor: '#F0F0E9' }, tabLabel: { fontSize: 10, color: colors.muted, fontWeight: '600' }, tabLabelActive: { color: colors.navy, fontWeight: '800' }, tabBadge: { position: 'absolute', right: -10, top: -5, minWidth: 16, height: 16, paddingHorizontal: 3, backgroundColor: colors.gold, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, tabBadgeText: { fontSize: 9, fontWeight: '800', color: colors.navy },
   toast: { position: 'absolute', alignSelf: 'center', backgroundColor: colors.navy, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, maxWidth: '90%', zIndex: 5 }, toastText: { color: colors.white, fontSize: 13, textAlign: 'center' },

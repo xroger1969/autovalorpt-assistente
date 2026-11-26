@@ -6,25 +6,35 @@ O projeto usa Expo e TypeScript. As versões concretas das dependências estão 
 
 ## Estado da entrega
 
-Em **26/11/2026**, a aplicação foi compilada com sucesso pelo EAS para o **simulador iOS**. Existe, portanto, uma build nativa de simulador; ainda não existe uma IPA assinada, uma build no TestFlight ou uma publicação na App Store. A interface ainda não foi executada num dispositivo ou simulador nativo.
+Em **26/11/2026**, a build iOS de produção **1.0.0 (3)** foi compilada, submetida e processada com sucesso pela Apple. A build 3 está **«Pronta para enviar»** no TestFlight e associada ao grupo interno **Team (Expo)**. O grupo tem **2 compilações, as builds 2 e 3, e 1 tester convidado**; apenas o titular foi adicionado. Ainda não há instalação ou sessões registadas, validação visual nativa ou publicação pública na App Store.
+
+A build 3 inclui as ferramentas da bio, a secção Mais, o atalho no catálogo e o logótipo comum descritos em **«Ferramentas e contactos da build 3»**. A descrição e as notas da ficha pública foram atualizadas e guardadas na Apple com estas funcionalidades.
 
 | Etapa | Estado verificado em 26/11/2026 |
 | --- | --- |
-| TypeScript e testes de lógica | Aprovados em 26/11/2026: verificação de tipos e 8 testes nativos; 710 testes do projeto web/backend também aprovados. |
+| TypeScript e testes de lógica | Build 3: verificação de tipos e 8 testes nativos aprovados em 26/11/2026. O gate obrigatório do preview Vercel do mesmo commit aprovou os 727 testes web/backend, sem falhas. |
 | Expo Doctor | 19 de 20 verificações aprovadas. O único aviso refere-se a `eas-cli` como dependência local de desenvolvimento; não impediu a compilação. |
-| Exportação dos bundles iOS e Android | Concluída para ambas as plataformas em 26/11/2026. Produz JavaScript/Hermes e recursos, não uma IPA ou um APK. |
-| Geração e compilação nativas | Expo Prebuild para iOS e Android concluído; build nativa iOS de simulador concluída pelo EAS com Expo SDK 58.0.26. Ainda não foi compilado um binário Android. |
+| Exportação dos bundles iOS e Android | Concluída para o código da build 3 em ambas as plataformas, em 26/11/2026. Produz JavaScript/Hermes e recursos, não uma IPA ou um APK. |
+| Geração e compilação nativas | Expo Prebuild para iOS e Android concluído; builds iOS de simulador e de produção concluídas pelo EAS com Expo SDK 58.0.26. Ainda não foi compilado um binário Android. |
 | Teste da interface em iPhone e iPad | Pendente de evidência em dispositivos ou simuladores nativos. |
 | Catálogo web existente | Publicado e verificado em desktop e larguras de 390 e 320 px, com oito viaturas e sem transbordo horizontal. Estas verificações não validam a interface nativa. A correção de acessibilidade dos filtros está acompanhada no [PR #70](https://github.com/xroger1969/autovalorpt-assistente/pull/70). |
+| Preview Vercel do código da build 3 | Deployment `dpl_3TXwht2oTDsG7dGC92qTPa7d8s5k` em estado READY, a partir do commit `877654a24a86b4fad319683c20b12bb7881a5566`; gate concluído em 3 minutos. Apoio e privacidade foram revistos no [PR #72](https://github.com/xroger1969/autovalorpt-assistente/pull/72). |
 | Conta Expo e projeto EAS | Projeto `autovalorpt-catalogo` criado na conta `cvasconcelos1969s-team`; ID `99e2814b-559a-42fe-899b-19b167c1c05c`. GitHub ligado ao repositório atual e pasta `/mobile`. A sessão CLI local continua sem login. |
 | Conta Apple, equipa e identificadores | Registo criado em 26/11/2026: Carlos Vasconcelos, equipa `QBU2Z3YJ88`, bundle `pt.autovalor.catalogo`, Apple ID `6839660385`. |
-| Perfil de assinatura App Store | Criado na Apple para esta app; o carregamento do perfil no Expo ainda está pendente. |
-| IPA assinada e TestFlight | Pendentes. A build de simulador não pode ser enviada para TestFlight. |
-| App Store e screenshots | Ficha 1.0.0 em rascunho PT-PT, com lançamento manual. Descrição, apoio e notas guardados; subtítulo, categoria Compras e URL de privacidade confirmados como guardados. Faltam screenshots nativas e submissão. |
+| Perfil de assinatura App Store | Perfil correto disponível e válido no Expo, com correspondência confirmada ao certificado de distribuição existente. |
+| IPA assinada e TestFlight | Produção 1.0.0 (3) compilada, submetida e processada; Apple mostra «Pronta para enviar». Grupo interno Team (Expo) com as builds 2 e 3 e 1 tester convidado; sem instalação ou sessões registadas. |
+| Informação beta | Beta Info global e notas atualizadas para Mais, simuladores e logótipo; What to Test da build 3 preenchido e guardado, com persistência confirmada na Apple. |
+| App Store e screenshots | Ficha pública 1.0.0 em rascunho PT-PT, com lançamento manual. Descrição completa com ferramentas, notas de revisão, contactos de revisão e copyright «2026 Carlos Vasconcelos» guardados. Subtítulo, categoria Compras e URLs de apoio/privacidade também guardados. Faltam validação visual, screenshots nativas e submissão à revisão da App Store. |
 
-**Build nativa de referência:** [EAS `ae9ca583-0113-4179-90c2-86bb90af9117`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/ae9ca583-0113-4179-90c2-86bb90af9117), estado **Succeeded**, versão **1.0.0 (1)**, a partir do commit `e7f0cb0e7f04498c45bc4aa6bf0cc9460d1b661a`. A compilação demorou **2 min 44 s**, com **3 min 33 s** de duração total. O serviço Expo Simulators estava indisponível para esta conta, pelo que não foi executado um teste visual nativo.
+**Última build de produção enviada:** [EAS `c53a3057-d41f-4205-a683-493313ff6481`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/c53a3057-d41f-4205-a683-493313ff6481), estado **Succeeded**, versão **1.0.0 (3)**, a partir do commit `877654a24a86b4fad319683c20b12bb7881a5566`. A compilação demorou **2 min 10 s**, com **2 min 37 s** de duração total. A [submissão EAS `9f500b1b-9dd0-4879-97f4-17f11d2b0738`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/submissions/9f500b1b-9dd0-4879-97f4-17f11d2b0738) terminou com estado **Succeeded**, enviada às **18:07 de 26/11/2026, hora de Lisboa**. A Apple concluiu o processamento e confirmou a associação ao grupo interno nos [detalhes da build 3 no TestFlight](https://appstoreconnect.apple.com/teams/f14e8d50-2439-4216-bbe0-5697b90f3551/apps/6839660385/testflight/ios/4d947a8a-378c-412c-af86-5d77a82ca94a), com estado **«Pronta para enviar»**. A ligação dá acesso à página de gestão da build.
+
+**Build anterior já processada:** [EAS `d858fcd5-a2a7-4290-85fd-79daf47f3b9d`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/d858fcd5-a2a7-4290-85fd-79daf47f3b9d), estado **Succeeded**, versão **1.0.0 (2)**, a partir do commit `ff2629c7ac80fac98d6dc5e3a612f6bab97fefec`. A submissão EAS `c22925e6-1c63-4b68-9892-ca74052a2b85` terminou com estado **Succeeded** às **17:44 de 26/11/2026**. O processamento e a associação ao grupo interno foram confirmados nos [detalhes da build 2 no App Store Connect](https://appstoreconnect.apple.com/teams/f14e8d50-2439-4216-bbe0-5697b90f3551/apps/6839660385/testflight/ios/f2758a0b-d878-4c20-90fa-c36be985fcf1). Esta é uma página de gestão, não uma ligação pública de instalação.
+
+**Referência histórica de simulador:** [EAS `ae9ca583-0113-4179-90c2-86bb90af9117`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/ae9ca583-0113-4179-90c2-86bb90af9117), estado **Succeeded**, versão **1.0.0 (1)**, a partir do commit `e7f0cb0e7f04498c45bc4aa6bf0cc9460d1b661a`. A compilação demorou **2 min 44 s**, com **3 min 33 s** de duração total. O serviço Expo Simulators estava indisponível para esta conta, pelo que não foi executado um teste visual nativo.
 
 Guardar o resultado e a data das verificações efetuadas no relatório da entrega ou no pull request. Não substituir a validação num dispositivo nativo por capturas de uma versão web.
+
+O workflow GitHub Actions [Validate desta alteração](https://github.com/xroger1969/autovalorpt-assistente/actions/runs/45872834770) não arrancou: a anotação pública indica bloqueio da conta por um problema de faturação. Nenhuma proteção foi desativada. As verificações de código e a compilação EAS acima foram concluídas; o gate Vercel do mesmo código executou os 727 testes com sucesso.
 
 ## Catálogo e atualização
 
@@ -49,6 +59,29 @@ Funcionalidades implementadas no código, com validação final em dispositivo a
 - Consulta da última cópia válida do catálogo quando a atualização falha, com indicação de que os dados precisam de confirmação.
 
 O primeiro carregamento do catálogo requer internet. A cópia local conserva dados comerciais e preferências; não garante que todas as fotografias estejam disponíveis sem ligação. Preços e disponibilidade devem ser confirmados com a AutoValorPT. Os contactos externos dependem dos serviços correspondentes.
+
+## Ferramentas e contactos da build 3
+
+**Estado: incluídas na build 1.0.0 (3), compilada, enviada, processada pela Apple e associada ao grupo interno TestFlight; validação nativa pendente.** A verificação de tipos, os 8 testes nativos e a exportação dos bundles iOS/Android foram aprovados para estas alterações. O preview Vercel do mesmo commit aprovou os 727 testes web/backend, sem falhas.
+
+- A navegação mantém quatro separadores: **Viaturas**, **Favoritos**, **Comparar** e **Mais**. O separador Mais substitui Contacto e reúne as ferramentas e os contactos.
+- O catálogo inclui o atalho **Simuladores e avaliação do usado** para abrir essa secção.
+- A secção Mais inclui três ferramentas da bio e o perfil Instagram, através dos endereços confirmados abaixo.
+- O componente `BrandMark` usa o mesmo logótipo PNG no cabeçalho e no cartão de contacto.
+- O contacto direto por WhatsApp mantém o número **+351 965 637 736**.
+
+Os destinos foram confirmados na interface da bio de **@autovalorpt em 26/11/2026**:
+
+| Ação | Destino |
+| --- | --- |
+| Avaliar o meu usado | [Pedido de avaliação](https://xroger1969.github.io/autovalorpt-avaliacao-v2/) |
+| Simular crédito | [CREDICARROS](https://xroger1969.github.io/CREDICARROS/) |
+| Simular carregamento | [CARREGADOR](https://xroger1969.github.io/CARREGADOR/) |
+| Instagram | [@autovalorpt](https://www.instagram.com/autovalorpt/) |
+
+A avaliação e os simuladores são serviços externos, abertos pelo `Linking` do React Native no navegador; não são simuladores nativos incorporados na app. Exigem internet. A app não preenche os formulários desses serviços e os endereços não incluem parâmetros de tracking do Instagram. O Instagram abre através do mesmo mecanismo de ligação externa. O contacto WhatsApp só prepara a conversa; o envio da mensagem depende da pessoa.
+
+A descrição PT-PT completa com estas ferramentas foi **guardada na ficha pública da Apple em 26/11/2026**, e as notas de revisão foram atualizadas com conteúdo equivalente, incluindo o endpoint do catálogo e a origem OLX das fotografias. `store/pt-PT.md` conserva a descrição e uma referência editorial das notas. A ficha permanece em rascunho; guardar os textos não publica a app nem substitui a validação nativa.
 
 ## Preparação local
 
@@ -102,9 +135,9 @@ O uso anterior de Expo ou Apple Developer noutras apps não confirma, por si só
 
 ## Build iOS, TestFlight e publicação
 
-O perfil Apple **`AutoValorPT Catalogo App Store 20261126`** foi gerado para **`QBU2Z3YJ88.pt.autovalor.catalogo`**, com validade até **14/10/2027**, usando um certificado iOS Distribution já existente na equipa Apple. **Falta descarregar o perfil na Apple e carregá-lo nas credenciais iOS do projeto Expo.** A correspondência com o certificado guardado no Expo deve ser confirmada nessa importação. O perfil ainda não está disponível no Expo para esta app; não foi gerada uma IPA assinada. O ficheiro de perfil e os restantes materiais de assinatura não devem ser adicionados ao repositório.
+O perfil App Store correto para **`QBU2Z3YJ88.pt.autovalor.catalogo`** está disponível e válido nas credenciais iOS do projeto Expo. A correspondência com o certificado iOS Distribution existente foi confirmada e permitiu compilar as IPAs assinadas **1.0.0 (2)** e **1.0.0 (3)**. O ficheiro de perfil e os restantes materiais de assinatura não devem ser adicionados ao repositório.
 
-O perfil `production` de `eas.json` usa distribuição de loja. Depois de confirmar conta, identificadores, assinatura e condições de utilização do serviço:
+O perfil `production` de `eas.json` usa distribuição de loja. Para compilar a próxima versão com a conta, os identificadores e a assinatura já associados:
 
 ```sh
 npm run build:ios
@@ -120,7 +153,9 @@ npm run submit:ios
 
 O perfil de submissão já usa o `ascAppId` real **`6839660385`**. A submissão de uma IPA assinada permite o processamento no App Store Connect e no TestFlight; a publicação pública exige os metadados, a revisão Apple e a opção de lançamento escolhida.
 
-Testadores externos do TestFlight precisam de um grupo e da revisão beta aplicável. A ligação de teste só deve ser apresentada como disponível depois de a build estar processada e atribuída ao grupo correto.
+A build 3 está processada, com estado **«Pronta para enviar»**, e associada ao grupo interno **Team (Expo)**, que contém as builds 2 e 3. O único tester é o titular, no estado **Convidado**, com data de 26/11/2026; não há instalação ou sessões registadas. **Beta Info** global e as notas foram atualizadas para Mais, simuladores e logótipo. O **What to Test da build 3** foi preenchido e guardado, com persistência confirmada na Apple. A execução nativa continua pendente. A ficha pública 1.0.0 permanece em rascunho e ainda não foi enviada para App Review.
+
+Uma ligação pública para testadores externos ainda não está confirmada. Testadores externos do TestFlight precisam de um grupo e da revisão beta aplicável. Só apresentar uma ligação de teste como disponível depois de verificar a build, o grupo e o acesso correspondentes.
 
 O perfil `simulator` permite preparar uma build iOS de simulador, sem assinatura de dispositivo:
 
@@ -143,7 +178,7 @@ Endereços da entrega:
 - Privacidade: <https://autovalorpt-assistente.vercel.app/app/privacidade.html>
 - Apoio: <https://autovalorpt-assistente.vercel.app/app/apoio.html>
 
-O URL de privacidade foi guardado no App Store Connect e verificado em produção com resposta **HTTP 200**, em 26/11/2026. O URL de apoio também está guardado na ficha. Rever o conteúdo de ambos contra a versão nativa final antes da submissão. A ficha PT-PT, as notas para revisão e os campos ainda pendentes estão em `store/pt-PT.md`.
+O URL de privacidade foi guardado no App Store Connect e verificado em produção com resposta **HTTP 200**, em 26/11/2026. O URL de apoio também está guardado na ficha. As revisões destas páginas incluídas no código da build 3 estão no preview Vercel e **ainda aguardam merge e publicação em produção**. Confirmar o conteúdo publicado contra a versão nativa final antes da submissão à revisão. A ficha PT-PT, as notas para revisão e os campos ainda pendentes estão em `store/pt-PT.md`.
 
 ## Fontes oficiais
 
