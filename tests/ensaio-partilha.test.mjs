@@ -49,5 +49,5 @@ test('the in-page rehearsal reserves and releases a fictitious item, without for
   assert.equal((await call('confirm', { id, attemptId: requestId, observed: true })).status, 404);
   assert.equal((await call('release', { id, attemptId: requestId, notSent: true })).status, 200);
   assert.equal((await (await call('list')).json()).items[0].status, 'ready');
-  assert.equal((await context.fetch('https://other.example/' )).status, 404);
+  assert.equal((await context.fetch('https://other.example/')).status, 404);
 });
