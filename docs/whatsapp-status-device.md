@@ -16,7 +16,7 @@ O acesso permite consultar um candidato e a própria tentativa, obter o MP4 dess
 
 1. Abrir **Preparar vídeo de uma viatura nova**. A consulta confere os anúncios disponíveis da Samucar e da AutoValorPT com o stock sincronizado e apresenta a origem do anúncio. As viaturas novas com vídeo confirmado entram por ordem de espera. A expiração natural do Story no Instagram permite continuar a usar o MP4 original se os dados e o preço se mantiverem.
 2. Selecionar **Reservar este vídeo**. O servidor guarda a reserva antes do envio. Se já existir uma tentativa, abrir o respetivo registo.
-3. No iPhone, confirmar o número da conta e preparar o MP4. A aplicação confere o stock e regista o início. Tocar em **Partilhar vídeo no Estado**, escolher WhatsApp Business e depois **O meu estado**.
+3. No iPhone, confirmar o número da conta e preparar o MP4. A aplicação confere o stock e regista o início. A legenda usa o modelo e o preço da viatura. Para a ter à mão, tocar em **Copiar legenda**. Tocar em **Partilhar vídeo no Estado**, escolher WhatsApp Business e depois **O meu estado**. Se o campo da legenda aparecer vazio, colar o texto antes de enviar.
 4. Onde a partilha de ficheiros estiver indisponível, descarregar o vídeo reservado. Preparar o Estado no WhatsApp, confirmar o número no painel e tocar em **Registar início do envio** antes de enviar. Se a folha de partilha tiver fechado depois do registo inicial, verificar primeiro o resultado no WhatsApp.
 5. Enviar uma vez. Abrir **O meu estado**, verificar o carro e o preço que aparecem no vídeo e usar **Guardar publicação observada**. A aplicação guarda a observação do operador (`providerApiVerified: false`).
 6. Se o resultado for incerto, usar **Resultado incerto**. Recuperar a mesma tentativa permite consultar o seu estado mesmo que a ligação ao painel tenha falhado.
@@ -25,7 +25,9 @@ Um administrador pode encerrar uma tentativa sem confirmação para libertar os 
 
 ## Partilhar uma dica
 
-Abrir **Estado do WhatsApp** no painel principal e escolher uma publicação diária ou extra já confirmada no Instagram. A aplicação reutiliza o conteúdo publicado. A legenda e a ligação ao simulador, quando aplicável, podem ser copiadas para o Estado. Usar **Preparar dica para o Estado**, partilhar os ficheiros ou descarregá-los e enviá-los em **O meu estado**.
+Abrir **Estado do WhatsApp** no painel principal e escolher uma publicação diária ou extra já confirmada no Instagram. A pré-visualização mostra a imagem ou o vídeo e a legenda completa para o Estado. As imagens preparadas para o Estado incluem um resumo da dica.
+
+Tocar em **Preparar dica e copiar legenda**. Se a cópia automática falhar, selecionar e copiar a legenda apresentada. Tocar em **Partilhar no WhatsApp…** e escolher WhatsApp Business → **O meu estado**. A aplicação inclui a legenda com os ficheiros quando o navegador aceita ambos. Se o campo da legenda aparecer vazio, manter o dedo no campo e escolher **Colar**. Para publicar, tocar na seta de envio. Também é possível descarregar os ficheiros e escolher o conteúdo em **Atualizações → Adicionar estado**.
 
 Depois de ver a dica na conta indicada, escolher **Vi esta dica no meu Estado**. Cada publicação tem o seu próprio registo de partilha. A dica diária e a extra podem ser partilhadas no mesmo dia que uma viatura. Essas ações preservam o limite das viaturas e os horários de publicação no Instagram.
 

@@ -5,6 +5,14 @@
   let nativeTransfer = null;
   const supportsFileShare = () => typeof globalThis.navigator?.canShare === 'function' &&
     typeof globalThis.navigator?.share === 'function' && typeof File === 'function';
+  const vehicleCaption = active => [active.title, active.price].filter(Boolean).join(' · ');
+  function supportedPayload(file, text) {
+    const files = [file];
+    for (const payload of text ? [{ files, text }, { files }] : [{ files }]) {
+      try { if (navigator.canShare(payload)) return payload; } catch { /* Try the next format. */ }
+    }
+    return null;
+  }
   const format = value => value ? new Date(value).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' }) : '—';
   const errors = {
     status_unauthorized: 'Este acesso terminou ou foi revogado. Entre na área privada para verificar a autorização.',
@@ -40,6 +48,7 @@
   function render(data) {
     if (state?.active?.attemptId !== data.active?.attemptId) {
       nativeTransfer = null;
+      $('vehicleCaptionHint').textContent = '';
       $('visible').checked = false; $('observation').value = ''; $('account').value = '';
       for (const id of ['withdrawalVisible', 'withdrawalUnambiguous', 'withdrawalActionObserved', 'withdrawalAbsent']) $(id).checked = false;
       for (const id of ['withdrawalBeforeObservation', 'withdrawalAfterObservation', 'withdrawalAccount']) $(id).value = '';
@@ -64,6 +73,9 @@
     $('attempt').hidden = !active || removing; $('attemptDetails').replaceChildren();
     $('withdrawalAttempt').hidden = !removing; $('withdrawalDetails').replaceChildren();
     const ownVideo = Boolean(active && !removing && data.device?.valid && data.device.thisDevice && data.device.id === active.deviceId);
+    const caption = ownVideo ? vehicleCaption(active) : '';
+    $('vehicleCaption').value = caption;
+    $('vehicleCaptionGroup').hidden = !caption;
     if (!ownVideo || active.phase !== 'publishing' || nativeTransfer?.attemptId !== active.attemptId) nativeTransfer = null;
     $('nativePrepare').hidden = !ownVideo || active.phase !== 'reserved' || !supportsFileShare();
     $('nativeShare').hidden = !nativeTransfer;
@@ -125,6 +137,20 @@
   $('plan').onclick = () => work(loadPlan, 'Pesquisa de vídeo concluída.');
   $('claim').onclick = () => work(async () => { if (!selected) return; const data = await api('claim', { id: selected.id, fingerprint: selected.fingerprint }); selected = null; render(data); });
   const attempt = () => ({ attemptId: state?.active?.attemptId });
+  $('copyVehicleCaption').onclick = async () => {
+    const active = state?.active;
+    const caption = $('vehicleCaption').value;
+    if (busy || !active || !caption || $('vehicleCaptionGroup').hidden) return;
+    try {
+      await navigator.clipboard.writeText(caption);
+      if (state?.active?.attemptId === active.attemptId) $('vehicleCaptionHint').textContent = 'Legenda copiada. Podes colá-la no WhatsApp.';
+    } catch {
+      if (state?.active?.attemptId !== active.attemptId || $('vehicleCaptionGroup').hidden) return;
+      $('vehicleCaption').focus();
+      $('vehicleCaption').select();
+      $('vehicleCaptionHint').textContent = 'Usa a opção «Copiar» do telemóvel para copiar o texto selecionado.';
+    }
+  };
   $('nativePrepare').onclick = () => work(async () => {
     const active = state?.active;
     if (!active || active.phase !== 'reserved' || !supportsFileShare()) throw { code: 'status_file_share_unavailable' };
@@ -137,10 +163,11 @@
       throw { code: 'status_video_unavailable', status: response.status };
     const blob = await response.blob();
     const file = new File([blob], 'AutoValorPT_' + active.id + '.mp4', { type: 'video/mp4' });
-    if (!file.size || !navigator.canShare({ files: [file] })) throw { code: 'status_file_share_unavailable' };
+    const payload = file.size && supportedPayload(file, vehicleCaption(active));
+    if (!payload) throw { code: 'status_file_share_unavailable' };
     const result = await api('begin', { attemptId: active.attemptId, account });
     if (result.active?.attemptId !== active.attemptId || result.active.phase !== 'publishing') throw { code: 'status_attempt_mismatch' };
-    nativeTransfer = { attemptId: active.attemptId, file };
+    nativeTransfer = { attemptId: active.attemptId, payload };
     render(result);
   }, 'MP4 pronto. Toca em «Partilhar vídeo no Estado» e escolhe WhatsApp Business.');
   $('nativeShare').onclick = async () => {
@@ -148,15 +175,16 @@
     if (busy || !transfer || state?.active?.attemptId !== transfer.attemptId || state.active.phase !== 'publishing') return;
     nativeTransfer = null; $('nativeShare').hidden = true;
     try {
-      await navigator.share({ files: [transfer.file] });
+      await navigator.share(transfer.payload);
       if (state?.active?.attemptId !== transfer.attemptId || state?.active?.phase !== 'publishing') return;
       $('message').textContent = 'Verifica «O meu estado» no WhatsApp Business. Regista a publicação só depois de veres o vídeo.';
     } catch {
       if (state?.active?.attemptId !== transfer.attemptId || state?.active?.phase !== 'publishing') return;
       $('message').textContent = 'A partilha terminou sem confirmação. Verifica «O meu estado» antes de voltares a enviar.';
       // Preserve the same file for manual completion when the target is unavailable.
-      const url = URL.createObjectURL(transfer.file);
-      const link = document.createElement('a'); link.href = url; link.download = transfer.file.name;
+      const file = transfer.payload.files[0];
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a'); link.href = url; link.download = file.name;
       link.textContent = 'Guardar o MP4 já preparado'; $('message').append(document.createElement('br'), link);
       setTimeout(() => URL.revokeObjectURL(url), 120000);
     }

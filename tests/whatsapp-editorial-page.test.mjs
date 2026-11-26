@@ -7,11 +7,11 @@ const code = (await Promise.all(['editorial-preview.js', 'whatsapp-editorial.js'
   readFile(new URL('../' + name, import.meta.url), 'utf8')))).join('\n');
 const html = await readFile(new URL('../rotina.html', import.meta.url), 'utf8');
 const origin = 'https://autovalorpt-assistente.vercel.app', simulatorUrl = 'https://carregador.vercel.app/';
-const mediaUrl = '/api/stock?integration=editorial-image&date=2026-11-26&slide=1&v=v4';
+const mediaUrl = '/api/stock?integration=editorial-image&date=2026-11-26&slide=1&v=v4&variant=wa1';
 const tip = { id: 'editorial-day', date: '2026-11-26', title: 'Custo por 100 km', caption: 'Link do perfil.',
   shareCaption: 'Simulador ' + simulatorUrl, simulatorUrl, media: [{ url: mediaUrl, mime: 'image/jpeg' }], status: 'ready' };
 
-function harness({ shared = async () => {}, list = () => [tip], claim, canShare = true, media, confirm = () => true } = {}) {
+function harness({ shared = async () => {}, list = () => [tip], claim, canShare = () => true, media, writeText, confirm = () => true } = {}) {
   const elements = new Map(), requests = [], clipboard = [], native = [];
   class Element {
     constructor() { this.hidden = false; this.children = []; this.events = {}; }
@@ -22,8 +22,8 @@ function harness({ shared = async () => {}, list = () => [tip], claim, canShare 
   const get = id => { assert.ok(html.includes('id="' + id + '"'), id); if (!elements.has(id)) elements.set(id,new Element()); return elements.get(id); };
   const ctx = vm.createContext({ document: {getElementById:get,createElement:()=>new Element()},
     location: { origin, hash: '#estado-whatsapp' }, addEventListener() {}, AbortSignal, File, URL, URLSearchParams, crypto,
-    confirm, navigator: { clipboard: { writeText: async x=>clipboard.push(x) },
-      canShare:()=>canShare, share: async content=>{native.push(content.files); await shared();} },
+    confirm, navigator: { clipboard: { writeText: writeText || (async x=>clipboard.push(x)) },
+      canShare, share: async content=>{native.push(content); await shared();} },
     fetch: async (url, init) => {
       const action = new URL(url, origin).searchParams.get('action'); requests.push({ action, init });
       if (!action) return media?.() || new Response(new Uint8Array([1,2,3]),{headers:{'Content-Type':'image/jpeg'}});
@@ -41,15 +41,22 @@ test('a daily or extra tip is loaded on demand; preparing, opening the share she
   assert.equal(app.get('estado-whatsapp').open,true); assert.equal(app.requests.length,0);
   await app.click('waTipRefresh');
   assert.equal(app.get('waTipSelect').children.length,1); assert.equal(app.get('waTipMedia').children[0].src,mediaUrl);
+  assert.match(app.get('waTipMedia').children[1].textContent,/resumo da dica/);
+  assert.equal(app.get('waTipText').open,true);
   await app.click('waTipCopy'); await app.click('waTipCopyLink'); assert.deepEqual(app.clipboard,[tip.shareCaption,simulatorUrl]);
   await Promise.all([app.click('waTipPrepare'),app.click('waTipPrepare')]);
+  assert.deepEqual(app.clipboard,[tip.shareCaption,simulatorUrl,tip.shareCaption]);
   assert.equal(app.get('waTipShare').hidden,false); assert.equal(app.get('waTipDownloads').children.length,1);
   assert.deepEqual(app.requests.map(r=>r.action),['tip-list',null,'tip-claim']);
   assert.equal(app.get('waTipReview').hidden,true);
   await app.click('waTipConfirm'); await app.click('waTipRelease');
   assert.deepEqual(app.requests.map(r=>r.action),['tip-list',null,'tip-claim']);
-  await Promise.all([app.click('waTipShare'),app.click('waTipShare')]);
-  assert.equal(app.native.length,1); assert.equal(app.native[0][0].type,'image/jpeg');
+  const firstShare = app.click('waTipShare');
+  // The native call must already have happened in the same tap, before any await.
+  assert.equal(app.native.length,1); assert.equal(app.native[0].files[0].type,'image/jpeg');
+  assert.equal(app.native[0].text,tip.shareCaption);
+  await Promise.all([firstShare,app.click('waTipShare')]);
+  assert.equal(app.native.length,1);
   assert.equal(app.get('waTipHandoff').hidden,true); assert.equal(app.get('waTipReview').hidden,false);
   assert.ok(!app.requests.some(r=>r.action==='tip-confirm'));
   await app.click('waTipConfirm'); assert.match(app.get('waTipMessage').textContent,/registada como visível/);
@@ -73,9 +80,10 @@ test('a previous uncertain handoff cannot be shared again on refresh; releasing 
 test('a claim conflict exposes no files; unsupported native share provides a download, and logout clears private captions and controls',async () => {
   const app=harness({claim:()=>Response.json({ok:false},{status:409})});app.api.setSession(true);await app.click('waTipRefresh');await app.click('waTipPrepare');
   assert.match(app.get('waTipMessage').textContent,/registo mudou/);assert.equal(app.get('waTipHandoff').hidden,true);
-  const desktop=harness({canShare:false,list:()=>[{...tip,media:[{url:'https://wrong.example/image.jpg',mime:'image/jpeg'}]},tip]});
+  const desktop=harness({canShare:()=>false,list:()=>[{...tip,media:[{url:'https://wrong.example/image.jpg',mime:'image/jpeg'}]},tip]});
   desktop.api.setSession(true);await desktop.click('waTipRefresh');await desktop.click('waTipPrepare');
   assert.equal(desktop.get('waTipSelect').children.length,1);assert.equal(desktop.get('waTipShare').hidden,true);
+  assert.deepEqual(desktop.clipboard,[tip.shareCaption]); assert.match(desktop.get('waTipGuide').textContent,/cola a legenda/);
   const download=desktop.get('waTipDownloads').children[0];
   assert.equal(download.href,mediaUrl); assert.equal(desktop.get('waTipReview').hidden,true);
   download.events.click(); assert.equal(desktop.get('waTipReview').hidden,false);
@@ -93,9 +101,47 @@ test('closing the picker without sharing keeps the same files available and does
   assert.equal(app.get('waTipReview').hidden, true); assert.equal(app.get('waTipShare').hidden, false);
   assert.equal(app.get('waTipDownloads').children.length, 1); assert.match(app.get('waTipMessage').textContent, /cancelada/);
   canceled = false; await app.click('waTipShare');
-  assert.equal(app.native.length, 2); assert.equal(app.native[0][0], app.native[1][0]);
+  assert.equal(app.native.length, 2); assert.equal(app.native[0].files[0], app.native[1].files[0]);
   assert.equal(app.get('waTipReview').hidden, false);
   assert.deepEqual(app.requests.map(r => r.action), ['tip-list', null, 'tip-claim']);
+});
+
+test('a browser can accept the sample but reject the real files with text; files and a copied caption remain available',async () => {
+  const app = harness({canShare: data => {
+    if (data.files[0].size > 1 && data.text) throw new TypeError('Unsupported');
+    return true;
+  }});
+  app.api.setSession(true); await app.click('waTipRefresh'); await app.click('waTipPrepare');
+  assert.match(app.get('waTipGuide').textContent,/só os ficheiros.*Colar/);
+  assert.deepEqual(app.clipboard,[tip.shareCaption]);
+  await app.click('waTipShare'); assert.equal(Object.hasOwn(app.native[0],'text'),false);
+  assert.equal(app.native[0].files[0].size,3); assert.ok(!app.requests.some(r=>r.action==='tip-confirm'));
+});
+
+test('when copying is blocked, the user can copy the visible full caption manually and still share the approved video',async () => {
+  const video = {...tip,media:[{url:'/assets/editorial/rotina-web-v1.mp4',mime:'video/mp4'}]};
+  const app = harness({list:()=>[video],writeText:async()=>{throw new Error('blocked');},
+    media:()=>new Response(new Uint8Array([4]),{headers:{'Content-Type':'video/mp4'}})});
+  app.api.setSession(true); await app.click('waTipRefresh'); await app.click('waTipPrepare');
+  assert.equal(app.get('waTipMedia').children.length,1);
+  assert.equal(app.get('waTipText').open,true); assert.equal(app.get('waTipCaption').textContent,tip.shareCaption);
+  assert.match(app.get('waTipCopyStatus').textContent,/copiar manualmente/);
+  await app.click('waTipShare'); assert.equal(app.native[0].files[0].type,'video/mp4');
+  assert.equal(app.native[0].text,tip.shareCaption);
+  assert.ok(!app.requests.some(r=>r.action==='tip-confirm'));
+});
+
+test('preview allows only canonical image URLs including older JPEGs; ordered carousel files share the archived caption when no adapted text exists',async () => {
+  const legacy = mediaUrl.replace('&variant=wa1','');
+  const carousel = {...tip,shareCaption:undefined,media:[...tip.media,{url:mediaUrl.replace('slide=1','slide=2'),mime:'image/jpeg'}]};
+  const app = harness({list:()=>[carousel,...[legacy,mediaUrl+'&variant=wa1',mediaUrl.replace('wa1','unknown'),mediaUrl+'&test=1']
+    .map(url=>({...tip,media:[{url,mime:'image/jpeg'}]}))]});
+  app.api.setSession(true); await app.click('waTipRefresh');
+  assert.equal(app.get('waTipSelect').children.length,2);
+  assert.match(app.get('waTipMedia').children[1].textContent,/Primeira de 2/);
+  await app.click('waTipPrepare'); await app.click('waTipShare');
+  assert.equal(app.native[0].text,tip.caption);
+  assert.deepEqual(Array.from(app.native[0].files,file=>file.name),['AutoValorPT-2026-11-26-dica-1.jpg','AutoValorPT-2026-11-26-dica-2.jpg']);
 });
 
 test('if the browser rejects the share, manual downloads remain available and delivery is never inferred', async () => {

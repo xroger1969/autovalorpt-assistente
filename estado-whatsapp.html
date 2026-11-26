@@ -9,7 +9,7 @@
     details.card > summary { cursor:pointer; font-weight:700; font-size:17px; min-height:44px; padding:10px 0; }
     #candidateHint:empty { display:none; }
   </style>
-  <script src="/estado-whatsapp.js?v=20261126-2" defer></script>
+  <script src="/estado-whatsapp.js?v=20261126-3" defer></script>
 </head>
 <body>
   <header><div><strong>AutoValorPT</strong><a href="/rotina.html">A minha rotina</a></div></header>
@@ -26,6 +26,13 @@
         <p class="muted">Os Estados registados podem ser retirados quando o carro sai do stock ou os dados mudam. A eliminação é executada no WhatsApp e só fica confirmada após observação.</p>
       </section>
       <section id="attempt" class="card" hidden><h2>Publicação em curso</h2><dl id="attemptDetails"></dl>
+        <div id="vehicleCaptionGroup" hidden>
+          <label for="vehicleCaption">Legenda do vídeo</label>
+          <input id="vehicleCaption" type="text" readonly>
+          <div class="actions"><button id="copyVehicleCaption" type="button">Copiar legenda</button></div>
+          <p class="muted">Podes copiar a legenda antes de partilhar. Se o campo da legenda aparecer vazio no WhatsApp, mantém o dedo no campo e escolhe «Colar».</p>
+          <p id="vehicleCaptionHint" role="status" aria-live="polite"></p>
+        </div>
         <label for="account">Número confirmado na conta WhatsApp</label><input id="account" type="tel" autocomplete="off" placeholder="+351965637736">
         <div class="actions"><button id="nativePrepare" class="primary" type="button" hidden>Preparar MP4 para partilhar</button><button id="nativeShare" class="primary" type="button" hidden>Partilhar vídeo no Estado</button></div>
         <p id="nativeHint" class="muted" hidden>No iPhone, escolhe WhatsApp Business e depois «O meu estado» na folha de partilha. Se esse destino não aparecer, guarda o vídeo e abre Atualizações no WhatsApp Business.</p>

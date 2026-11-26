@@ -54,7 +54,7 @@
     #editorialHistory a { color: #244f70; text-decoration: underline; }
     #editorialHistory li { display: grid; gap: 4px; }
     #waTipSelect { max-width: 100%; min-height: 44px; font: inherit; }
-    #waTipMedia img, #waTipMedia video { display: block; width: min(100%, 260px); max-height: 370px; object-fit: contain; margin: 10px 0; }
+    #waTipMedia img, #waTipMedia video { display: block; width: min(100%, 360px); height: auto; margin: 10px auto; }
     #waTipCaption { white-space: pre-wrap; overflow-wrap: anywhere; }
     .channel-note { font-size: 13px; color: var(--muted); grid-column: 1; }
     .advanced > summary { font-weight: 650; }
@@ -120,7 +120,7 @@
   <script src="/editorial-preview.js?v=20261126-1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
-  <script src="/whatsapp-editorial.js?v=20261126-2" defer></script>
+  <script src="/whatsapp-editorial.js?v=20261126-3" defer></script>
   <script src="/rotina.js?v=20261126-2" defer></script>
 </head>
 <body>
@@ -210,7 +210,7 @@
         </details>
         <details id="estado-whatsapp"><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span><span class="channel-note">Viaturas novas e dicas</span></summary>
           <div class="details-body">
-            <p>Escolhe o conteúdo e conclui a publicação em «O meu estado» no WhatsApp Business.</p>
+            <p>O AutoValorPT prepara o conteúdo. Para o publicar, escolhe «O meu estado» e toca na seta de envio no WhatsApp Business.</p>
             <h3>Viaturas novas</h3>
             <a class="link" href="/estado-whatsapp.html#viaturas-novas">Preparar vídeo de uma viatura nova</a>
             <p id="whatsappLast" class="status"></p><p id="whatsappTime" class="time"></p>
@@ -220,11 +220,7 @@
               <label for="waTipSelect">Escolher dica</label>
               <select id="waTipSelect"></select>
               <div id="waTipMedia"></div>
-              <details id="waTipText"><summary>Legenda para o Estado</summary><p id="waTipCaption"></p></details>
-              <div class="links"><button id="waTipCopy" type="button" class="secondary">Copiar legenda</button>
-                <button id="waTipCopyLink" type="button" class="secondary" hidden>Copiar ligação do simulador</button></div>
-              <p id="waTipCopyStatus" role="status" class="hint"></p>
-              <button id="waTipPrepare" type="button" class="secondary" hidden>Preparar dica para o Estado</button>
+              <button id="waTipPrepare" type="button" class="secondary" hidden>Preparar dica e copiar legenda</button>
               <div id="waTipHandoff" hidden>
                 <p id="waTipGuide"></p>
                 <div class="links"><button id="waTipShare" type="button" class="primary" hidden>Partilhar no WhatsApp…</button><span id="waTipDownloads" class="links"></span></div>
@@ -234,6 +230,10 @@
                 <div class="links"><button id="waTipConfirm" type="button" class="secondary">Vi esta dica no meu Estado</button>
                   <button id="waTipRelease" type="button" class="secondary">Não enviei · retomar partilha</button></div>
               </div>
+              <details id="waTipText"><summary>Legenda completa para o Estado</summary><p id="waTipCaption"></p></details>
+              <div class="links"><button id="waTipCopy" type="button" class="secondary">Copiar legenda</button>
+                <button id="waTipCopyLink" type="button" class="secondary" hidden>Copiar ligação do simulador</button></div>
+              <p id="waTipCopyStatus" role="status" class="hint"></p>
             </div>
             <p id="waTipMessage" class="status" role="status" aria-live="polite"></p>
             <details><summary>Detalhes do dispositivo</summary><div class="details-body"><p id="whatsappAccess" class="status"></p><p id="whatsappSummary" class="status"></p><p id="whatsappWithdrawal" class="status"></p></div></details>

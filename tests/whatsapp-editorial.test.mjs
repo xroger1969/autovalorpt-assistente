@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { createWhatsappEditorial } from '../lib/whatsapp-editorial.js';
 import { createWhatsappStatusHandler } from '../lib/whatsapp-status-handler.js';
 import { editorialPlan } from '../lib/editorial-content.js';
 import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
 import { feedEditorialPlan } from '../lib/editorial-simulator.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
+import { createEditorialImageHandler } from '../lib/editorial-image-handler.js';
+import { whatsappCardContent } from '../lib/whatsapp-editorial-card.js';
+import sharp from 'sharp';
 
 const editorial = 'instagram/editorial/v1/production/state.json', history = 'whatsapp-status/v1/production/editorial.json';
 const env = { VERCEL_ENV: 'production', INSTAGRAM_USER_ID: '12345678' };
@@ -47,11 +51,74 @@ test('two read-only snapshots expose only completed, reproducible original daily
   assert.equal(old.shareCaption.split(old.simulatorUrl).length, 2);
   assert.equal(daily.shareCaption.split(daily.simulatorUrl).length, 2);
   assert.ok(!daily.shareCaption.includes('link do perfil'));
-  assert.match(old.media[0].url, /v=v3&extra=1$/);
-  assert.match(daily.media[0].url, /v=v4$/);
+  assert.match(old.media[0].url, /v=v3&extra=1&variant=wa1$/);
+  assert.match(daily.media[0].url, /v=v4&variant=wa1$/);
   assert.equal(items.find(x => x.id === reel.id).media[0].url, reel.videoPath);
   assert.equal(items.find(x => x.id === carousel.id).media.length, carousel.slides.length);
   assert.ok(items.every(x => x.status === 'ready' && !x.attemptId));
+});
+
+test('the archived 42 km tip shares its complete v3 artwork, explanation and QR as one portrait JPEG', async () => {
+  const plan = adviceEditorialPlan('2026-11-26', true);
+  const { items: [item] } = await fixture([plan]).service.list();
+  const handler = createEditorialImageHandler();
+  async function request(query, method = 'GET', headers = {}) {
+    const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(n) { this.code = n; return this; },
+      json(data) { this.data = data; }, end(data) { this.data = data; } };
+    await handler({ query, headers, method }, res);
+    return res;
+  }
+  const query = Object.fromEntries(new URL(item.media[0].url, 'https://example.test').searchParams);
+  const { variant, ...feedQuery } = query;
+  assert.equal(variant, 'wa1');
+  const original = await request(feedQuery), status = await request(query);
+  assert.equal(original.code, 200);
+  assert.equal(status.code, 200);
+  assert.notEqual(status.headers.ETag, original.headers.ETag);
+  assert.match(status.headers['Cache-Control'], /immutable/);
+  assert.equal(status.headers['Content-Type'], 'image/jpeg');
+  const { format, width, height } = await sharp(status.data).metadata();
+  assert.deepEqual([format, width, height], ['jpeg', 1080, 1920]);
+  async function meanDifference(a, b) {
+    const [first, second] = await Promise.all([a.removeAlpha().raw().toBuffer(), b.removeAlpha().raw().toBuffer()]);
+    assert.equal(first.length, second.length);
+    let sum = 0;
+    for (let i = 0; i < first.length; i++) sum += Math.abs(first[i] - second[i]);
+    return sum / first.length;
+  }
+  assert.ok(await meanDifference(sharp(original.data), sharp(status.data).extract({ left: 0, top: 48, width, height: 1350 })) < 1);
+  const content = whatsappCardContent(plan, 0);
+  assert.equal(content.url, item.simulatorUrl);
+  assert.match(content.summary, /desvios.*quilómetros do mês/);
+  assert.match(content.summary, /kWh e por litro/);
+  const summary = await sharp(status.data).extract({ left: 72, top: 1434, width: 936, height: 172 }).raw().toBuffer();
+  assert.ok(summary.filter(channel => channel > 220).length > 5000);
+  const qr = sharp(fileURLToPath(new URL('../assets/editorial/qr-custos.svg', import.meta.url)));
+  assert.ok(await meanDifference(qr, sharp(status.data).extract({ left: 823, top: 1600, width: 185, height: 185 })) < 3);
+  assert.equal((await request(query, 'HEAD')).headers.ETag, status.headers.ETag);
+  assert.equal((await request(query, 'GET', { 'if-none-match': status.headers.ETag })).code, 304);
+  assert.equal((await request({ ...query, v: undefined })).code, 400);
+  assert.equal((await request({ ...query, variant: 'unknown' })).code, 400);
+  assert.equal((await request({ ...query, text: 'free text' })).code, 400);
+  assert.equal((await request({ date: '2026-11-22', v: 'v1', variant })).code, 404);
+});
+
+test('a legacy entry with just a question or no caption gets the correct description without changing Instagram history', async () => {
+  const plan = adviceEditorialPlan('2026-11-26', true);
+  const f = fixture([plan]), row = f.state.extraItems[plan.date];
+  for (const archived of ['Que desvios fazes no caminho?', plan.title, undefined]) {
+    row.caption = archived; f.save();
+    const original = f.records.get(editorial).text;
+    const { items: [tip] } = await f.service.list();
+    assert.equal(tip.caption, archived ?? '');
+    if (archived) assert.equal(tip.shareCaption.split(archived).length, 2);
+    assert.equal(tip.shareCaption.split(plan.title).length, 2);
+    assert.ok(tip.shareCaption.includes(plan.slides[0].body));
+    assert.ok(tip.shareCaption.includes(plan.slides[0].takeaway));
+    assert.equal(tip.shareCaption.split(tip.simulatorUrl).length, 2);
+    assert.equal(f.records.get(editorial).text, original);
+  }
+  assert.equal(f.calls.some(call => call.method === 'put'), false);
 });
 
 test('concurrent tabs, timeouts and retries cannot grant two handoffs; only an explicit checked outcome can resolve one', async () => {

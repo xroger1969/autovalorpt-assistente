@@ -23,7 +23,7 @@ async function page(initial, { request, navigator, hash = '' } = {}) {
   const elements = new Map(); const created = []; const calls = []; let response = initial;
   function element(tagName) {
     return { tagName: tagName.toUpperCase(), textContent: '', hidden: false, disabled: false, value: '', checked: false,
-      children: [], attributes: new Map(),
+      children: [], attributes: new Map(), focus() {}, select() { this.selectedText = this.value; },
       replaceChildren(...nodes) { this.children = [...nodes]; }, append(...nodes) { this.children.push(...nodes); },
       removeAttribute(name) { this.attributes.delete(name); delete this[name]; } };
   }
@@ -107,10 +107,10 @@ test('finding a video shows the next step for the actual device and makes only r
   }
 });
 
-test('mobile vehicle sharing verifies the account and reserves one send before a fresh user gesture; publication still requires observation', async () => {
+for (const combined of [true, false]) test('mobile vehicle sharing prepares once and requires observation (native captions ' + combined + ')', async () => {
   const initial = { ok: true, role: 'admin', device: { id: 'D1', valid: true, thisDevice: true }, blocked: true,
     active: { attemptId: 'A1', deviceId: 'D1', id: 'IDabcde1', title: 'Renault Zoe', price: '12990 EUR', phase: 'reserved' } };
-  const actions = [], transfers = [];
+  const actions = [], transfers = [], clipboard = [];
   const app = await page(initial, { hash: '#viaturas-novas', request: async (params, options) => {
     const action = params.get('action'); actions.push(action);
     if (action === 'media') {
@@ -121,14 +121,26 @@ test('mobile vehicle sharing verifies the account and reserves one send before a
       assert.deepEqual(JSON.parse(options.body), { attemptId: 'A1', account: '+351965637736' });
       return Response.json({ ...initial, active: { ...initial.active, phase: 'publishing', publicationStartedAt: new Date().toISOString() } });
     }
-  }, navigator: { canShare: ({ files }) => files[0].size === 2048, share: async ({ files }) => { transfers.push(files[0]); } } });
+  }, navigator: {
+    canShare: ({ files, text }) => files[0].size === 2048 && (combined || !text),
+    share: async payload => { transfers.push(payload); },
+    clipboard: { writeText: async text => { if (!combined) throw Error('permission denied'); clipboard.push(text); } },
+  } });
   assert.deepEqual(actions, ['plan']); assert.equal(app.get('nativePrepare').hidden, false);
+  const caption = 'Renault Zoe · 12990 EUR';
+  assert.equal(app.get('vehicleCaptionGroup').hidden, false);
+  assert.equal(app.get('vehicleCaption').value, caption);
+  await app.get('copyVehicleCaption').onclick();
+  if (combined) assert.deepEqual(clipboard, [caption]);
+  else assert.equal(app.get('vehicleCaption').selectedText, caption);
   await app.get('nativePrepare').onclick(); assert.deepEqual(actions, ['plan']);
   app.get('account').value = '+351 965637736';
   await app.get('nativePrepare').onclick();
   assert.equal(app.get('nativeShare').hidden, false); assert.deepEqual(actions, ['plan','media','begin']); assert.equal(transfers.length, 0);
   await Promise.all([app.get('nativeShare').onclick(), app.get('nativeShare').onclick()]);
-  assert.equal(transfers.length, 1); assert.equal(transfers[0].name, 'AutoValorPT_IDabcde1.mp4');
+  assert.equal(transfers.length, 1); assert.equal(transfers[0].files[0].name, 'AutoValorPT_IDabcde1.mp4');
+  assert.equal(transfers[0].text, combined ? caption : undefined);
+  assert.equal(app.get('vehicleCaption').value, caption);
   assert.deepEqual(actions, ['plan','media','begin']); assert.equal(app.get('evidence').hidden, false);
   assert.match(app.get('message').textContent, /depois de veres o vídeo/);
 });

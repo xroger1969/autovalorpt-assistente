@@ -20,13 +20,11 @@ O botão POST autenticado `action=manual-start` cria um ciclo próprio em `morni
 
 A proteção por data impede repetir o ciclo manual no mesmo dia. A execução manual pode publicar uma nova viatura mesmo após uma publicação da manhã; os históricos Instagram impedem repetir o mesmo anúncio. A rotina agendada mantém o limite diário. Uma etapa em execução noutro ciclo continua protegida; uma etapa apenas em fila há mais de uma hora já não pode arrancar. Uma publicação em estado incerto nunca deve ser repetida automaticamente.
 
-## Estados WhatsApp: execução separada
+## Estado do WhatsApp
 
-O botão **Atualizar agora** inicia apenas o ciclo do servidor descrito acima. Não desencadeia a tarefa ChatGPT nem o navegador cloud que publica os Estados. O atalho apresenta esta dependência num bloco próprio e liga a `/estado-whatsapp.html`, onde se consultam o acesso do dispositivo e as publicações observadas. Um Story publicado ou um ciclo do servidor terminado não comprovam um Estado WhatsApp publicado.
+O botão **Atualizar agora** inicia o ciclo de stock, catálogo e Instagram. A ligação **Abrir viaturas e dicas para o Estado** abre a secção correspondente de `/rotina.html`. Aí podes rever os vídeos de viaturas novas e as dicas já publicadas no Instagram.
 
-A tarefa ChatGPT existente das 08h00 inclui a etapa dos Estados no navegador associado à conta empresarial **+351 965 637 736**, desde que a sessão esteja disponível. Para a executar antes dessa ocorrência, é necessária uma execução no ChatGPT, seguindo `docs/whatsapp-status-device.md`: consulta de tentativas pendentes, verificação de retiradas, reserva do vídeo elegível, revalidação antes do envio e observação da publicação. O atalho não cria outro agendamento nem altera os limites ou registos desta etapa.
-
-Se o navegador cloud se desligar, voltar a associá-lo na aplicação WhatsApp Business do iPhone da conta indicada: **Definições → Dispositivos associados → Associar dispositivo**, lendo o QR apresentado nesse navegador cloud. Associar o Chrome local não restabelece a sessão cloud. A associação e o vídeo preparado não comprovam a publicação; o resultado só é confirmado depois de observado em **Os meus estados** e guardado no painel.
+O painel prepara o conteúdo para a conta **+351 965 637 736**. A publicação requer a ação **Enviar** no WhatsApp Business. Depois de a veres em **O meu estado**, podes registar essa observação no painel. O procedimento e as regras de recuperação de tentativas ficam em [Dispositivo privado para Estados WhatsApp](whatsapp-status-device.md).
 
 ## Proteção do alojamento
 
