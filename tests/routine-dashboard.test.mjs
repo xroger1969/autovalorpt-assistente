@@ -148,11 +148,11 @@ test('a readable final check with unknown outcome remains unconfirmed', async ()
 });
 
 test('WhatsApp observed publication is separate from automatic execution and device access', async () => {
-  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true, expiresAt: '2027-02-12T08:00:00Z' }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, observation: 'Viatura e preço visíveis no meu Estado.' } } });
+  const app = await dashboard({ whatsapp: { automation: 'pending_end_to_end_test', device: { valid: true, expiresAt: '2027-02-12T08:00:00Z' }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt, confirmationSource: 'whatsapp_observation', observation: 'Viatura e preço visíveis no meu Estado.' } } });
   assert.equal(app.get('whatsappBadge').textContent, 'Última publicação observada');
-  assert.match(app.get('whatsappSummary').textContent, /Automação ainda em validação/);
+  assert.match(app.get('whatsappSummary').textContent, /envio e a verificação em «O meu estado» são feitos no WhatsApp Business/);
   assert.match(app.get('whatsappAccess').textContent, /sessão ligada no WhatsApp é verificada separadamente/);
-  assert.match(app.get('whatsappLast').textContent, /IDabcde1.*observada.*Não é uma confirmação da API/);
+  assert.match(app.get('whatsappLast').textContent, /IDabcde1.*observada em «O meu estado».*Não é uma confirmação da API/);
   assert.ok(app.calls.some(call => call.endpoint.includes('integration=whatsapp-status&action=status') && !call.init.method));
 });
 
@@ -184,9 +184,10 @@ test('WhatsApp private observation is cleared when authentication expires', asyn
   assert.equal(app.get('whatsappBadge').textContent, 'Por consultar');
 });
 
-test('observed WhatsApp test reports first scheduled execution still pending', async () => {
+test('observed WhatsApp history distinguishes the legacy web observation from the new manual handoff', async () => {
   const app = await dashboard({ whatsapp: { automation: 'publication_observed_scheduled_test_pending', device: { valid: true }, lastResult: { status: 'observed_published', id: 'IDabcde1', observedAt: startedAt } } });
-  assert.match(app.get('whatsappSummary').textContent, /Publicação observada neste dispositivo.*primeira execução agendada/);
+  assert.match(app.get('whatsappLast').textContent, /observada no WhatsApp Web/);
+  assert.match(app.get('whatsappSummary').textContent, /verificação em «O meu estado»/);
   assert.doesNotMatch(app.get('whatsappSummary').textContent, /falta concluir o teste no WhatsApp/);
 });
 

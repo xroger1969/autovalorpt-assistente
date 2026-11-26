@@ -53,6 +53,9 @@
     .editorial-caption { padding: 0 8px 12px; }
     #editorialHistory a { color: #244f70; text-decoration: underline; }
     #editorialHistory li { display: grid; gap: 4px; }
+    #waTipSelect { max-width: 100%; min-height: 44px; font: inherit; }
+    #waTipMedia img, #waTipMedia video { display: block; width: min(100%, 260px); max-height: 370px; object-fit: contain; margin: 10px 0; }
+    #waTipCaption { white-space: pre-wrap; overflow-wrap: anywhere; }
     .channel-note { font-size: 13px; color: var(--muted); grid-column: 1; }
     .advanced > summary { font-weight: 650; }
     .advanced .rows { margin: 0 12px 12px; }
@@ -117,7 +120,8 @@
   <script src="/editorial-preview.js?v=20261126-1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
-  <script src="/rotina.js?v=20261126-1" defer></script>
+  <script src="/whatsapp-editorial.js?v=20261126-1" defer></script>
+  <script src="/rotina.js?v=20261126-2" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -204,10 +208,34 @@
             <div class="links"><a class="link" href="/editorial.html">Pré-visualização completa e definições</a></div>
           </div>
         </details>
-        <details><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span><span class="channel-note">Envio no WhatsApp Business</span></summary>
-          <div class="details-body"><p>Prepara aqui o vídeo. O envio é feito no WhatsApp Business. Depois podes registar o que ficou visível em «O meu estado».</p>
-            <div class="links"><a class="link" href="/estado-whatsapp.html">Preparar ou consultar o Estado</a></div>
+        <details id="estado-whatsapp"><summary><strong>Estado do WhatsApp</strong><span id="whatsappBadge" class="badge">Por consultar</span><span class="channel-note">Viaturas novas e dicas</span></summary>
+          <div class="details-body">
+            <p>Escolhe o conteúdo e conclui a publicação em «O meu estado» no WhatsApp Business.</p>
+            <h3>Viaturas novas</h3>
+            <a class="link" href="/estado-whatsapp.html#viaturas-novas">Preparar vídeo de uma viatura nova</a>
             <p id="whatsappLast" class="status"></p><p id="whatsappTime" class="time"></p>
+            <h3>Dicas publicadas no Instagram</h3>
+            <button id="waTipRefresh" type="button" class="secondary">Atualizar lista de dicas</button>
+            <p id="waTipMessage" class="status" role="status" aria-live="polite"></p>
+            <div id="waTipPicker" hidden>
+              <label for="waTipSelect">Escolher dica</label>
+              <select id="waTipSelect"></select>
+              <div id="waTipMedia"></div>
+              <details id="waTipText"><summary>Legenda para o Estado</summary><p id="waTipCaption"></p></details>
+              <div class="links"><button id="waTipCopy" type="button" class="secondary">Copiar legenda</button>
+                <button id="waTipCopyLink" type="button" class="secondary" hidden>Copiar ligação do simulador</button></div>
+              <p id="waTipCopyStatus" role="status" class="hint"></p>
+              <button id="waTipPrepare" type="button" class="secondary" hidden>Preparar dica para o Estado</button>
+              <div id="waTipHandoff" hidden>
+                <p>Escolhe o WhatsApp Business e depois «O meu estado». Também podes descarregar o ficheiro e adicioná-lo em Atualizações no WhatsApp.</p>
+                <div class="links"><button id="waTipShare" type="button" class="secondary" hidden>Partilhar ficheiros…</button><span id="waTipDownloads" class="links"></span></div>
+              </div>
+              <div id="waTipReview" hidden>
+                <p>Abre «O meu estado» na conta +351 965 637 736 e verifica se a dica está visível.</p>
+                <div class="links"><button id="waTipConfirm" type="button" class="secondary">Vi esta dica no meu Estado</button>
+                  <button id="waTipRelease" type="button" class="secondary">Confirmo que não enviei</button></div>
+              </div>
+            </div>
             <details><summary>Detalhes do dispositivo</summary><div class="details-body"><p id="whatsappAccess" class="status"></p><p id="whatsappSummary" class="status"></p><p id="whatsappWithdrawal" class="status"></p></div></details>
           </div>
         </details>

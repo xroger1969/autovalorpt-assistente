@@ -1,10 +1,10 @@
 # Dispositivo privado para Estados WhatsApp
 
-Esta preparação não ativa a publicação agendada nem confirma um Estado no WhatsApp. Depois de uma publicação observada no dispositivo atual, o painel distingue esse resultado da primeira execução agendada, ainda por validar. Uma eliminação também exige prova visual própria.
+Em `/rotina.html#estado-whatsapp`, a secção **Estado do WhatsApp** reúne os vídeos de viaturas novas e as dicas já publicadas no Instagram. A aplicação prepara os ficheiros. O proprietário escolhe «O meu estado» no WhatsApp Business, envia e regista o que viu.
 
 ## Acesso
 
-Abrir `/estado-whatsapp.html` no navegador persistente que tem a conta WhatsApp `+351965637736` ligada. A sessão administrativa existente permite autorizar esse dispositivo uma vez por 90 dias. A página explica a duração e permite revogar o acesso. A autorização WhatsApp é uma operação separada no próprio WhatsApp.
+Entrar no painel privado. Para os vídeos, abrir **Preparar vídeo de uma viatura nova** e autorizar o dispositivo em `/estado-whatsapp.html`. A autorização dura 90 dias e pode ser revogada. No WhatsApp Business ou WhatsApp Web, usar a conta `+351965637736`.
 
 O cookie `__Host-avpt_wa_status` é opaco, aleatório, `HttpOnly`, `Secure` e `SameSite=Strict`. Apenas o hash fica no Blob privado. Não é devolvido no JSON nem colocado em URLs, armazenamento JavaScript ou instruções de automação. A autorização administrativa continua limitada aos sete dias existentes. Nenhum segredo de ambiente novo é necessário.
 
@@ -12,22 +12,27 @@ Revogar aqui bloqueia apenas os vídeos e registos desta aplicação. Não termi
 
 O acesso permite consultar um candidato e a própria tentativa, obter o MP4 dessa tentativa e registar a observação da publicação. Permite também preparar e confirmar a retirada das publicações registadas pelo mesmo dispositivo, com as condições abaixo. Não permite administrar o site, aceder ao catálogo, alterar Instagram, renderizar vídeos ou consultar uma lista pública de ficheiros. A troca da chave ou do código administrativo invalida também o acesso do dispositivo.
 
-## Execução por um operador autorizado
+## Partilhar uma viatura
 
-1. Abrir a página privada e verificar que este dispositivo está autorizado. Verificar que o WhatsApp está ligado ao número indicado. Se precisar de nova autenticação, parar e avisar o proprietário.
-2. Usar «Verificar stock e vídeo». O servidor compara a Samucar com os dois ficheiros e seleciona somente o vídeo mais recente elegível, já publicado no Instagram, com o mesmo conteúdo e preço. Nunca gerar outro vídeo nesta etapa.
-3. Usar «Reservar este vídeo» e guardar o identificador da tentativa. O servidor persiste a reserva antes de qualquer interação de publicação. Se existir uma tentativa anterior, verificar o resultado dela antes de continuar; nunca reenviar por causa de um timeout.
-4. Descarregar o MP4 reservado. O download faz nova verificação do stock e exige o cookie e a tentativa exata. Preparar esse ficheiro no compositor de Estado do WhatsApp, sem enviar ainda.
-5. Confirmar a conta e usar «Iniciar envio no WhatsApp» imediatamente antes de enviar. Isto volta a verificar o stock. Só carregar em enviar depois de a página confirmar o início registado. Se a resposta falhar, atualizar o estado e rever; não presumir que não ficou gravado.
-6. Enviar uma vez no WhatsApp. Abrir «O meu estado» e observar o vídeo, identificando carro e preço. Só depois preencher a observação e usar «Guardar publicação observada». Este registo é uma observação do navegador; `providerApiVerified` permanece falso.
-7. Se a publicação não puder ser confirmada, usar «Resultado incerto». Não repetir o envio automaticamente, mesmo no dia seguinte. Se o registo de observação falhar depois da publicação, atualizar e reconciliar a mesma tentativa; nunca criar outra publicação.
+1. Abrir **Preparar vídeo de uma viatura nova**. A consulta confere os anúncios disponíveis da Samucar e da AutoValorPT com o stock sincronizado e apresenta a origem do anúncio. As viaturas novas com vídeo confirmado entram por ordem de espera. A expiração natural do Story no Instagram permite continuar a usar o MP4 original se os dados e o preço se mantiverem.
+2. Selecionar **Reservar este vídeo**. O servidor guarda a reserva antes do envio. Se já existir uma tentativa, abrir o respetivo registo.
+3. No iPhone, confirmar o número da conta e preparar o MP4. A aplicação confere o stock e regista o início. Tocar em **Partilhar vídeo no Estado**, escolher WhatsApp Business e depois **O meu estado**.
+4. Onde a partilha de ficheiros estiver indisponível, descarregar o vídeo reservado. Preparar o Estado no WhatsApp, confirmar o número no painel e tocar em **Registar início do envio** antes de enviar. Se a folha de partilha tiver fechado depois do registo inicial, verificar primeiro o resultado no WhatsApp.
+5. Enviar uma vez. Abrir **O meu estado**, verificar o carro e o preço que aparecem no vídeo e usar **Guardar publicação observada**. A aplicação guarda a observação do operador (`providerApiVerified: false`).
+6. Se o resultado for incerto, usar **Resultado incerto**. Recuperar a mesma tentativa permite consultar o seu estado mesmo que a ligação ao painel tenha falhado.
 
 Um administrador pode encerrar uma tentativa sem confirmação para libertar os outros carros. Esse encerramento mantém o identificador do carro definitivamente processado e não comprova que tenha sido publicado. Revogar o dispositivo nunca elimina uma tentativa pendente. Uma nova autorização só é permitida depois de a tentativa anterior ser reconciliada ou encerrada.
+
+## Partilhar uma dica
+
+Abrir **Estado do WhatsApp** no painel principal e escolher uma publicação diária ou extra já confirmada no Instagram. A aplicação reutiliza o conteúdo publicado. A legenda e a ligação ao simulador, quando aplicável, podem ser copiadas para o Estado. Usar **Preparar dica para o Estado**, partilhar os ficheiros ou descarregá-los e enviá-los em **O meu estado**.
+
+Depois de ver a dica na conta indicada, escolher **Vi esta dica no meu Estado**. Cada publicação tem o seu próprio registo de partilha. A dica diária e a extra podem ser partilhadas no mesmo dia que uma viatura. Essas ações preservam o limite das viaturas e os horários de publicação no Instagram.
 
 ## Retirada de Estados desatualizados
 
 1. Antes de uma nova publicação, usar «Verificar Estados a retirar». A consulta não altera registos nem elimina conteúdos. Considera apenas publicações observadas desta rotina, pertencentes ao dispositivo autorizado e ainda dentro das 24 horas posteriores ao início de envio registado; registos antigos sem esse marcador usam a data de observação. Um administrador pode consultar registos de outros dispositivos, mas a autorização restrita de um dispositivo não permite operar publicações alheias.
-2. A mesma auditoria completa da Samucar, Stock e Catalogo tem de confirmar a alteração. Para uma saída, exige-se uma linha explicitamente `out of stock` na folha Stock e ausência entre os disponíveis. A simples ausência de uma linha não autoriza eliminar. Para uma alteração de dados/preço, a impressão digital atual tem de diferir da do vídeo publicado. Uma auditoria incompleta, incoerente, vazia ou desatualizada bloqueia a operação.
+2. A auditoria dos dois inventários e do stock sincronizado tem de confirmar a alteração. Para uma saída, exige-se uma linha explicitamente `out of stock` no histórico de stock e ausência entre os anúncios disponíveis. A simples ausência de uma linha não autoriza eliminar. Para uma alteração de dados/preço, a impressão digital atual tem de diferir da do vídeo publicado. Uma auditoria incompleta, incoerente, vazia ou desatualizada bloqueia a operação.
 3. Preparar a retirada do candidato exato. Isto reserva uma operação com o identificador da publicação original e a sua impressão digital, sem alterar o registo de publicação. Publicações e retiradas usam a mesma exclusão mútua; não podem avançar simultaneamente.
 4. Abrir apenas «O meu estado» da conta indicada, localizar o vídeo exato e comparar carro, preço e prova da publicação original. Se o vídeo não estiver visível, se não for identificável sem ambiguidades ou se houver Estados indistinguíveis, não eliminar nem selecionar outro como alternativa. Registar resultado incerto e pedir revisão quando necessária. Não consultar conversas ou Estados de terceiros para procurar correspondências.
 5. Descrever a identificação e confirmar as duas opções antes de usar «Registar início da eliminação». O servidor volta a validar o stock, a propriedade do registo e a janela de 24 horas. Só eliminar o Estado no WhatsApp depois da confirmação deste marcador. Uma falha da resposta exige consultar o estado; não repetir a eliminação por causa de um timeout.
@@ -43,13 +48,11 @@ Quando decorre essa janela de 24 horas, o plano apresenta `window_elapsed`, nunc
 
 O estado e o acesso ficam juntos em `whatsapp-status/v1/production/state.json`, com ETag e escrita condicional. Assim, uma reserva não pode sobrescrever uma revogação concorrente, nem duas execuções reservar o mesmo trabalho. Resultados ativos ou incertos não expiram para reenvio automático.
 
-A primeira reserva exclui os restantes carros atuais da publicação inicial em massa. Depois disso, apenas identificadores novos são elegíveis; carros já processados, retirados ou reaparecidos não voltam a entrar automaticamente. Há no máximo um início de envio por dia em `Europe/Lisbon`; resultado incerto, revogação ou encerramento manual não libertam essa quota diária. A preparação reutiliza MP4 privados e não altera os históricos Instagram ou consome quota de renderização/publicação Instagram.
+Na primeira reserva, a fila escolhe um vídeo confirmado nas últimas 24 horas e regista o stock já existente como referência. Se encontrar um vídeo recente indisponível ao procurar o candidato, mantém essa viatura pendente. Nas consultas seguintes, verifica primeiro as viaturas há mais tempo em espera. Um ficheiro em falta ou inválido deixa passar a próxima viatura disponível. Um erro temporário de armazenamento interrompe a consulta. Cada identificador já processado conserva o seu registo, mesmo que a viatura reapareça no stock. Há no máximo um início de envio de viatura por dia em `Europe/Lisbon`. A tentativa conta para o limite mesmo que termine com resultado incerto, revogação ou encerramento manual. A preparação reutiliza MP4 privados e não altera os históricos Instagram ou consome quota de renderização/publicação Instagram.
 
-O código prepara e regista publicações e retiradas; a ação real no WhatsApp é efetuada pelo executor autorizado do navegador. Nenhum endpoint chama uma API não documentada, elimina em massa ou aceita ausência/expiração como confirmação. Não se deve afirmar que as retiradas estão automatizadas até esse percurso estar integrado e testado na execução agendada.
+As retiradas de viaturas são manuais e exigem observação no WhatsApp. Os registos conservam a publicação original e a eventual retirada. Uma ausência ou expiração tem um resultado distinto de uma eliminação confirmada.
 
-As operações usam o router existente `/api/stock?integration=whatsapp-status`, sem aumentar o número de funções Vercel. Consultas são GET; mudanças exigem POST com origem HTTPS igual ao host. A página pública contém apenas a interface, sem dados privados. Os dados e o MP4 exigem autenticação e usam `no-store` e `no-referrer`.
-
-O navegador persistente e a sessão WhatsApp têm de continuar disponíveis ao executor agendado. O código não assegura a disponibilidade da infraestrutura do navegador, não contorna autenticação WhatsApp e não publica por uma API não documentada. Expiração, revogação e ausência de sessão exigem aviso ao proprietário. Sem uma publicação observada pelo dispositivo atual, `automation` fica `pending_end_to_end_test`; com essa prova, fica `publication_observed_scheduled_test_pending`. Nenhum destes estados comprova a execução agendada. Os marcadores das outras etapas mantêm-se inalterados.
+A gestão das viaturas usa o router existente `/api/stock?integration=whatsapp-status`. As consultas usam GET. Alterações exigem POST com a mesma origem HTTPS. Os dados e o MP4 exigem autenticação e usam `no-store` e `no-referrer`.
 
 ## Verificação
 

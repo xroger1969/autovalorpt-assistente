@@ -17,10 +17,13 @@ const rejection = code => error => error.code === code;
 
 async function fixture() {
   const mem = memoryBlob(); let clock = Date.parse('2026-11-14T08:15:00.000Z');
-  let items = [car('1'), car('2'), car('3')]; let outOfStockIds = []; let valid = true; let sourceHook;
+  let items = [car('1'), car('2'), car('3')]; let outOfStockIds = []; let sources = []; let valid = true; let sourceHook;
   const baseHead = mem.storage.head;
-  mem.storage.head = async (...args) => ({ ...await baseHead(...args), ...(args[0].endsWith('.mp4') ? { contentType: 'video/mp4', size: 1200 } : {}) });
-  const source = { audit: async () => { if (sourceHook) await sourceHook(); return { valid, items, outOfStockIds, expectedCount: items.length, sourceCount: items.length, checkedAt: new Date(clock).toISOString() }; } };
+  mem.storage.head = async (...args) => {
+    if (args[0].endsWith('.mp4') && !mem.records.has(args[0])) throw Object.assign(new Error('Missing file'), { status: 404 });
+    return { ...await baseHead(...args), ...(args[0].endsWith('.mp4') ? { contentType: 'video/mp4', size: 1200 } : {}) };
+  };
+  const source = { audit: async () => { if (sourceHook) await sourceHook(); return { valid, items, sources, outOfStockIds, expectedCount: items.length, sourceCount: items.length, checkedAt: new Date(clock).toISOString() }; } };
   const settings = { env, storage: mem.storage, source, now: () => clock };
   const service = createWhatsappStatus(settings);
   async function stories(values = items, extra = {}) {
@@ -43,6 +46,7 @@ async function fixture() {
   return { ...mem, service, settings, context, enrolled, plan, claim, confirm, stories,
     get items() { return items; }, set items(value) { items = value; },
     get outOfStockIds() { return outOfStockIds; }, set outOfStockIds(value) { outOfStockIds = value; },
+    set sources(value) { sources = value; },
     set valid(value) { valid = value; }, set clock(value) { clock = value; }, get clock() { return clock; },
     set sourceHook(value) { sourceHook = value; }, state: () => JSON.parse(mem.records.get(WHATSAPP_STATUS_PATH).text) };
 }
@@ -109,7 +113,7 @@ test('WhatsApp validates the row while streaming an immutable shared gallery ass
   assert.equal((await new Response(media.stream).text()).length, 1200);
 });
 
-test('candidate rejects untrusted IG binding, unpublished video and missing assets', async () => {
+test('candidate rejects untrusted IG binding and unpublished videos and skips missing assets', async () => {
   const f = await fixture();
   await f.stories(f.items, { accountId: 'another-account' });
   await assert.rejects(f.plan(), rejection('status_video_binding_changed'));
@@ -118,8 +122,12 @@ test('candidate rejects untrusted IG binding, unpublished video and missing asse
   for (const entry of Object.values(ig.items)) entry.status = 'preview_ready';
   blob.text = JSON.stringify(ig); assert.equal((await f.plan()).candidate, null);
   await f.stories(); const latest = f.items[2]; f.records.delete(instagramVideoPath(latest.id, storyFingerprint(latest)));
-  await assert.rejects(f.plan());
-  assert.equal(f.state().active, null);
+  const fallback = await f.plan();
+  assert.equal(fallback.candidate.id, f.items[1].id);
+  assert.equal(fallback.pendingVideoCount, 1);
+  const claimed = await f.service.claim(f.context, fallback.candidate);
+  assert.equal(claimed.active.id, f.items[1].id);
+  assert.equal(f.state().items[latest.id], undefined);
 });
 
 test('concurrent reservations permit exactly one attempt', async () => {
@@ -177,6 +185,108 @@ test('processed and baseline IDs never requeue when removed, reappeared or chang
   f.items.push(car('4')); await f.stories(); assert.equal((await f.plan()).candidate.id, 'IDabcde4');
 });
 
+test('new vehicles from either inventory stay queued through Instagram expiry and are served in order across days', async () => {
+  const f = await fixture();
+  const baseline = (await f.claim()).active;
+  await f.service.begin(f.context, { attemptId: baseline.attemptId, account: WHATSAPP_STATUS_NUMBER });
+  await f.confirm(baseline);
+  f.clock += 2 * 86400_000;
+  const first = car('4'), second = car('5'), pending = car('6');
+  f.items = [...f.items, first, second, pending];
+  f.sources = [{ id: 'autovalorpt', ids: [first.id, pending.id] }, { id: 'samucar', ids: [second.id] }];
+  await f.stories(f.items.filter(item => item.id !== pending.id));
+  const blob = f.records.get('instagram/v1/production/stories.json');
+  const ledger = JSON.parse(blob.text);
+  ledger.items[first.id].status = 'expired';
+  ledger.items[first.id].at = new Date(f.clock - 86400_000).toISOString();
+  ledger.items[second.id].status = 'mapping_pending';
+  ledger.items[second.id].mappingStatus = 'pending';
+  blob.text = JSON.stringify(ledger);
+  const plan = await f.plan();
+  assert.equal(plan.pendingCount, 3);
+  assert.equal(plan.pendingVideoCount, 1);
+  assert.equal(plan.candidate.id, first.id);
+  assert.deepEqual(plan.candidate.sourceNames, ['AutoValorPT']);
+  const { active } = await f.service.claim(f.context, plan.candidate);
+  const media = await f.service.media(f.context, { attemptId: active.attemptId });
+  assert.equal((await new Response(media.stream).text()).length, 1200);
+  await f.service.begin(f.context, { attemptId: active.attemptId, account: WHATSAPP_STATUS_NUMBER });
+  const confirmed = await f.service.confirm(f.context, { attemptId: active.attemptId, id: active.id, fingerprint: active.fingerprint,
+    account: WHATSAPP_STATUS_NUMBER, visibleInMyStatus: true, observedAt: new Date(f.clock).toISOString(),
+    observationClient: 'whatsapp', observation: 'Preço e viatura visíveis no Estado do WhatsApp Business.' });
+  assert.equal(confirmed.lastResult.confirmationSource, 'whatsapp_observation');
+  assert.equal(confirmed.lastResult.providerApiVerified, false);
+  assert.equal((await f.plan()).reason, 'status_daily_limit');
+  f.clock += 86400_000;
+  const next = await f.plan();
+  assert.equal(next.candidate.id, second.id);
+  assert.deepEqual(next.candidate.sourceNames, ['Samucar']);
+  assert.equal(next.pendingCount, 2);
+  f.items = f.items.filter(item => item.id !== second.id);
+  await assert.rejects(f.service.claim(f.context, next.candidate), rejection('status_candidate_changed'));
+});
+
+test('expired media cannot bootstrap an old stock backlog and unconfirmed or changed stories stay ineligible', async () => {
+  const f = await fixture();
+  const blob = f.records.get('instagram/v1/production/stories.json');
+  const state = JSON.parse(blob.text);
+  for (const entry of Object.values(state.items)) entry.status = 'expired';
+  blob.text = JSON.stringify(state);
+  assert.equal((await f.plan()).candidate, null);
+  for (const entry of Object.values(state.items)) {
+    entry.status = 'mapping_pending'; entry.instagramMediaId = '';
+  }
+  blob.text = JSON.stringify(state); assert.equal((await f.plan()).candidate, null);
+  const first = state.items[f.items[0].id]; first.instagramMediaId = '12345678'; first.provider = 'facebook';
+  blob.text = JSON.stringify(state); assert.equal((await f.plan()).candidate, null);
+  first.provider = 'instagram'; first.fingerprint = 'd'.repeat(64);
+  blob.text = JSON.stringify(state); assert.equal((await f.plan()).candidate, null);
+});
+
+test('the vehicle queue skips broken archive files, checks only until the first usable one, and retries restored assets in order', async () => {
+  const f = await fixture();
+  const initial = (await f.claim()).active;
+  await f.service.begin(f.context, { attemptId: initial.attemptId, account: WHATSAPP_STATUS_NUMBER });
+  await f.confirm(initial);
+  f.clock += 86400_000;
+  const cars = ['4','5','6','7','8'].map(suffix => car(suffix));
+  f.items.push(...cars); await f.stories();
+  const storyBlob = f.records.get('instagram/v1/production/stories.json'), original = storyBlob.text;
+  const ledger = JSON.parse(original), first = ledger.items[cars[0].id];
+  first.videoPath = 'unexpected/example.mp4';
+  ledger.items[cars[1].id].assetFingerprint = 'invalid';
+  storyBlob.text = JSON.stringify(ledger);
+  const previousHead = f.storage.head, videoHeads = [];
+  f.storage.head = async (path, options) => {
+    const meta = await previousHead(path, options);
+    if (path.endsWith('.mp4')) videoHeads.push(path);
+    if (path.includes(cars[2].id)) meta.size = 0;
+    if (path.includes(cars[3].id)) meta.contentType = 'image/jpeg';
+    return meta;
+  };
+  const selected = await f.plan();
+  assert.equal(selected.candidate.id, cars[4].id);
+  assert.equal(selected.pendingCount, 5); assert.equal(selected.pendingVideoCount, 4);
+  assert.equal(videoHeads.length, 3);
+  const originalHead = f.storage.head;
+  f.storage.head = (path, options) => {
+    if (path.includes(cars[2].id)) throw Object.assign(new Error('storage timeout'), { status: 503 });
+    return originalHead(path, options);
+  };
+  await assert.rejects(f.plan(), /storage timeout/);
+  storyBlob.text = original; videoHeads.length = 0;
+  const restored = await f.plan(); assert.equal(restored.candidate.id, cars[0].id);
+  assert.equal(videoHeads.length, 1);
+  assert.equal(f.state().items[cars[0].id], undefined);
+});
+
+test('bootstrap rejects old published entries even if the Instagram ledger has yet to run its expiry pass', async () => {
+  const f = await fixture();
+  f.clock += 2 * 86400_000;
+  const plan = await f.plan();
+  assert.equal(plan.candidate, null); assert.equal(plan.pendingCount, 0); assert.equal(plan.pendingVideoCount, 0);
+});
+
 test('an uncertain or manually closed send consumes the day even after device replacement', async () => {
   const f = await fixture(); const active = (await f.claim()).active;
   await f.service.begin(f.context, { attemptId: active.attemptId, account: WHATSAPP_STATUS_NUMBER });
@@ -220,10 +330,10 @@ test('router enforces same-origin POST, rejects broad actions and never accepts 
   await handler(request('revoke', 'POST', { cookie: `${ADMIN_COOKIE_NAME}=${admin}` }), revoke); assert.equal(revoke.statusCode, 200); assert.match(revoke.headers['Set-Cookie'], /Max-Age=0/);
 });
 
-test('UI exposes scope, expiry, pending automation and observed-only evidence without embedding secrets', async () => {
+test('UI exposes scope, expiry, manual sending and observed-only evidence without embedding secrets', async () => {
   const html = await readFile(new URL('../estado-whatsapp.html', import.meta.url), 'utf8');
   const js = await readFile(new URL('../estado-whatsapp.js', import.meta.url), 'utf8');
-  assert.match(html, /90 dias/); assert.match(html, /teste completo/); assert.match(html, /Não é uma confirmação recebida da API/);
+  assert.match(html, /90 dias/); assert.match(html, /envio final é feito em «O meu estado»/); assert.match(html, /Não é uma confirmação recebida da API/);
   assert.match(js, /visibleInMyStatus/); assert.match(js, /doNotRepeat: true/);
   assert.doesNotMatch(html + js, /ADMIN_SESSION_SECRET|tokenHash|localStorage|innerHTML|Bearer/);
 });

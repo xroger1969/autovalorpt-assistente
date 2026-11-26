@@ -9,26 +9,28 @@
     details.card > summary { cursor:pointer; font-weight:700; font-size:17px; min-height:44px; padding:10px 0; }
     #candidateHint:empty { display:none; }
   </style>
-  <script src="/estado-whatsapp.js" defer></script>
+  <script src="/estado-whatsapp.js?v=20261126-2" defer></script>
 </head>
 <body>
   <header><div><strong>AutoValorPT</strong><a href="/rotina.html">A minha rotina</a></div></header>
   <main>
     <h1>Estados WhatsApp</h1>
-    <p class="muted">Prepara aqui o vídeo e publica-o no WhatsApp Business da conta <strong>+351 965 637 736</strong>.</p><p class="muted" id="automationExplanation">A publicação automática continua por confirmar até ao teste completo no WhatsApp e na rotina agendada.</p>
+    <p class="muted">Prepara aqui o vídeo e publica-o no WhatsApp Business da conta <strong>+351 965 637 736</strong>.</p><p class="muted" id="automationExplanation">O envio final é feito em «O meu estado» no WhatsApp Business.</p>
     <p id="message" class="notice" role="status" aria-live="polite">A verificar o acesso…</p>
     <p id="login" hidden><a class="button" href="/rotina.html">Entrar na área privada</a> Depois de entrar, volte a esta página.</p>
     <div id="private" hidden>
       <button id="refresh" type="button">Consultar registo</button>
-      <section class="card"><h2>Próximo vídeo</h2><p id="candidate">Por consultar.</p><p id="baseline" class="muted"></p><p id="candidateHint" class="muted"></p>
+      <section id="viaturas-novas" class="card"><h2>Próximo vídeo</h2><p id="candidate">Por consultar.</p><p id="baseline" class="muted"></p><p id="candidateHint" class="muted"></p>
         <div class="actions"><button id="plan" type="button">Procurar vídeo</button><button id="claim" class="primary" type="button" hidden>Reservar este vídeo</button></div>
-        <p class="muted">É reutilizado um vídeo já preparado e publicado no Instagram, com os dados conferidos no stock atual. No máximo um envio iniciado por dia, mesmo quando o resultado fica incerto. Os carros antigos não são publicados em série.</p>
+        <p class="muted">É reutilizado um vídeo já preparado e publicado no Instagram, com os dados conferidos no stock atual. No máximo um envio de viatura iniciado por dia, mesmo quando o resultado fica incerto. Os carros antigos não são publicados em série.</p>
         <p class="muted">Os Estados registados podem ser retirados quando o carro sai do stock ou os dados mudam. A eliminação é executada no WhatsApp e só fica confirmada após observação.</p>
       </section>
       <section id="attempt" class="card" hidden><h2>Publicação em curso</h2><dl id="attemptDetails"></dl>
+        <label for="account">Número confirmado na conta WhatsApp</label><input id="account" type="tel" autocomplete="off" placeholder="+351965637736">
+        <div class="actions"><button id="nativePrepare" class="primary" type="button" hidden>Preparar MP4 para partilhar</button><button id="nativeShare" class="primary" type="button" hidden>Partilhar vídeo no Estado</button></div>
+        <p id="nativeHint" class="muted" hidden>No iPhone, escolhe WhatsApp Business e depois «O meu estado» na folha de partilha. Se esse destino não aparecer, guarda o vídeo e abre Atualizações no WhatsApp Business.</p>
         <div class="actions"><a id="download" class="button" hidden>Descarregar vídeo reservado</a><button id="begin" type="button" hidden>Registar início do envio</button></div>
         <p class="muted">Descarrega o vídeo e prepara o teu Estado no WhatsApp Business. Confirma aqui o número da conta e regista o início. Depois, toca em enviar no WhatsApp.</p>
-        <label for="account">Número confirmado na conta WhatsApp</label><input id="account" type="tel" autocomplete="off" placeholder="+351965637736">
         <div id="evidence" hidden>
           <label for="observation">O que ficou visível em «O meu estado»?</label><textarea id="observation" maxlength="300" rows="3" placeholder="Indique o carro e o preço que observou no vídeo publicado."></textarea>
           <label><input id="visible" type="checkbox">Vi este vídeo publicado em «O meu estado» nesta conta.</label>
@@ -58,7 +60,7 @@
         <details id="withdrawalReconcile" hidden><summary>Encerrar retirada sem confirmação</summary><p>Liberta a rotina, mas não afirma que o Estado foi eliminado e impede repetir esta retirada automaticamente.</p><button id="withdrawalClose" type="button">Encerrar sem confirmar eliminação</button></details>
       </section>
       <details class="card"><summary>Acesso do dispositivo</summary><p id="device"></p>
-        <p class="muted">A autorização dura 90 dias e dá acesso apenas ao vídeo selecionado e ao registo da respetiva publicação. A sessão WhatsApp tem de estar ligada neste navegador.</p>
+        <p class="muted">A autorização dura 90 dias e dá acesso apenas ao vídeo selecionado e ao registo da respetiva publicação. Para enviar, abre a conta indicada no WhatsApp Business ou no WhatsApp Web.</p>
         <p class="muted">Revogar aqui bloqueia o acesso aos vídeos e registos desta página. Para desligar também a sessão WhatsApp, remova o navegador em «Dispositivos associados» no WhatsApp do telemóvel.</p>
         <div id="adminControls" class="actions" hidden><button id="enroll" class="primary" type="button">Autorizar este dispositivo por 90 dias</button><button id="revoke" type="button">Revogar acesso aos vídeos e registos</button></div>
       </details>
@@ -66,7 +68,7 @@
         <button id="withdrawalPlan" type="button">Verificar Estados a retirar</button><ul id="withdrawalCandidates"></ul><p id="elapsed" class="muted"></p>
         <p class="muted">Só são considerados Estados registados por esta rotina e ainda dentro da janela de 24 horas. Identidade ambígua, falta de stock confirmado ou resultado incerto impedem uma nova eliminação.</p>
       </details>
-      <section class="card"><h2>Últimos registos</h2><p id="last">Ainda sem publicação observada.</p><p id="lastWithdrawal">Ainda sem eliminação observada.</p><small class="muted">O registo confirma uma observação no WhatsApp Web por quem executa a rotina. Não é uma confirmação recebida da API da Meta.</small></section>
+      <section class="card"><h2>Últimos registos</h2><p id="last">Ainda sem publicação observada.</p><p id="lastWithdrawal">Ainda sem eliminação observada.</p><small class="muted">O registo identifica quem observou o vídeo em «O meu estado». Não é uma confirmação recebida da API da Meta.</small></section>
     </div>
   </main>
 </body>
