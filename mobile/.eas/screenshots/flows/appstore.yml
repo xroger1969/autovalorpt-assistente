@@ -19,7 +19,8 @@ name: AutoValorPT — actual catalogue, vehicle and tools
 - extendedWaitUntil:
     visible: A tua próxima viatura
     timeout: 15000
-- assertVisible: Pedir informações
+- assertVisible: Fechar viatura
+- assertNotVisible: Viatura indisponível
 - waitForAnimationToEnd:
     timeout: 10000
 - assertNotVisible: Fotografia indisponível
