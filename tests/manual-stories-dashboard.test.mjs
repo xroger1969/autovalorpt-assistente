@@ -58,7 +58,8 @@ function dashboard(overrides = {}, storage = new Map(), collapsible = false, pre
       return { ok: true, status: 200, json: async () => result };
     }, location: { origin: 'https://example.test' }, URL, AbortController,
     clearTimeout: id => timers.delete(id), setTimeout: (callback, delay) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; },
-    localStorage: { getItem: key => preparationStorage.get(key), setItem: (key, value) => preparationStorage.set(key, value), removeItem: key => preparationStorage.delete(key) },
+    localStorage: { get length() { return preparationStorage.size; }, key: index => [...preparationStorage.keys()][index],
+      getItem: key => preparationStorage.get(key), setItem: (key, value) => preparationStorage.set(key, value), removeItem: key => preparationStorage.delete(key) },
     sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } };
   if (collapsible) element('manualStories').setAttribute('data-collapsible-preview', '');
   vm.runInNewContext(script, context);
@@ -101,7 +102,7 @@ test('preview/download and canceled confirmation never publish; repeated confirm
   assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress']);
   app.click('publishStory'); app.click('sendStory'); app.click('sendStory'); await flush();
   assert.deepEqual(app.calls.filter(call => call.action === 'publish').map(call => call.body), [
-    { id: stock[1].id, fingerprint, reviewToken: 'review-' + stock[1].id, confirmed: true }
+    { id: stock[1].id, fingerprint, reviewToken: 'review-' + stock[1].id, confirmed: true, background: true }
   ]);
   assert.equal(app.element('publishStory').disabled, false);
   assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
@@ -120,12 +121,12 @@ test('a lost publication response survives reload and only queries the original 
   first.click('publishStory'); first.click('sendStory'); await flush();
   assert.equal(first.element('publishStory').disabled, true); assert.equal(storage.size, 1);
   assert.deepEqual(counts, [[0], [1]]);
-  const next = dashboard({ status: input => ({ id: input.id, status: 'published' }) }, storage);
+  const next = dashboard({ status: input => ({ id: input.id, status: 'published' }) }, new Map(), false, storage);
   const restoredCounts = [];
   next.setSession(true, undefined, (...args) => restoredCounts.push(args));
   assert.deepEqual(restoredCounts, [[1]]);
   assert.deepEqual(next.calls, []);
-  next.element('pendingStories').children[0].emit('click'); await flush();
+  await next.tick(0);
   assert.deepEqual(next.calls, [{ action: 'status', body: { id: stock[0].id, fingerprint, reviewToken: 'review-' + stock[0].id } }]);
   assert.equal(storage.size, 0);
   assert.deepEqual(restoredCounts, [[1], [0]]);
@@ -294,4 +295,114 @@ test('returning to the page during a slow progress request never starts a parall
   complete({ ...preview(stock[0].id), jobId }); await flush();
   assert.equal(app.element('vehiclePreview').hidden, false);
   assert.equal(app.timers.size, 0);
+});
+
+test('confirmation follows one durable publication while visible and checks it when the iPhone returns', async () => {
+  const storage = new Map(); let reads = 0;
+  const app = dashboard({
+    publish: ({ id }) => ({ id, status: 'busy' }),
+    status: ({ id }) => ++reads === 1 ? { id, status: 'busy' } : { id, status: 'published', publishedAt: '2026-11-26T18:30:00.000Z' }
+  }, storage);
+  await app.open(); await app.select(1);
+  app.click('publishStory'); app.click('sendStory'); await flush();
+  assert.equal(app.element('chooseVehicle').disabled, false);
+  assert.equal(app.element('publishStory').disabled, true);
+  await app.tick();
+  app.visibility(true); await app.tick();
+  assert.equal(reads, 1);
+  app.visibility(false); await app.tick(0);
+  assert.deepEqual(app.calls.map(call => call.action), ['stock', 'create', 'progress', 'publish', 'status', 'status']);
+  assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
+  assert.match(app.element('vehicleStatus').textContent, /confirmou.*18:30/);
+  assert.equal(storage.size, 0);
+});
+
+test('a receipt from yesterday clears without marking the newly reviewed generation as published', async () => {
+  const id = stock[1].id;
+  const receipt = { id, fingerprint, reviewToken: '1.1000.old' };
+  const app = dashboard({
+    progress: () => ({ ...preview(id), jobId, reviewToken: '2.2000.new' }),
+    status: () => ({ id, status: 'published', publishedAt: '2026-11-25T19:48:00Z' })
+  }, new Map([['autovalorpt.manual-stories.pending.v1', JSON.stringify([receipt])]]));
+  await app.open(); await app.select(1); await app.tick(0);
+  assert.equal(app.element('publishStory').textContent, 'Publicar Story agora');
+  assert.equal(app.element('publishStory').disabled, false);
+  assert.match(app.element('vehicleStatus').textContent, /Envio anterior.*19:48/);
+  assert.equal(app.calls.filter(({ action }) => action === 'publish').length, 0);
+});
+
+test('an interrupted attempt resumes only after review and confirmation with its renewed receipt', async () => {
+  const id = stock[1].id, old = { id, fingerprint, reviewToken: '1.1000.expired' };
+  const active = { ...old, reviewToken: '1.2000.renewed' };
+  const app = dashboard({
+    progress: () => ({ ...preview(id), ...old, jobId, publicationStatus: 'preparing' }),
+    status: () => ({ id, status: 'preparing', pendingPublication: active })
+  }, new Map([['autovalorpt.manual-stories.pending.v1', JSON.stringify([old])]]));
+  await app.tick(0);
+  assert.match(app.element('pendingStories').children[0].textContent, /Rever vídeo para continuar/);
+  app.element('pendingStories').children[0].emit('click'); await flush();
+  app.element('vehicleVideo').readyState = 1; app.element('vehicleVideo').emit('loadedmetadata');
+  await app.tick(0); await app.tick();
+  assert.equal(app.element('publishStory').textContent, 'Continuar este envio');
+  assert.equal(app.calls.filter(({ action }) => action === 'publish').length, 0);
+  app.click('publishStory'); app.click('sendStory'); await flush();
+  assert.deepEqual(app.calls.filter(({ action }) => action === 'publish').map(x => x.body),
+    [{ ...active, confirmed: true, background: true }]);
+});
+
+test('an ambiguous result always reconciles via status without automatically publishing again', async () => {
+  const app = dashboard({
+    publish: ({ id }) => ({ id, status: 'review_required' }),
+    status: ({ id }) => ({ id, status: 'review_required' })
+  });
+  await app.open(); await app.select(0);
+  app.click('publishStory'); app.click('sendStory'); await flush();
+  for (let i = 0; i < 52; i++) await app.tick(15000);
+  assert.equal(app.calls.filter(call => call.action === 'publish').length, 1);
+  assert.equal(app.calls.filter(call => call.action === 'status').length, 48);
+  assert.equal(app.timers.size, 0);
+  assert.equal(app.element('publishStory').disabled, true);
+  assert.match(app.element('vehicleStatus').textContent, /ainda não confirmou/);
+});
+
+test('a lost POST can be briefly invisible before the server claim becomes busy and then published', async () => {
+  const statuses = ['ready', 'busy', 'published'], storage = new Map();
+  const app = dashboard({
+    publish() { throw new TypeError('Load failed'); },
+    status: ({ id }) => ({ id, status: statuses.shift() })
+  }, storage);
+  await app.open(); await app.select(1); app.click('publishStory'); app.click('sendStory'); await flush();
+  await app.tick(0);
+  assert.equal(storage.size, 1);
+  assert.equal(app.element('publishStory').disabled, true);
+  await app.tick(); await app.tick();
+  assert.equal(storage.size, 0);
+  assert.deepEqual(app.calls.map(x => x.action), ['stock', 'create', 'progress', 'publish', 'status', 'status', 'status']);
+  assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
+});
+
+test('the server may explicitly permit continuing the same slow container after a single confirmation', async () => {
+  let reads = 0;
+  const app = dashboard({
+    publish: ({ id }) => ({ id, status: 'busy' }),
+    status: ({ id }) => ++reads === 1 ? { id, status: 'preparing', canContinueAutomatically: true } : { id, status: 'published' }
+  });
+  await app.open(); await app.select(1); app.click('publishStory'); app.click('sendStory'); await flush();
+  await app.tick(); await app.tick();
+  assert.deepEqual(app.calls.map(x => x.action), ['stock', 'create', 'progress', 'publish', 'status', 'publish', 'status']);
+  const [first, second] = app.calls.filter(x => x.action === 'publish');
+  assert.deepEqual(second.body, { ...first.body, automatic: true });
+  assert.equal(app.element('publishStory').textContent, 'Preparar novo Story desta viatura');
+});
+
+test('an old tab migrating a session receipt preserves the newer generation in persistent storage', async () => {
+  const id = stock[0].id, key = 'autovalorpt.manual-story.receipt.' + id;
+  const first = { id, fingerprint, reviewToken: '1.1000.old' }, recent = { ...first, reviewToken: '2.2000.new' };
+  const legacy = new Map([['autovalorpt.manual-stories.pending.v1', JSON.stringify([first])]]);
+  const durable = new Map([[key, JSON.stringify(recent)]]);
+  const app = dashboard({ status: () => ({ id, status: 'busy' }) }, legacy, false, durable);
+  await app.tick(0);
+  assert.deepEqual(app.calls, [{ action: 'status', body: recent }]);
+  assert.deepEqual(JSON.parse(durable.get(key)), recent);
+  assert.equal(legacy.size, 0);
 });
