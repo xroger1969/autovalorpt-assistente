@@ -28,6 +28,16 @@ function imageAudit(images = [catalogImage(items[0].id), originalImages[1]], ext
   return { valid: true, sourceCount: items.length, expectedCount: items.length, items: imageItems, expectedImages, imageRevision, ...extra };
 }
 const imageProducts = audit => audit.items.map(item => ({ ...asProduct(item), image_url: item.image_link, image_fetch_status: 'FETCHED' }));
+function galleryAudit(galleries = [[originalImages[0].replace('/image', '-interior/image'),
+  originalImages[0].replace('/image', '-rear/image')], []], extra = {}) {
+  const audit = imageAudit(originalImages);
+  audit.items = audit.items.map((item, index) => ({ ...item, additional_image_link: galleries[index].join(',') }));
+  audit.expectedAdditionalImages = Object.fromEntries(audit.items.map((item, index) => [item.id, galleries[index]]));
+  audit.additionalImageRevision = createHash('sha256').update(JSON.stringify(
+    Object.entries(audit.expectedAdditionalImages).sort(([a], [b]) => a.localeCompare(b)))).digest('hex');
+  return { ...audit, ...extra };
+}
+const galleryProducts = audit => imageProducts(audit).map(item => ({ ...item, additional_image_urls: [...audit.expectedAdditionalImages[item.retailer_id]] }));
 
 test('different source and feed counts survive persistence and status reads', async () => {
   const f = fixture({ auditSource: async () => ({ valid: false, reason: 'source_feed_mismatch', sourceCount: 9, expectedCount: 7 }) });
@@ -171,6 +181,7 @@ test('least-privilege catalog access confirms WhatsApp approval despite an empty
   const productFields = f.calls.find((c) => c.url.pathname.endsWith('/products')).url.searchParams.get('fields').split(',');
   assert.ok(productFields.includes('capability_to_review_status'));
   assert.ok(productFields.includes('image_url'));
+  assert.ok(productFields.includes('additional_image_urls'));
   assert.ok(productFields.includes('image_fetch_status'));
   assert.ok(!productFields.includes('review_status'));
   assert.equal(f.posts().length, 0);
@@ -972,5 +983,149 @@ test('latest-snapshot passive uploads can confirm catalogue but cannot reconcile
   const passive = fixture({ remote: { uploads: f.remote.uploads }, auditSource: async () => snapshotAudit() });
   assert.equal((await passive.service.check()).catalogConfirmed, true);
   assert.equal(passive.posts().length, 0);
+});
+
+test('a missing remote gallery requests one XML import even when every cover, price and ID already matches', async () => {
+  const feedUrl = `${SNAPSHOT_URL}&format=xml`;
+  const audit = galleryAudit(undefined, { feedHash: SNAPSHOT_HASH, feedUrl });
+  const products = galleryProducts(audit); products[0].additional_image_urls = [];
+  const f = fixture({ feedUrl, auditSource: async () => structuredClone(audit), remote: { products } });
+  const check = await f.service.check();
+  assert.equal(check.status, 'catalog_mismatch');
+  assert.deepEqual(check.imageMismatchIds, [items[0].id]);
+  assert.deepEqual(check.imageUnverifiedIds, []);
+  assert.equal(check.catalogConfirmed, false);
+  assert.equal((await f.service.run()).status, 'import_requested');
+  assert.equal((await f.service.run()).status, 'import_pending');
+  assert.equal(f.posts().length, 1);
+  assert.equal(JSON.parse(f.blob.records.get(STATE).text).active.feedUrl, feedUrl);
+  Object.assign(f.remote.uploads[0], { end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 });
+  f.remote.products = galleryProducts(audit);
+  f.remote.products[0].image_fetch_status = 'PARTIAL_FETCH';
+  assert.equal((await f.service.run()).status, 'images_pending');
+  f.remote.products[0].image_fetch_status = 'FETCHED';
+  const result = await f.service.check();
+  assert.equal(result.catalogConfirmed, true);
+  assert.equal(result.additionalImageRevision, audit.additionalImageRevision);
+  assert.equal((await f.service.status()).lastResult.additionalImageRevision, audit.additionalImageRevision);
+  assert.equal(f.posts().length, 1);
+});
+
+test('remote gallery order and identity are checked, allowing only resize variants of the same originals', async () => {
+  const audit = galleryAudit();
+  const products = galleryProducts(audit);
+  products[0].additional_image_urls = products[0].additional_image_urls.map(url => `${url};w=1200;h=800;s=1`);
+  const f = fixture({ auditSource: async () => audit, remote: { products } });
+  assert.equal((await f.service.check()).catalogConfirmed, true);
+  f.remote.products[0].additional_image_urls.reverse();
+  const reordered = await f.service.check();
+  assert.deepEqual(reordered.imageMismatchIds, [items[0].id]);
+  assert.equal(reordered.imagesVerified, false);
+  f.remote.products[0].additional_image_urls = [originalImages[1]];
+  assert.equal((await f.service.check()).catalogConfirmed, false);
+});
+
+test('malformed gallery readback remains unverified and cannot force an import', async () => {
+  for (const remoteGallery of [null, '', {}, [null], ['https://unknown.example/photo.jpg']]) {
+    const audit = galleryAudit(); const products = galleryProducts(audit);
+    products[0].additional_image_urls = remoteGallery;
+    const f = fixture({ auditSource: async () => audit, remote: { products } });
+    const result = await f.service.run();
+    assert.equal(result.status, 'review_required');
+    assert.equal(result.reason, 'product_image_unverified');
+    assert.deepEqual(result.imageUnverifiedIds, [items[0].id]);
+    assert.equal(result.catalogConfirmed, false);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('omitted empty Graph fields permit gallery correction without falsely confirming missing photographs', async () => {
+  const audit = galleryAudit(); const products = galleryProducts(audit);
+  for (const product of products) delete product.additional_image_urls;
+  const f = fixture({ auditSource: async () => audit, remote: { products } });
+  const result = await f.service.run();
+  assert.equal(result.status, 'import_requested');
+  assert.deepEqual(result.imageMismatchIds, [items[0].id]);
+  assert.deepEqual(result.imageUnverifiedIds, []);
+  assert.equal(result.imagesVerified, false);
+  assert.equal(result.catalogConfirmed, false);
+  Object.assign(f.remote.uploads[0], { end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 });
+  assert.equal((await f.service.run()).reason, 'completed_import_still_differs');
+  assert.equal(f.posts().length, 1);
+  f.remote.products[0].additional_image_urls = audit.expectedAdditionalImages[items[0].id];
+  assert.equal((await f.service.check()).catalogConfirmed, true);
+  assert.equal(Object.hasOwn(f.remote.products[1], 'additional_image_urls'), false);
+});
+
+test('additional image expectations must exactly cover and agree with the source gallery', async () => {
+  const valid = galleryAudit();
+  const invalid = [
+    { expectedAdditionalImages: {} },
+    { expectedAdditionalImages: { ...valid.expectedAdditionalImages, [items[0].id]: [] } },
+    { expectedAdditionalImages: { ...valid.expectedAdditionalImages, [items[0].id]: ['https://evil.example/photo'] } },
+    { additionalImageRevision: 'f'.repeat(64) },
+    { expectedAdditionalImages: undefined },
+    { items: valid.items.map((item, index) => index ? item : { ...item, additional_image_link: null }) },
+  ];
+  for (const changes of invalid) {
+    const f = fixture({ auditSource: async () => ({ ...structuredClone(valid), ...changes }) });
+    const result = await f.service.run();
+    assert.equal(result.status, 'source_invalid');
+    assert.equal(result.reason, 'source_images_invalid');
+    assert.equal(f.calls.length, 0);
+  }
+  for (const gallery of [[originalImages[0]], [originalImages[1], originalImages[1]],
+    Array.from({ length: 21 }, (_, i) => `https://ireland.apollo.olxcdn.com/v1/files/extra-${i}/image`)]) {
+    const f = fixture({ auditSource: async () => galleryAudit([gallery, []]) });
+    assert.equal((await f.service.run()).reason, 'source_images_invalid');
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test('a gallery-only change during revalidation prevents an upload even with an unchanged claimed fingerprint', async () => {
+  let reads = 0;
+  const initial = galleryAudit(undefined, { feedHash: SNAPSHOT_HASH });
+  const changed = galleryAudit([[`${originalImages[1]};w=1200`, ...initial.expectedAdditionalImages[items[0].id]], []], { feedHash: SNAPSHOT_HASH });
+  const products = galleryProducts(initial); products[0].additional_image_urls = [];
+  const f = fixture({ remote: { products }, auditSource: async () => ++reads === 1 ? initial : changed });
+  const result = await f.service.run();
+  assert.equal(result.status, 'source_changed');
+  assert.equal(result.reason, 'source_changed_during_check');
+  assert.equal(f.posts().length, 0);
+});
+
+test('an earlier CSV upload reconciles using its original transport after switching to XML', async () => {
+  const legacy = fixture({ feedUrl: SNAPSHOT_URL, auditSource: async () => snapshotAudit(), remote: { products: [] } });
+  assert.equal((await legacy.service.run()).status, 'import_requested');
+  Object.assign(legacy.remote.uploads[0], { end_time: new Date(TIME + 5000).toISOString(), error_count: 0, num_invalid_items: 0 });
+  legacy.remote.products = items.map(asProduct);
+  const current = fixture({ blob: legacy.blob, remote: legacy.remote, auditSource: async () => snapshotAudit(`${SNAPSHOT_URL}&format=xml`) });
+  assert.equal((await current.service.run()).status, 'catalog_matches');
+  assert.equal((await current.service.status()).active, null);
+  assert.equal(current.posts().length, 0);
+});
+
+test('both the old server CSV schedule and Google schedule migrate to XML without changing cadence', async () => {
+  const oldServer = META_CATALOG_LATEST_FEED_URL.replace('&format=xml', '');
+  const schedule = { interval: 'HOURLY', interval_count: 2, minute: 20, timezone: 'Europe/Lisbon', url: oldServer };
+  const update = { interval: 'DAILY', hour: 8, minute: 15, url: META_CATALOG_FEED_URL };
+  const f = fixture({ remote: { feed: { id: FEED, schedule, update_schedule: update } }, auditSource: async () => snapshotAudit(`${SNAPSHOT_URL}&format=xml`) });
+  const result = await f.service.run();
+  assert.equal(result.status, 'catalog_matches');
+  assert.equal(result.feedScheduleVerified, true);
+  assert.equal(f.posts().length, 1);
+  assert.deepEqual(f.remote.feed.schedule, { ...schedule, url: META_CATALOG_LATEST_FEED_URL });
+  assert.deepEqual(f.remote.feed.update_schedule, { ...update, url: META_CATALOG_LATEST_FEED_URL });
+  assert.equal((await f.service.run()).catalogConfirmed, true);
+  assert.equal(f.posts().length, 1);
+});
+
+test('XML transport is restricted to the exact immutable snapshot URL and format', async () => {
+  for (const url of [`${SNAPSHOT_URL}&format=json`, `${SNAPSHOT_URL}&format=xml&extra=1`, `${SNAPSHOT_URL}&format=xml#fragment`,
+    `${META_CATALOG_LATEST_FEED_URL}`, `${SNAPSHOT_URL}&format=xml`.replace(SNAPSHOT_HASH, 'b'.repeat(64))]) {
+    const f = fixture({ auditSource: async () => snapshotAudit(url), remote: { products: [] } });
+    assert.equal((await f.service.run()).reason, 'source_feed_url_invalid');
+    assert.equal(f.calls.length, 0);
+  }
 });
 

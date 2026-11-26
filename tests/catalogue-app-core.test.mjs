@@ -25,6 +25,7 @@ test('inventory validation projects only public fields and preserves original ph
   const item = vehicle({ secret: 'never retain', image: 'https://ireland.apollo.olxcdn.com/v1/files/original/image;s=960x0' });
   const result = normalizeInventory(inventory([item], { token: 'never retain' }));
   assert.equal(result.items[0].image, item.image);
+  assert.deepEqual(result.items[0].images, [item.image]);
   assert.equal(result.items[0].secret, undefined);
   assert.equal(result.token, undefined);
   assert.deepEqual(Object.keys(result), ['updatedAt', 'revision', 'items']);
@@ -32,7 +33,35 @@ test('inventory validation projects only public fields and preserves original ph
   assert.equal(result.updatedAt, '2026-11-26T08:00:00.000Z');
   assert.deepEqual(normalizeInventory(inventory([])).items, []);
   const unknown = vehicle({ year: null, mileage: null, fuel: '', url: 'https://standvirtual.com/carros/anuncio/modelo-ID8Qalpha.html' });
-  assert.deepEqual(normalizeInventory(inventory([unknown])).items, [unknown]);
+  assert.deepEqual(normalizeInventory(inventory([unknown])).items, [{ ...unknown, images: [unknown.image] }]);
+});
+
+test('original galleries retain their order, cover and full set through saved-snapshot round trips', () => {
+  const cover = vehicle().image;
+  const second = 'https://ireland.apollo.olxcdn.com/v1/files/interior/image;s=1920x0';
+  const third = 'https://ireland.apollo.olxcdn.com/v1/files/rear/image';
+  const item = vehicle({ images: [cover, second, third, second] });
+  const result = normalizeInventory(inventory([item]));
+  assert.deepEqual(result.items[0].images, [cover, second, third]);
+  assert.equal(result.items[0].image, cover);
+  assert.deepEqual(item.images, [cover, second, third, second], 'does not mutate the received snapshot');
+  const saved = JSON.parse(JSON.stringify(inventory(result.items)));
+  assert.deepEqual(normalizeInventory(saved).items[0].images, [cover, second, third]);
+  const full = [cover, ...Array.from({ length: 99 }, (_, i) => `https://ireland.apollo.olxcdn.com/v1/files/gallery${i}/image`)];
+  assert.equal(normalizeInventory(inventory([vehicle({ images: full })])).items[0].images.length, 100);
+});
+
+test('unsafe, mismatched or malformed galleries cannot replace the last valid catalogue', () => {
+  const cover = vehicle().image;
+  for (const images of [
+    [], null, 'not-an-array', {}, [cover, null], [cover, 'javascript:alert(1)'],
+    [cover, 'https://ireland.apollo.olxcdn.com.evil.test/v1/files/other/image'],
+    [cover, 'https://ireland.apollo.olxcdn.com/v1/files/other/image?token=secret'],
+    [cover, 'https://user:password@ireland.apollo.olxcdn.com/v1/files/other/image'],
+    [cover, 'https://private.blob.vercel-storage.com/customer-document'],
+    ['https://ireland.apollo.olxcdn.com/v1/files/wrong-cover/image', cover],
+    Array.from({ length: 101 }, () => cover),
+  ]) assert.throws(() => normalizeInventory(inventory([vehicle({ images })])));
 });
 
 test('corrupt or incomplete snapshots cannot silently replace the catalogue with partial results', () => {

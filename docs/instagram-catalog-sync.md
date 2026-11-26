@@ -1,6 +1,6 @@
 # AutoValorPT: catálogo → publicações Instagram
 
-Integração desativada por defeito. Não cria uma Loja Meta nem altera o catálogo WhatsApp. O cron diário das 10:00 UTC lê a mesma folha usada pelo catálogo e publica no máximo um novo anúncio por execução, apenas depois de validar que a conta é `autovalorpt`.
+Integração desativada por defeito. Não cria uma Loja Meta nem altera o catálogo WhatsApp. A rotina principal, iniciada a partir das 08h00 Europe/Lisbon, recebe o stock validado das contas Standvirtual Samucar e AutoValorPT através do fornecedor interno e publica no máximo um novo anúncio por execução, apenas depois de validar que a conta é `autovalorpt`. O antigo cron independente das 10:00 UTC foi substituído por esta coordenação.
 
 ## Configuração de produção
 
@@ -10,7 +10,7 @@ Configurar apenas no servidor/Vercel; nunca colocar tokens no código, logs ou c
 | --- | --- |
 | `INSTAGRAM_SYNC_ENABLED` | `false` até autorização e validação concluídas; depois `true` |
 | `INSTAGRAM_INCLUDE_EXISTING_STOCK` | `true` para incluir também os carros inicialmente registados como baseline; por defeito `false` |
-| `INSTAGRAM_FEED_URL` | `https://docs.google.com/spreadsheets/d/1RENDbmN9Inyd2fr0FQJJmbe1jMpJl4Psevlawc92uVs/export?format=csv&gid=2105479537` |
+| `INSTAGRAM_FEED_URL` | `https://docs.google.com/spreadsheets/d/1RENDbmN9Inyd2fr0FQJJmbe1jMpJl4Psevlawc92uVs/export?format=csv&gid=2105479537` — identidade histórica conservada; em produção, o fornecedor interno entrega os dados atuais. |
 | `INSTAGRAM_USER_ID` | ID confirmado pela Meta para `autovalorpt` |
 | `INSTAGRAM_ACCESS_TOKEN` | Token da conta autorizada, variável sensível |
 | `INSTAGRAM_TOKEN_EXPIRES_AT` | No modo `instagram`, data ISO de expiração devolvida para o token inicial de longa duração |
@@ -29,27 +29,37 @@ No modo `facebook`, não chama o endpoint de renovação Instagram e conserva o 
 ## Arranque e operação
 
 1. Publicar com `INSTAGRAM_SYNC_ENABLED=false`. O cron permanece inativo.
-2. Administrador autenticado consulta `GET /api/stock?integration=instagram-sync&action=status` e `GET /api/stock?integration=instagram-sync&action=dry-run`. O segundo valida o CSV e apresenta o próximo texto/foto sem escrever estado nem publicar.
-3. Depois da autorização da Meta, configurar token/ID, validar a conta e ativar. A primeira execução válida grava todos os IDs atuais como **baseline** e publica zero carros. No estado inicial conhecido existem 11; a fonte atual é sempre revalidada.
+2. Administrador autenticado consulta `GET /api/stock?integration=instagram-sync&action=status` e `GET /api/stock?integration=instagram-sync&action=dry-run`. O segundo valida o feed e apresenta a legenda, capa, lista `imageUrls` e contagem `imageCount` da próxima publicação sem escrever estado nem publicar.
+3. Depois da autorização da Meta, configurar token/ID, validar a conta e ativar. A primeira execução válida grava todos os IDs atuais como **baseline** e publica zero carros. A quantidade e os dados atuais são sempre obtidos da fonte validada.
 4. Execuções seguintes publicam IDs novos que estejam `in stock`. Com `INSTAGRAM_INCLUDE_EXISTING_STOCK=true`, os IDs iniciais ainda não publicados também entram na fila, no máximo um por execução, usando os preços e fotografias atuais. Carros retirados ou sem stock são excluídos. Não se apaga nem reinicia o histórico: IDs já publicados continuam excluídos, mesmo que o preço mude ou sejam retirados e repostos. Um ID novo visto inicialmente sem stock pode ser publicado quando ficar disponível. O feed original e as suas imagens não são alterados.
-5. Cada foto é entregue à Meta por URL assinado válido duas horas. Apenas a origem OLX permitida é lida. A imagem é convertida em JPEG sRGB e recebe margens neutras quando necessário, sem cortar o automóvel; máximo 1440 px de largura/8 MB.
+5. Uma nova viatura com várias fotografias é publicada num único carrossel, com a capa e as fotografias seguintes por ordem, até **20 imagens no total**. Com apenas uma fotografia, mantém-se a publicação simples. Acrescentar fotografias a uma viatura já publicada não a volta a publicar, não apaga a publicação anterior e não altera o histórico. A migração para galerias não ativa a opção de incluir stock antigo.
+6. Cada foto é entregue à Meta por URL assinado válido duas horas. Apenas a origem OLX permitida é lida. Mantém-se o adaptador visual já existente: cópia JPEG sRGB compatível, fotografia completa dentro da moldura AutoValorPT e margens quando necessárias, sem cortar o automóvel; máximo 1440 px de largura/8 MB. A galeria de origem permanece intacta. Não se retoca a viatura, não se substitui o seu fundo e não se geram fotografias.
 
 A rotina principal começa às 08h00 de Portugal continental, com ajuste de verão e inverno. A aplicação conserva o histórico comercial no Instagram e atualiza o catálogo WhatsApp com as viaturas disponíveis. [Regras do histórico](instagram-retirements.md).
+
+## Galerias e compatibilidade
+
+O estado de stock v3 conserva as galerias originais completas, até 100 fotografias por viatura, para a app web e nativa. O feed de canais mantém `image_link` e acrescenta `additional_image_link`, com até 20 URLs adicionais. O publicador valida todas as fotografias, remove repetições do mesmo original e aplica o limite de 20 imagens totais apenas à publicação Instagram. A galeria completa da app não é reduzida por esse limite.
+
+Os feeds antigos de nove colunas continuam válidos e conservam a forma dos seus registos. O fornecedor interno preserva a nova coluna quando existe e descarta campos privados. A passagem para carrosséis conserva a identidade histórica do feed, a conta e todos os registos de viaturas já publicadas.
 
 ## Falhas e duplicados
 
 Estado privado em `instagram/v1/production/state.json`. A transição exclusiva CAS é persistida antes de criar o contentor e antes de publicar. Falha de rede ou processo depois de iniciar a publicação deixa a tentativa em `publishing`/`unknown`; **não se repete automaticamente**, mesmo que a gravação posterior tenha falhado. Execuções seguintes consultam o contentor: `PUBLISHED` confirma a publicação sem repetir; `ERROR`/`EXPIRED` confirmam que pode haver uma nova tentativa. Outros estados mantêm `review_required`; confirmar o resultado na conta/Meta antes de qualquer intervenção no registo. Nunca apagar o estado para forçar nova tentativa. O status privado inclui o ID do contentor e apenas códigos numéricos seguros dos erros Meta.
 
-O mesmo pedido verifica a preparação até oito vezes com intervalos de 1,5 segundos, respeitando o orçamento de execução. Contentores ainda em preparação podem retomar na execução seguinte; se tiverem expirado, o anúncio permanece elegível para uma nova tentativa. Se o anúncio sair de stock ou os dados mudarem antes da publicação, a tentativa é cancelada e a versão atual pode ser reconsiderada. Há no máximo três tentativas de criação por ID; falhas sem publicação não impedem os outros anúncios. Um resultado de publicação ainda incerto bloqueia a fila até ser esclarecido. Respostas inválidas, conta diferente, CSV incompleto, IDs repetidos e redução superior a metade do número de linhas bloqueiam o envio. Uma redução real dessa dimensão requer revisão, porque não pode ser distinguida automaticamente de um feed parcial. Com uma publicação por execução diária, várias entradas novas ficam para os dias seguintes.
+Nos carrosséis, cada contentor de fotografia é guardado antes de passar à seguinte. `preparing_children` permite retomar uma preparação parcial; `creating_children` e `creating_carousel` mantêm uma reserva de 90 segundos contra execuções concorrentes. Uma interrupção durante a criação privada pode deixar um contentor não publicado, mas a retoma reutiliza os identificadores já confirmados e nunca publica as fotografias individualmente. Só cria o contentor principal depois de todas as fotografias estarem prontas. A rotina principal pode retomar estas fases; a reserva e a verificação do publicador continuam a decidir se pode prosseguir.
+
+O mesmo pedido verifica a preparação do contentor principal até oito vezes com intervalos de 1,5 segundos, respeitando o orçamento de execução. Contentores ainda em preparação podem retomar na execução seguinte; se tiverem expirado, o anúncio permanece elegível para uma nova tentativa. Se o anúncio sair de stock ou os dados mudarem antes da publicação, a tentativa é cancelada e a versão atual pode ser reconsiderada. Há no máximo três tentativas de criação por ID; falhas sem publicação não impedem os outros anúncios. Um resultado de publicação ainda incerto bloqueia a fila até ser esclarecido. Respostas inválidas, conta diferente, CSV incompleto, IDs repetidos e redução superior a metade do número de linhas bloqueiam o envio. Uma redução real dessa dimensão requer revisão, porque não pode ser distinguida automaticamente de um feed parcial. Com uma publicação por execução diária, várias entradas novas ficam para os dias seguintes.
 
 Desativar `INSTAGRAM_SYNC_ENABLED` suspende novas execuções; o estado é preservado. O endpoint administrativo de execução exige POST da mesma origem, e o cron exige Bearer `CRON_SECRET`. Status e dry run também são privados. Nenhum erro devolve o corpo Meta ou credenciais.
 
 ## Validação
 
-`npm test` inclui baseline sem posts, concorrência, duplicados, alteração/retirada de stock, falhas de persistência e de publicação, feed parcial, conta errada, configuração incompleta, autorização dos endpoints e conversão/assinatura das imagens. Todos os envios nos testes são simulados.
+`npm test` inclui baseline sem posts, carrosséis e ordem das fotografias, limites e validação de URLs, compatibilidade dos feeds antigos, retoma parcial, concorrência, ausência de republicação ao acrescentar fotos, alteração/retirada de stock, falhas de persistência e de publicação, feed parcial, conta errada, configuração incompleta, autorização dos endpoints e conversão/assinatura das imagens. Todos os envios nos testes são simulados.
 
-Referências oficiais verificadas em 2026-11-06:
+Referências oficiais (limite de carrosséis e endpoint de publicação revistos em 2026-11-26):
 
+- https://developers.facebook.com/documentation/instagram-platform/content-publishing
 - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
 - https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login
 - https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media

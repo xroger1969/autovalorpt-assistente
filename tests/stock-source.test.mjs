@@ -6,6 +6,9 @@ import { createStockSource, stockFeedCsv, stockSnapshotUrl } from '../lib/stock-
 import { META_CATALOG_SOURCE_URLS as URLS } from '../lib/meta-catalog-source.js';
 import { STOCK_INVENTORIES } from '../lib/stock-inventories.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
+import { createCatalogueAppFeed } from '../lib/catalogue-app-feed.js';
+import { stockFeedXml } from '../lib/stock-feed-handler.js';
+import { stockPhotoIdentity, originalPhotoGallery } from '../lib/stock-photos.js';
 
 const STATE = 'stock-source/v1/production/state.json';
 const AUTOVALORPT = STOCK_INVENTORIES.find(source => source.id === 'autovalorpt').url;
@@ -17,13 +20,18 @@ const car = (id, fields = {}) => ({ id, title: 'Tesla Model 3 | 2022 | 138 000 k
   image_link: `https://ireland.apollo.olxcdn.com/v1/files/${id}/image`, brand: 'Tesla', ...fields });
 const advert = item => ({ title: 'Tesla Model 3', url: item.link,
   price: { currencyCode: 'EUR', grossMinorAmount: Math.round(Number(item.price.split(' ')[0]) * 100) },
-  photos: [item.image_link], attributes: [
+  photos: (item.photos || [item.image_link]).slice(0, 5), attributes: [
     { key: 'make', value: 'tesla', valueLabel: 'Tesla' }, { key: 'new_used', value: 'used' },
     { key: 'first_registration_year', value: '2022' }, { key: 'mileage', value: '138000' },
     { key: 'fuel_type', value: 'electric', valueLabel: 'Elétrico' }
   ] });
 const html = (items, count = items.length) => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: {
   numberOfActiveAdverts: count, urqlState: { list: { data: JSON.stringify({ publishedAds: { total: count, ads: items.map(advert) } }) } }
+} } })}</script>`;
+const advertHtml = (item, owner) => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: {
+  advertDetailsId: item.id, advert: { title: 'Tesla Model 3', url: item.link, status: 'ACTIVE',
+    price: { currency: 'EUR', value: item.price.split(' ')[0] }, seller: { sellerUrl: owner },
+    images: { photos: (item.photos || [item.image_link]).map(url => ({ url })) } }
 } } })}</script>`;
 
 function fixture(options = {}) {
@@ -41,6 +49,8 @@ function fixture(options = {}) {
     // in both origins. Multi-source scenarios provide distinct AutoValorPT rows.
     if (url === AUTOVALORPT) return new Response(data.autovalorptBody ?? html(data.autovalorptItems ?? data.items), { headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (url === URLS.stock) return new Response(stockFeedCsv(data.seed), { headers: { 'content-type': 'text/csv' } });
+    const item = [...data.items, ...(data.autovalorptItems || [])].find(item => item.link === url);
+    if (item) return new Response(advertHtml(item, data.items.includes(item) ? URLS.inventory : AUTOVALORPT), { headers: { 'content-type': 'text/html; charset=utf-8' } });
     throw new Error(`Unexpected URL ${url}`);
   };
   const source = createStockSource({ env: options.env || env, storage: options.storage || blob.storage, now, fetchImpl });
@@ -73,7 +83,7 @@ test('migrates Samucar v1 state to both inventories while retaining IDs, sold hi
   assert.deepEqual(new Set(result.items.map(item => item.id)), new Set(['ID8stock1', 'ID8stock2', 'ID8auto01', 'ID8auto02']));
   assert.deepEqual(result.outOfStockIds, ['ID8sold01']);
   const saved = JSON.parse(f.blob.records.get(STATE).text);
-  assert.equal(saved.version, 2); assert.equal(saved.initializedAt, legacy.initializedAt);
+  assert.equal(saved.version, 3); assert.equal(saved.initializedAt, legacy.initializedAt);
   assert.deepEqual(saved.itemSources.ID8sold01, ['samucar']);
   assert.deepEqual(saved.itemSources.ID8auto01, ['autovalorpt']);
   assert.equal(saved.items.find(item => item.id === 'ID8stock1').link, legacy.items[0].link);
@@ -333,9 +343,11 @@ test('latest resolves only the committed immutable snapshot and never fetches in
   assert.equal(f.calls.length, 0); assert.equal(f.blob.records.size, 0);
   const first = await f.source.sync();
   const expected = await f.source.feed(first.feedHash);
+  const committed = JSON.parse(f.blob.records.get(STATE).text);
   const writes = f.blob.calls.filter(call => call.method === 'put').length; const requests = f.calls.length;
   f.data.items[0].price = '30000.00 EUR'; // Public reads must not observe an uncommitted inventory change.
-  assert.deepEqual(await f.source.feed('latest'), { ...expected, checkedAt: first.checkedAt });
+  assert.deepEqual(await f.source.feed('latest'), { ...expected, checkedAt: first.checkedAt,
+    galleries: committed.galleries, galleryRevision: committed.galleryRevision });
   assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes); assert.equal(f.calls.length, requests);
   const second = await f.source.sync();
   assert.notEqual(second.feedHash, first.feedHash);
@@ -409,7 +421,7 @@ test('production-only and malformed seeds do not initialize or publish a new bas
 test('seed redirects are restricted to Google export and secrets never enter diagnostics', async () => {
   const f = fixture({ respond: url => url === URLS.stock ? new Response('', { status: 302, headers: { location: 'https://attacker.example/export' } }) : null });
   assert.equal((await f.source.sync()).reason, 'feed_redirect_not_allowed');
-  assert.ok(f.calls.every(call => [URLS.stock, ...STOCK_INVENTORIES.map(source => source.url)].includes(call.url)));
+  assert.ok(f.calls.every(call => [URLS.stock, ...STOCK_INVENTORIES.map(source => source.url), ...f.data.items.map(item => item.link)].includes(call.url)));
   const broken = createStockSource({ env, storage: memoryBlob().storage, now,
     fetchImpl: async () => { throw new Error('bearer-secret-provider-detail'); } });
   const result = await broken.sync(); assert.equal(result.valid, false); assert.equal(JSON.stringify(result).includes('bearer'), false);
@@ -428,4 +440,129 @@ test('corrupt immutable snapshot and corrupt state fail closed', async () => {
   parsed.feedHash = result.feedHash; delete parsed.items[0].description;
   f.blob.records.set(STATE, { ...state, text: JSON.stringify(parsed) });
   assert.equal((await f.source.audit()).reason, 'stock_state_invalid');
+});
+
+async function publicCatalogue(source) {
+  const res = { headers: {}, setHeader(key, value) { this.headers[key] = value; },
+    status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
+  await createCatalogueAppFeed({ source })({ method: 'GET' }, res);
+  assert.equal(res.code, 200);
+  return res.body;
+}
+
+test('complete advert gallery crosses both origins, snapshot, Meta XML and public app without changing originals', async () => {
+  const galleryCar = (id, length) => car(id, { photos: Array.from({ length }, (_, i) =>
+    `https://ireland.apollo.olxcdn.com/v1/files/${id}${i ? '-photo-' + i : ''}/image`) });
+  const first = galleryCar('ID8stock1', 27); const own = galleryCar('ID8auto01', 12);
+  const f = fixture({ items: [first], autovalorptItems: [own], seed: [car('ID8stock1')] });
+  const result = await f.source.sync(); assert.equal(result.valid, true);
+  const snapshot = await f.source.feed('latest');
+  assert.deepEqual(snapshot.galleries[first.id], first.photos);
+  assert.deepEqual(snapshot.galleries[own.id], own.photos);
+  assert.equal(result.items.find(item => item.id === first.id).additional_image_link.split(',').length, 20);
+  const app = await publicCatalogue(f.source);
+  assert.deepEqual(app.items.find(item => item.id === first.id).images, first.photos);
+  assert.equal(app.items.find(item => item.id === first.id).image, first.photos[0]);
+  const xml = stockFeedXml(snapshot.csv);
+  assert.equal((xml.match(/<additional_image_link>/g) || []).length, 31);
+  assert.match(xml, /<g:image_link>https:\/\/ireland\.apollo\.olxcdn\.com/);
+  assert.equal((await f.source.audit()).valid, true);
+
+  // A change beyond the Meta/Instagram limit must still invalidate app caches.
+  first.photos[26] = first.photos[26].replace('/image', '-updated/image');
+  assert.equal((await f.source.audit()).reason, 'stock_source_changed');
+  assert.deepEqual((await publicCatalogue(f.source)).items.find(item => item.id === first.id).images, snapshot.galleries[first.id]);
+  const changed = await f.source.sync(); assert.equal(changed.valid, true);
+  assert.equal(changed.feedHash, result.feedHash);
+  const refreshed = await publicCatalogue(f.source);
+  assert.notEqual(refreshed.revision, app.revision);
+  assert.deepEqual(refreshed.items.find(item => item.id === first.id).images, first.photos);
+});
+
+test('a missing, redirected, foreign or inconsistent advert gallery preserves the last complete catalogue', async () => {
+  let bad = null;
+  const f = fixture({ respond: url => url === car('ID8stock1').link ? bad : null });
+  assert.equal((await f.source.sync()).valid, true);
+  const before = f.blob.records.get(STATE).text;
+  for (const content of [
+    '<html>Unavailable</html>',
+    advertHtml(car('ID8other1'), URLS.inventory),
+    advertHtml(car('ID8stock1'), 'https://unapproved.standvirtual.com/inventory'),
+    advertHtml(car('ID8stock1', { price: '1.00 EUR' }), URLS.inventory),
+    advertHtml(car('ID8stock1', { photos: ['https://internal.invalid/private.jpg'] }), URLS.inventory),
+  ]) {
+    bad = new Response(content, { headers: { 'content-type': 'text/html' } });
+    assert.equal((await f.source.sync()).valid, false);
+    assert.equal(f.blob.records.get(STATE).text, before);
+  }
+  bad = new Response('', { status: 302, headers: { location: 'https://unapproved.invalid/gallery' } });
+  assert.equal((await f.source.sync()).reason, 'source_gallery_unavailable');
+  assert.equal(f.blob.records.get(STATE).text, before);
+});
+
+test('version two snapshots migrate galleries without losing sold history or changing legacy snapshot bytes', async () => {
+  const f = fixture(); assert.equal((await f.source.sync()).valid, true);
+  const original = f.blob.records.get(STATE); const state = JSON.parse(original.text);
+  state.version = 2; delete state.galleries; delete state.galleryRevision;
+  state.items.forEach(item => { delete item.additional_image_link; });
+  const csv = stockFeedCsv(state.items.filter(item => item.availability === 'in stock'));
+  state.feedHash = createHash('sha256').update(csv).digest('hex');
+  f.blob.records.set(STATE, { ...original, text: JSON.stringify(state) });
+  f.blob.records.set(`stock-source/v1/production/snapshots/${state.feedHash}.csv`, { text: csv, etag: 'v2-snapshot' });
+  assert.equal((await f.source.feed('latest')).galleries, undefined);
+  assert.equal((await f.source.sync()).valid, true);
+  const saved = JSON.parse(f.blob.records.get(STATE).text);
+  assert.equal(saved.version, 3);
+  assert.deepEqual(saved.items.map(item => item.id), state.items.map(item => item.id));
+  assert.equal(saved.items.find(item => item.id === 'ID8sold01').availability, 'out of stock');
+  assert.equal((await f.source.feed(state.feedHash)).csv, csv);
+});
+
+test('oversized complete galleries cannot write a snapshot or replace the last readable state', async () => {
+  const f = fixture();
+  assert.equal((await f.source.sync()).valid, true);
+  const previousSnapshot = await f.source.feed('latest');
+  const recordsBefore = [...f.blob.records].map(([path, record]) => [path, { ...record }]);
+  const callsBefore = f.blob.calls.length;
+  f.data.items = Array.from({ length: 60 }, (_, index) => {
+    const item = car(index < 2 ? `ID8stock${index + 1}` : `ID8large${String(index).padStart(4, '0')}`);
+    return { ...item, photos: [item.image_link, ...Array.from({ length: 99 }, (_, photo) =>
+      `https://ireland.apollo.olxcdn.com/v1/files/${item.id}-${photo}-${'x'.repeat(900)}/image`)] };
+  });
+  const galleries = Object.fromEntries(f.data.items.map(item => [item.id, item.photos]));
+  assert.ok(Buffer.byteLength(JSON.stringify(galleries)) > 4 * 1024 * 1024);
+  const csv = stockFeedCsv(f.data.items.map(item => ({ ...item, additional_image_link: item.photos.slice(1, 21).join(',') })));
+  assert.ok(Buffer.byteLength(csv) < 2 * 1024 * 1024, 'the Meta CSV fits while the complete gallery exceeds the state limit');
+
+  const result = await f.source.sync();
+  assert.equal(result.valid, false);
+  assert.equal(result.reason, 'stock_state_too_large');
+  assert.equal(f.blob.calls.slice(callsBefore).some(call => call.method === 'put'), false, 'neither snapshot nor state is written');
+  assert.deepEqual([...f.blob.records], recordsBefore);
+  assert.deepEqual(await f.source.feed('latest'), previousSnapshot, 'the previous catalogue stays readable');
+});
+
+test('photo identities accept exactly the original CDN path supported by the web and native galleries', async () => {
+  const original = 'https://ireland.apollo.olxcdn.com/v1/files/original-photo/image';
+  assert.equal(stockPhotoIdentity(original), original);
+  assert.equal(stockPhotoIdentity(`${original};s=960x0;q=80`), original);
+  const invalid = [
+    'https://ireland.apollo.olxcdn.com/v1/files/folder/nested-file/image',
+    'https://ireland.apollo.olxcdn.com/v1/files//image',
+    'https://ireland.apollo.olxcdn.com/v1/files/file/image/other/image',
+    `${original}?token=private`,
+  ];
+  for (const url of invalid) {
+    assert.equal(stockPhotoIdentity(url), null, url);
+    assert.equal(originalPhotoGallery([original, url], original), null, url);
+  }
+
+  const f = fixture();
+  assert.equal((await f.source.sync()).valid, true);
+  const previousState = f.blob.records.get(STATE).text;
+  const callsBefore = f.blob.calls.length;
+  f.data.items[0].photos = [f.data.items[0].image_link, invalid[0]];
+  assert.equal((await f.source.sync()).valid, false);
+  assert.equal(f.blob.records.get(STATE).text, previousState);
+  assert.equal(f.blob.calls.slice(callsBefore).some(call => call.method === 'put'), false);
 });

@@ -55,7 +55,7 @@ test('public catalogue projects the committed snapshot without scraping, writing
   assert.deepEqual(result.body, {
     ok: true, updatedAt: checkedAt, revision: record.fingerprint, total: 1,
     items: [{ id: 'ID8Qapp01', title: 'BMW X1 1.5 xDrive25e', brand: 'BMW', year: 2020,
-      mileage: 68000, price: 22990, fuel: 'Híbrido Plug-In', image: active.image_link, url: active.link }],
+      mileage: 68000, price: 22990, fuel: 'Híbrido Plug-In', image: active.image_link, images: [active.image_link], url: active.link }],
     contact: { whatsapp: '351965637736' },
   });
   assert.equal(result.headers['Cache-Control'], 'no-store');

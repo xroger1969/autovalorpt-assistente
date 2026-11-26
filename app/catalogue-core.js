@@ -5,6 +5,7 @@ const REVISION = /^[a-f0-9]{64}$/;
 const PRODUCTION_ORIGIN = 'https://autovalorpt-assistente.vercel.app';
 const WHATSAPP_NUMBER = '351965637736';
 const MAX_VEHICLES = 2000;
+const MAX_IMAGES = 100;
 export const FAVORITES_KEY = 'autovalor.catalogue.favorites.v1';
 
 const currency = new Intl.NumberFormat('pt-PT', {
@@ -59,6 +60,16 @@ function publicUrl(value, kind, id) {
   return value;
 }
 
+function originalImages(image, images) {
+  // Saved snapshots from before galleries contained only the cover. Keep them
+  // usable offline, while validating every URL in a newly supplied gallery.
+  if (images === undefined) return [image];
+  if (!Array.isArray(images) || images.length < 1 || images.length > MAX_IMAGES) throw invalidInventory();
+  const gallery = [...new Set(images.map(url => publicUrl(url, 'image')))];
+  if (gallery[0] !== image) throw invalidInventory();
+  return gallery;
+}
+
 /**
  * Validate an entire authoritative snapshot before replacing the visible one.
  * A bad row, duplicate ID or count mismatch invalidates the whole response;
@@ -81,6 +92,7 @@ export function normalizeInventory(payload) {
       throw invalidInventory();
     }
     ids.add(item.id);
+    const image = publicUrl(item.image, 'image');
     // Explicit projection keeps unrelated/private fields out of browser storage.
     return {
       id: item.id,
@@ -90,7 +102,8 @@ export function normalizeInventory(payload) {
       mileage: item.mileage,
       price: item.price,
       fuel: text(item.fuel, 100, true),
-      image: publicUrl(item.image, 'image'),
+      image,
+      images: originalImages(image, item.images),
       url: publicUrl(item.url, 'advert', item.id),
     };
   });
