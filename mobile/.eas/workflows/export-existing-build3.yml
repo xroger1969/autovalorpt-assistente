@@ -6,8 +6,8 @@ on:
   workflow_dispatch: {}
   # To trigger once from GitHub, enable these two lines, then disable them
   # after the run is registered with an [eas skip] commit.
-  push:
-    branches: [codex/appstore-screenshots-build3]
+  # push:
+  #   branches: [codex/appstore-screenshots-build3]
 
 jobs:
   export_saved_captures:
