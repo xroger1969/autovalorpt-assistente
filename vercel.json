@@ -89,27 +89,6 @@
       ]
     },
     {
-      "source": "/stock-rapido.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store, max-age=0"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "no-referrer"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
-        }
-      ]
-    },
-    {
       "source": "/catalogo.html",
       "headers": [
         {
@@ -149,6 +128,24 @@
           "key": "X-Frame-Options",
           "value": "DENY"
         }
+      ]
+    },
+    {
+      "source": "/rotina.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
+    {
+      "source": "/stock-rapido.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; media-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
       ]
     },
     {

@@ -209,6 +209,73 @@ test('cycle cannot continue mutating beyond its one-hour limit', async () => {
 });
 
 function response() { return { headers: {}, statusCode: 200, setHeader(k, v) { this.headers[k] = v; }, status(n) { this.statusCode = n; return this; }, json(body) { this.body = body; return this; } }; }
+
+test('recent scheduled history looks back seven Lisbon calendar days and returns only the latest prior run', async () => {
+  const f = fixture();
+  const manualFlow = createMorningFlow({ ...f.options, mode: 'manual' });
+  f.setTime('2026-06-24T07:00:00Z');
+  await f.flow.start();
+  f.setTime('2026-07-01T23:30:00Z');
+  assert.deepEqual(await f.flow.latestPrior(), { ok: true, day: '2026-07-02', latest: null });
+
+  f.setTime('2026-06-25T07:00:00Z');
+  await f.flow.start();
+  f.setTime('2026-07-01T07:00:00Z');
+  await manualFlow.start();
+  f.setTime('2026-07-02T07:00:00Z');
+  await f.flow.start();
+  f.setTime('2026-07-01T23:30:00Z');
+  const before = f.memory.calls.length;
+  assert.deepEqual(await f.flow.latestPrior(), {
+    ok: true, day: '2026-07-02', latest: { day: '2026-06-25', startedAt: '2026-06-25T07:00:00.000Z' }
+  });
+  assert.deepEqual(f.memory.calls.slice(before).map(({ method, path }) => [method, path.slice(-15)]),
+    ['2026-07-01', '2026-06-30', '2026-06-29', '2026-06-28', '2026-06-27', '2026-06-26', '2026-06-25']
+      .map(day => ['get', day + '.json']));
+
+  f.setTime('2026-07-01T07:00:00Z');
+  await f.flow.start();
+  f.setTime('2026-07-01T23:30:00Z');
+  const start = f.memory.calls.length;
+  assert.equal((await f.flow.latestPrior()).latest.day, '2026-07-01');
+  assert.equal(f.memory.calls.length - start, 1);
+});
+
+test('recent history is a private GET and a missing newer read cannot yield an empty or older result', async () => {
+  const f = fixture();
+  f.setTime('2026-11-13T08:00:00Z');
+  await f.flow.start();
+  f.setTime('2026-11-16T08:00:00Z');
+  const handler = createMorningFlowHandler({ ...f.options, authorizeAdmin: req => req.admin === true,
+    waitUntil: () => assert.fail('History must never schedule work') });
+  const invoke = async ({ query, ...options } = {}) => {
+    const res = response();
+    await handler({ admin: true, method: 'GET', headers: {}, ...options,
+      query: { action: 'latest-prior', ...query } }, res);
+    return res;
+  };
+  assert.equal((await invoke({ admin: false })).statusCode, 401);
+  assert.equal((await invoke({ admin: false, headers: { authorization: `Bearer ${secret}` } })).statusCode, 401);
+  assert.equal((await invoke({ method: 'POST' })).statusCode, 405);
+  assert.equal((await invoke({ query: { mode: 'manual' } })).statusCode, 400);
+  f.memory.faults.get = path => path.endsWith('/2026-11-14.json');
+  const failed = await invoke();
+  assert.equal(failed.statusCode, 503);
+  assert.equal(failed.body.error, 'morning_flow_unavailable');
+  assert.equal(Object.hasOwn(failed.body, 'latest'), false);
+  f.memory.faults.get = path => path.endsWith('/2026-11-12.json');
+  const found = await invoke({ query: { day: '2000-01-01' } });
+  assert.equal(found.statusCode, 200);
+  assert.match(found.headers['Cache-Control'], /no-store/);
+  assert.deepEqual(found.body, { ok: true, day: '2026-11-16', latest: { day: '2026-11-13', startedAt: '2026-11-13T08:00:00.000Z' } });
+  f.env.VERCEL_ENV = 'preview';
+  const before = f.memory.calls.length;
+  const preview = await invoke();
+  assert.equal(preview.body.status, 'production_only');
+  assert.equal(f.memory.calls.length, before);
+  assert.equal(f.queue.length, 0);
+});
+
 test('endpoint keeps status private, requires same-origin admin start and restricts callbacks to the cron secret', async () => {
   const f = fixture(); const pending = [];
   const handler = createMorningFlowHandler({ ...f.options, authorizeAdmin: req => req.admin === true, waitUntil: p => pending.push(p) });

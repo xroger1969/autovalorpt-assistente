@@ -58,6 +58,40 @@ test('create returns before rendering finishes; another instance reads its compl
   assert.ok(f.memory.calls.filter(call => call.method === 'put').every(call => call.options.access === 'private'));
 });
 
+test('video recovery lists existing live jobs and unexpired previews without revealing review material', async () => {
+  const gate = deferred();
+  const f = fixture({ preview: async result => { await gate.promise; return result(); } });
+  const job = await f.jobs.create(id);
+  const reader = createManualVideoJobs({ ...f.options, manualPublisher: { preview: () => assert.fail('Recovery cannot render') } });
+  const writes = f.memory.calls.filter(call => call.method === 'put').length;
+  const entry = { id, jobId: job.jobId, status: 'preparing', startedAt: job.startedAt };
+  assert.deepEqual(await reader.recover(), { ok: true, items: [entry], nextCursor: null });
+  assert.equal(f.memory.calls.filter(call => call.method === 'put').length, writes);
+  const other = createManualVideoJobs({ ...f.options, env: { ...env, INSTAGRAM_USER_ID: '99999999' } });
+  assert.deepEqual((await other.recover()).items, []);
+  gate.resolve(); await f.drain();
+  assert.deepEqual((await reader.recover()).items, [{ ...entry, status: 'preview_ready' }]);
+  f.advance(7200001);
+  assert.deepEqual((await reader.recover()).items, []);
+});
+
+test('video recovery can advance beyond a partial page of older records', async () => {
+  const f = fixture();
+  await f.jobs.create(id); await f.drain();
+  const prefix = 'instagram/v1/production/manual-video-jobs/';
+  for (let i = 0; i < 12; i++) {
+    const olderId = `ID0demo${String(i).padStart(2, '0')}`;
+    const text = i === 0 ? '{corrupt' : JSON.stringify({ ...f.state(), id: olderId, status: 'failed', reason: 'synthetic_failure' });
+    f.memory.records.set(prefix + olderId + '.json', { etag: `older-${i}`, text });
+  }
+  const first = await f.jobs.recover();
+  assert.deepEqual(first, { ok: true, items: [], nextCursor: '12', partial: true });
+  const second = await f.jobs.recover({ cursor: first.nextCursor });
+  assert.equal(second.items[0].id, id);
+  assert.equal(second.nextCursor, null);
+  await assert.rejects(f.jobs.recover({ cursor: [] }), { code: 'manual_video_recovery_cursor_invalid' });
+});
+
 test('concurrent creates in independent instances atomically share one job and one render', async () => {
   const gate = deferred();
   const f = fixture({ preview: async result => { await gate.promise; return result(); } });
@@ -199,10 +233,16 @@ test('new endpoints keep admin-only POST JSON checks, respond 202 before work co
   }
   assert.equal(f.calls.length, 0);
   assert.equal((await request('progress', { id })).statusCode, 400);
+  assert.equal((await request('video-recovery', undefined, 'GET', { authorization: `Bearer ${secret}` })).statusCode, 401);
+  assert.equal((await request('video-recovery')).statusCode, 405);
   const creation = await request('create', { id });
   assert.equal(creation.statusCode, 202);
   assert.equal(creation.body.status, 'preparing');
   assert.match(creation.headers['Cache-Control'], /private.*no-store/);
+  const recovery = await request('video-recovery', undefined, 'GET');
+  assert.equal(recovery.statusCode, 200);
+  assert.match(recovery.headers['Cache-Control'], /private.*no-store/);
+  assert.equal(recovery.body.items[0].jobId, creation.body.jobId);
   const receipt = f.receipt(creation.body);
   assert.equal((await request('progress', receipt)).body.status, 'preparing');
   gate.resolve();

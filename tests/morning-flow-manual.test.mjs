@@ -144,7 +144,6 @@ test('iPhone shortcut has its own installable manifest and no embedded access cr
   const html = readFileSync(new URL('../rotina.html', import.meta.url), 'utf8');
   const script = readFileSync(new URL('../rotina.js', import.meta.url), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('../manifest-stock-rapido.json', import.meta.url), 'utf8'));
-  const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   assert.equal(manifest.start_url, '/stock-rapido.html');
   assert.equal(manifest.display, 'standalone');
   assert.match(html, /Atualizar tudo/);
@@ -155,8 +154,27 @@ test('iPhone shortcut has its own installable manifest and no embedded access cr
   assert.match(script, /method: 'POST'/);
   assert.match(script, /credentials: 'same-origin'/);
   assert.doesNotMatch(script, /localStorage|sessionStorage|Authorization:|innerHTML/);
-  const policy = config.headers.find(entry => entry.source === '/stock-rapido.html');
-  assert.match(policy.headers.find(h => h.key === 'Content-Security-Policy').value, /frame-ancestors 'none'/);
+});
+
+test('the routine page and installed shortcut enforce the same private response policy', () => {
+  const html = readFileSync(new URL('../rotina.html', import.meta.url), 'utf8');
+  const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const globalRule = config.headers.findIndex(entry => entry.source === '/(.*)');
+  assert.notEqual(globalRule, -1);
+  const policies = ['/rotina.html', '/stock-rapido.html'].map(source => {
+    const index = config.headers.findIndex(entry => entry.source === source);
+    assert.ok(index > globalRule, `${source} must override the default referrer policy`);
+    return Object.fromEntries(config.headers[index].headers.map(({ key, value }) => [key, value]));
+  });
+  const [routine, shortcut] = policies;
+  assert.deepEqual(routine, shortcut);
+  assert.match(routine['Cache-Control'], /private, no-store/);
+  assert.equal(routine['Referrer-Policy'], 'no-referrer');
+  assert.equal(routine['X-Robots-Tag'], 'noindex, nofollow, noarchive');
+  assert.match(routine['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.match(routine['Content-Security-Policy'], /style-src 'self';/);
+  assert.doesNotMatch(html, /<style\b|\sstyle\s*=/i);
+  assert.match(html, /rel="stylesheet" href="\/rotina\.css(?:\?[^\"]*)?"/);
 });
 
 

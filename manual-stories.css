@@ -7,7 +7,7 @@
 .ms-publish { color: #182432; background: #ff9c56; border-color: #ff9c56; }
 .ms-picker, .ms-preview { margin-top: 16px; }
 .ms-picker label, .ms-preview h2 { display: block; margin: 0 0 8px; font-weight: 700; }
-.ms-picker input { width: 100%; min-height: 46px; font: inherit; font-size: 16px; color: #182b40; background: white; border: 1px solid #9dabb8; border-radius: 9px; padding: 10px; }
+.ms-picker input { width: 100%; min-height: 46px; font: inherit; font-size: 16px; color: #182b40; background: white; border: 1px solid #728397; border-radius: 9px; padding: 10px; }
 .ms-list { display: grid; max-height: min(55vh, 28rem); overflow-y: auto; gap: 6px; padding: 4px; margin: 8px -4px 0; list-style: none; }
 .ms-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 12px; width: 100%; min-height: 70px; text-align: left; padding: 8px; border-radius: 12px; border: 1px solid #d8e0e7; background: #f8fafb; color: #182b40; }
 .ms-row:hover, .ms-row:focus-visible { background: #ecf3f8; }
@@ -16,10 +16,13 @@
 .ms-row small, .ms-detail { color: #4b5e70; font-size: 14px; }
 .ms-preview video { display: block; width: min(100%, 280px, 35vh); aspect-ratio: 9/16; background: #132337; border-radius: 10px; }
 .ms-detail, .ms-message { margin: 8px 0; line-height: 1.5; overflow-wrap: anywhere; }
-.ms-message:empty { display: none; }
+.ms-message:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ms-message[data-tone="error"] { color: #8e3026; }
 .ms-message[data-tone="success"] { color: #166047; }
 .ms-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ms-recovery { margin-top: 14px; }
+.ms-recovery > summary { min-height: 44px; padding: 11px 0; cursor: pointer; font-weight: 700; }
+.ms-recovery-list { display: grid; gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
 .ms-dialog { width: min(460px, calc(100% - 28px)); padding: 22px; color: #182b40; border: 1px solid #d8e0e7; border-radius: 16px; box-shadow: 0 15px 60px #101b3050; }
 .ms-dialog::backdrop { background: #13233799; }
 #technicalDetails .stats { margin-top: 16px; }

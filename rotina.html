@@ -11,122 +11,14 @@
   <link rel="manifest" href="/manifest-stock-rapido.json">
   <link rel="icon" href="/avpt-icone.svg" type="image/svg+xml">
   <title>Stock e publicações · AutoValorPT</title>
-  <style>
-    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0B2030; background: #F8F7F4; --navy: #0B2030; --navy-light: #123247; --gold: #D6B36A; --line: #d9dfe0; --muted: #4b5e70; }
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-    body { margin: 0; min-height: 100svh; }
-    header { background: var(--navy); color: white; }
-    .top, main { max-width: 760px; margin: auto; padding-inline: clamp(16px, 4vw, 30px); }
-    .top, .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .top { min-height: calc(62px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
-    .brand { font-size: 21px; font-weight: 800; letter-spacing: -.045em; }
-    .brand span { color: var(--gold); }
-    main { padding-top: 26px; padding-bottom: max(44px, env(safe-area-inset-bottom)); }
-    h1, h2, p { margin: 0; }
-    h1 { font-size: clamp(28px, 5vw, 38px); letter-spacing: -.045em; line-height: 1.15; }
-    h2 { font-size: 21px; line-height: 1.25; letter-spacing: -.025em; }
-    p, li { line-height: 1.5; }
-    button, input { font: inherit; }
-    .history-caption { white-space: pre-wrap; overflow-wrap: anywhere; }
-    #editorialHistory details { flex-basis: 100%; min-width: 0; }
-    button, summary, .link { cursor: pointer; touch-action: manipulation; }
-    button, .link { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 650; }
-    button:disabled { cursor: default; }
-    button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #3084b4; outline-offset: 3px; }
-    .signout { background: transparent; color: #f4f6f8; }
-    .card, .rows { background: white; border: 1px solid var(--line); border-radius: 17px; }
-    .login { max-width: 430px; padding: 25px; margin: 4vh auto; }
-    .login p, .lead { margin-top: 7px; color: var(--muted); }
-    label { display: block; font-weight: 650; }
-    .login label { margin: 20px 0 7px; }
-    input { max-width: 100%; min-height: 48px; border-radius: 9px; border: 1px solid #9dabb8; padding: 10px; background: white; color: #182b40; }
-    .login input, .primary { width: 100%; }
-    .primary { min-height: 52px; margin-top: 18px; font-size: 17px; font-weight: 750; background: var(--gold); color: var(--navy); }
-    .primary:disabled { background: #d9e0e6; color: #425568; }
-    .action { padding: clamp(17px, 3vw, 25px); margin-top: 20px; }
-    .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
-    .action .primary { margin-top: 0; }
-    .editorial-next { margin: 12px 0; padding-top: 12px; border-top: 1px solid var(--line); }
-    .editorial-next h3 { margin: 5px 0; font-size: 18px; }
-    .editorial-image { display: block; width: 100%; max-width: 340px; height: auto; border-radius: 12px; margin: 10px auto; }
-    .editorial-caption { padding: 0 8px 12px; }
-    #editorialHistory a { color: #244f70; text-decoration: underline; }
-    #editorialHistory li { display: grid; gap: 4px; }
-    #waTipSelect { max-width: 100%; min-height: 44px; font: inherit; }
-    #waTipMedia img, #waTipMedia video { display: block; width: min(100%, 360px); height: auto; margin: 10px auto; }
-    #waTipCaption { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .channel-note { font-size: 13px; color: var(--muted); grid-column: 1; }
-    .advanced > summary { font-weight: 650; }
-    .advanced .rows { margin: 0 12px 12px; }
-    .hint, .time, .status, .details-body { overflow-wrap: anywhere; }
-    .hint, .time { font-size: 14px; color: var(--muted); }
-    .hint { margin-top: 9px; }
-    .time { margin: 3px 0 10px; }
-    .status { white-space: pre-line; color: var(--muted); }
-    .status:empty, .hint:empty { display: none; }
-    #checkStatus.attention { color: #77400b; }
-    .notice:not(:empty) { margin: 8px 0; padding: 10px 12px; background: #fff3df; color: #674113; border-radius: 10px; }
-    .action-details { margin-top: 8px; }
-    .action-details > summary, #manualStories > details.ms-preview > summary { min-height: 44px; padding: 9px 0; font-weight: 650; }
-    .action-details > .details-body { margin: 0; padding: 8px 0 0; }
-    .action-details .hint:first-child { margin-top: 0; }
-    .section-head { margin-top: 20px; }
-    .secondary { background: #e9edef; color: var(--navy-light); }
-    #manualStories .ms-launch { background: var(--navy-light); border-color: var(--navy-light); }
-    #manualStories .ms-publish { background: var(--gold); border-color: var(--gold); color: var(--navy); }
-    .brand-covers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-    .brand-cover { display: grid; justify-items: center; gap: 8px; min-height: 44px; padding: 8px 3px; color: var(--navy-light); font-size: 13px; font-weight: 650; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-    .brand-cover img { width: min(100%, 88px); height: auto; aspect-ratio: 1; border-radius: 50%; }
-    .rows { margin-bottom: 16px; }
-    .rows details + details { border-top: 1px solid var(--line); }
-    summary { min-height: 54px; padding: 13px 16px; list-style: none; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 12px; }
-    summary::-webkit-details-marker { display: none; }
-    summary::after { content: ''; grid-column: 2; grid-row: 1 / span 2; width: 8px; height: 8px; margin-right: 4px; border-right: 2px solid #677888; border-bottom: 2px solid #677888; transform: rotate(45deg); }
-    details[open] > summary::after { transform: rotate(225deg); }
-    summary strong { font-size: 17px; }
-    summary .badge { justify-self: start; grid-column: 1; }
-    .details-body { margin: 0 16px; border-top: 1px solid var(--line); padding: 13px 0 16px; }
-    .details-body p + p { margin-top: 7px; }
-    .details-body p { font-size: 14px; }
-    .details-body > ul { margin: 0; padding-left: 20px; }
-    .details-body li + li { margin-top: 8px; }
-    .badge { display: inline-block; max-width: 100%; background: #eef2f6; color: #3e5366; border-radius: 7px; padding: 3px 8px; font-size: 13px; font-weight: 650; }
-    .badge.good { color: #195f43; background: #e5f4eb; }
-    .badge.pending { color: #735122; background: #fff2dd; }
-    .badge.error { color: #872d29; background: #ffedea; }
-    .links, .toolbar, .stats { display: flex; flex-wrap: wrap; gap: 8px; }
-    .links { margin-top: 10px; }
-    .link { display: inline-flex; align-items: center; text-decoration: underline; text-underline-offset: 3px; background: #edf2f6; color: #244f70; }
-    .stats { margin-bottom: 12px; }
-    .stat { padding: 7px 12px; border-left: 2px solid var(--line); }
-    .stat span { display: block; font-size: 12px; color: var(--muted); }
-    .stat strong { font-size: 20px; }
-    .toolbar { align-items: end; margin: 12px 0; }
-    .toolbar label { display: grid; gap: 4px; font-size: 14px; }
-    .steps { list-style: none; padding: 0; margin: 12px 0 0; }
-    .steps li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; border-top: 1px solid var(--line); padding: 8px 0; }
-    .steps small { width: 100%; color: var(--muted); }
-    .calendar { margin-top: 18px; }
-    .calendar .details-body > .hint { margin-top: 0; }
-    .calendar-entry { margin-top: 8px; border-top: 1px solid var(--line); }
-    .calendar-entry > summary { padding: 12px 4px; }
-    .calendar-entry > summary > span, .calendar-entry > summary > strong { grid-column: 1; overflow-wrap: anywhere; }
-    .calendar-entry > summary .time { margin: 0; }
-    .calendar-preview { padding: 4px 4px 14px; }
-    .calendar-preview img, .calendar-preview video { display: block; width: min(100%, 320px); height: auto; margin: 6px 0; border-radius: 10px; }
-    .calendar-preview video { max-height: 55vh; width: auto; max-width: 100%; background: #142337; }
-    .calendar-caption { white-space: pre-line; margin-top: 12px; }
-    #calendarRefresh { margin-top: 12px; }
-    @media (max-width: 420px) { .section-head h2 { font-size: 19px; } .section-head button { padding-inline: 10px; } }
-  </style>
-  <link rel="stylesheet" href="/manual-stories.css">
-  <script src="/manual-stories.js?v=20261126-publicacao2" defer></script>
+  <link rel="stylesheet" href="/rotina.css">
+  <link rel="stylesheet" href="/manual-stories.css?v=20261126-pedidos">
+  <script src="/manual-stories.js?v=20261126-pedidos" defer></script>
   <script src="/editorial-preview.js?v=20261126-premium1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
-  <script src="/whatsapp-editorial.js?v=20261126-4" defer></script>
-  <script src="/rotina.js?v=20261126-premium1" defer></script>
+  <script src="/whatsapp-editorial.js?v=20261126-partilha" defer></script>
+  <script src="/rotina.js?v=20261126-historico" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -135,16 +27,17 @@
   <main>
     <section id="loginView" class="card login" aria-labelledby="loginTitle">
       <h1 id="loginTitle">Stock e publicações</h1><p>Entra com o teu código privado da AutoValorPT.</p>
-      <form id="loginForm"><label for="accessCode">Código de acesso</label><input id="accessCode" name="password" type="password" autocomplete="current-password" maxlength="160" required>
+      <form id="loginForm" method="post"><label for="accessCode">Código de acesso</label><input id="accessCode" name="password" type="password" autocomplete="current-password" maxlength="160" required>
         <button id="loginButton" class="primary" type="submit" disabled>Entrar</button></form>
       <p id="loginStatus" class="hint" role="status">A verificar a sessão…</p>
     </section>
     <section id="dashboardView" aria-labelledby="pageTitle" hidden>
-      <h1 id="pageTitle">O meu stock</h1>
+      <h1 id="pageTitle" tabindex="-1">O meu stock</h1>
       <p class="lead">Stock às <strong>08h00</strong> · Publicações criativas a partir das <strong>19h00</strong>.</p>
       <div class="links"><a class="link" href="/app/index.html" target="_blank" rel="noopener">Abrir app do catálogo</a></div>
       <section class="card action" aria-label="Atualizar stock e publicações">
         <button id="runNow" class="primary" type="button" aria-describedby="manualStatus checkStatus" disabled>Atualizar tudo</button>
+        <p id="manualPublicationHint" class="hint" hidden>A atualização pode publicar fotografias e Stories de viaturas no Instagram.</p>
         <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
         <p id="checkStatus" class="status" role="status" aria-atomic="true"></p>
         <details id="stockActionDetails" class="action-details">
@@ -155,6 +48,14 @@
             <p id="manualOutcome" class="status"></p>
           </div>
         </details>
+        <dialog id="manualStartDialog" class="confirm-dialog" aria-labelledby="manualStartTitle" aria-describedby="manualStartDescription">
+          <h2 id="manualStartTitle">Iniciar a atualização extra?</h2>
+          <p id="manualStartDescription">A atualização consulta os inventários, sincroniza o catálogo do WhatsApp e pode publicar fotografias e Stories de viaturas no Instagram. Há uma atualização extra por dia.</p>
+          <div class="links">
+            <button id="manualStartBack" class="secondary" type="button" autofocus>Voltar</button>
+            <button id="manualStartConfirm" class="primary" type="button">Iniciar atualização</button>
+          </div>
+        </dialog>
       </section>
       <section class="card action" id="manualStories" data-collapsible-preview aria-label="Vídeos de viaturas"></section>
       <section class="card action" aria-label="Publicação criativa extra">
@@ -183,7 +84,7 @@
           <button id="calendarRefresh" class="secondary" type="button">Atualizar calendário</button>
         </div>
       </details>
-      <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button" hidden>Consultar estado</button></div>
+      <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button">Consultar estado</button></div>
       <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
       <div class="rows">
         <details><summary><strong>Catálogo WhatsApp</strong><span id="catalogBadge" class="badge">Por consultar</span></summary>
@@ -258,13 +159,13 @@
           <div class="details-body">
             <p>Azul-marinho, dourado e branco nas novas publicações. Fotografias das viaturas e dicas com uma apresentação coerente.</p>
             <p>Estas capas estão prontas para os destaques do perfil. Guarda a imagem e escolhe-a ao editar a capa do destaque no Instagram.</p>
-            <div class="brand-covers" aria-label="Descarregar capas dos destaques">
-              <a class="brand-cover" href="/assets/brand/eletricos.png" download="AutoValorPT-Eletricos.png"><img src="/assets/brand/eletricos.png" alt="" width="1080" height="1080" loading="lazy">Elétricos</a>
-              <a class="brand-cover" href="/assets/brand/hibridos.png" download="AutoValorPT-Hibridos.png"><img src="/assets/brand/hibridos.png" alt="" width="1080" height="1080" loading="lazy">Híbridos</a>
-              <a class="brand-cover" href="/assets/brand/stock.png" download="AutoValorPT-Stock.png"><img src="/assets/brand/stock.png" alt="" width="1080" height="1080" loading="lazy">Stock</a>
-              <a class="brand-cover" href="/assets/brand/guias.png" download="AutoValorPT-Guias.png"><img src="/assets/brand/guias.png" alt="" width="1080" height="1080" loading="lazy">Guias</a>
-              <a class="brand-cover" href="/assets/brand/simulador.png" download="AutoValorPT-Simulador.png"><img src="/assets/brand/simulador.png" alt="" width="1080" height="1080" loading="lazy">Simulador</a>
-              <a class="brand-cover" href="/assets/brand/sobre-nos.png" download="AutoValorPT-Sobre-nos.png"><img src="/assets/brand/sobre-nos.png" alt="" width="1080" height="1080" loading="lazy">Sobre nós</a>
+            <div class="brand-covers" role="group" aria-label="Descarregar capas dos destaques">
+              <a class="brand-cover" href="/assets/brand/eletricos.png" download="AutoValorPT-Eletricos.png"><img src="/assets/brand/eletricos.svg" alt="" width="88" height="88" loading="lazy">Elétricos</a>
+              <a class="brand-cover" href="/assets/brand/hibridos.png" download="AutoValorPT-Hibridos.png"><img src="/assets/brand/hibridos.svg" alt="" width="88" height="88" loading="lazy">Híbridos</a>
+              <a class="brand-cover" href="/assets/brand/stock.png" download="AutoValorPT-Stock.png"><img src="/assets/brand/stock.svg" alt="" width="88" height="88" loading="lazy">Stock</a>
+              <a class="brand-cover" href="/assets/brand/guias.png" download="AutoValorPT-Guias.png"><img src="/assets/brand/guias.svg" alt="" width="88" height="88" loading="lazy">Guias</a>
+              <a class="brand-cover" href="/assets/brand/simulador.png" download="AutoValorPT-Simulador.png"><img src="/assets/brand/simulador.svg" alt="" width="88" height="88" loading="lazy">Simulador</a>
+              <a class="brand-cover" href="/assets/brand/sobre-nos.png" download="AutoValorPT-Sobre-nos.png"><img src="/assets/brand/sobre-nos.svg" alt="" width="88" height="88" loading="lazy">Sobre nós</a>
             </div>
           </div>
         </details>

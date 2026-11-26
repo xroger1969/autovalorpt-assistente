@@ -180,6 +180,114 @@ test('uncertain older fingerprint has an exact status receipt and never reports 
   assert.equal((await f.review()).publicationEnabled, true);
 });
 
+test('server discovery finds legacy pending attempts without contacting Meta or returning publishing authorization', async () => {
+  const jobs = [];
+  let inspections = 0;
+  const f = fixture({ waitUntil: work => jobs.push(work), provider: {
+    inspect: async () => { inspections++; return { status_code: 'IN_PROGRESS' }; }
+  } });
+  const reviewed = { ...await f.review(), background: true };
+  await f.service.publish(reviewed);
+  await jobs[0];
+  f.advance(2 * 3600000 + 100);
+  const callsBeforeRecovery = f.calls.slice();
+
+  const catalog = await f.service.recover();
+  assert.deepEqual(catalog, { ok: true, items: [{ id, generation: 1, status: 'preparing' }], nextCursor: null });
+  assert.deepEqual(await f.service.recoverStatus(catalog.items[0]), { ok: true, id, status: 'preparing', published: 0 });
+  assert.deepEqual(f.calls, callsBeforeRecovery);
+  assert.equal(inspections, 1);
+  assert.equal(jobs.length, 1);
+  await assert.rejects(f.service.publish({ ...catalog.items[0], confirmed: true, automatic: true }), /story_manual_review_invalid/);
+  assert.equal(await f.service.status(reviewed).then(result => result.canContinueAutomatically), undefined);
+});
+
+test('exact server recovery reconciles concurrent checks only after positive readback and never adds a publish', async () => {
+  let sends = 0, inspections = 0, remote = 'FINISHED';
+  const f = fixture({ provider: {
+    inspect: async () => { inspections++; return { status_code: remote }; },
+    publish: async () => { sends++; throw new Error('simulated lost confirmation'); },
+  } });
+  const confirmed = await f.review();
+  assert.equal((await f.service.publish(confirmed)).status, 'review_required');
+  const { items: [item] } = await f.service.recover();
+  assert.equal(inspections, 1);
+  assert.deepEqual(item, { id, generation: 1, status: 'review_required' });
+  assert.deepEqual(await f.service.recoverStatus(item), { ok: false, id, status: 'review_required', published: 0 });
+  assert.equal(f.state().attempts[0].phase, 'unknown');
+
+  remote = 'PUBLISHED';
+  const results = await Promise.all([f.service.recoverStatus(item), f.service.recoverStatus(item)]);
+  for (const result of results) {
+    assert.deepEqual(result, { ok: true, id, status: 'published', published: 1, publishedAt: '2026-11-26T17:00:00.000Z' });
+  }
+  assert.equal(f.state().attempts[0].phase, 'published');
+  assert.equal(sends, 1);
+  assert.deepEqual((await f.service.recover()).items, []);
+  assert.deepEqual(await f.service.recoverStatus({ id, generation: 2 }), { ok: true, id, status: 'ready', published: 0 });
+});
+
+test('recovery pages are bounded and isolate account data, even when one record cannot be read', async () => {
+  const f = fixture();
+  const now = Date.parse('2026-11-26T17:00:00Z');
+  const names = Array.from({ length: 14 }, (_, index) => 'ID8car' + String(index).padStart(2, '0'));
+  const pathFor = vehicle => 'instagram/v1/production/manual-stories/' + vehicle + '.json';
+  for (const [index, vehicle] of names.entries()) {
+    const state = { version: 1, id: vehicle, account: index === 0 ? '999999' : env.INSTAGRAM_USER_ID,
+      attempts: [{ phase: 'creating', fingerprint, at: now, workerUntil: now + 1000 }] };
+    await f.memory.storage.put(pathFor(vehicle), JSON.stringify(state), { access: 'private', allowOverwrite: false });
+  }
+  f.memory.faults.get = path => path === pathFor(names[1]);
+  const initial = f.memory.calls.length;
+  const first = await f.service.recover();
+  assert.equal(first.partial, true);
+  assert.deepEqual(first.items.map(item => item.id), names.slice(2, 12));
+  assert.equal(f.memory.calls.slice(initial).filter(call => call.method === 'get').length, 12);
+  assert.deepEqual(await f.service.recoverStatus({ id: names[0], generation: 1 }), {
+    ok: true, id: names[0], status: 'ready', published: 0
+  });
+  assert.deepEqual(await f.service.recover({ cursor: first.nextCursor }), {
+    ok: true, items: names.slice(12).map(id => ({ id, generation: 1, status: 'busy' })), nextCursor: null
+  });
+  assert.deepEqual(f.calls, []);
+  await assert.rejects(f.service.recover({ cursor: ['bad'] }), /story_manual_recovery_invalid/);
+  for (const generation of [0, '1', 1.5, 100_000_000]) {
+    await assert.rejects(f.service.recoverStatus({ id, generation }), /story_manual_recovery_invalid/);
+  }
+  await assert.rejects(fixture({ env: { VERCEL_ENV: 'preview' } }).service.recover(), /production_required/);
+});
+
+test('the recovery routes require a private session, and exact status accepts only same-origin POST JSON', async () => {
+  const calls = [];
+  const handler = createInstagramSyncHandler({ env, authorizeAdmin: req => req.headers.cookie === 'admin',
+    manualPublisher: {
+      recover(input) { calls.push(['list', input]); return { ok: true, items: [], nextCursor: null }; },
+      recoverStatus(input) { calls.push(['status', input]); return { ok: true, id, status: 'busy', published: 0 }; },
+    },
+  });
+  async function request(action, method, headers, body) {
+    const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; },
+      status(code) { this.code = code; return this; }, json(value) { this.body = value; } };
+    await handler({ method, query: { action: 'stories-manual-' + action, cursor: 'next-page' }, headers, body }, response);
+    return response;
+  }
+  const reference = { id, generation: 1 };
+  const admin = { cookie: 'admin', host: 'autovalorpt.example', origin: 'https://autovalorpt.example', 'content-type': 'application/json' };
+  assert.equal((await request('recovery', 'GET', {})).code, 401);
+  assert.equal((await request('recovery-status', 'POST', {}, reference)).code, 401);
+  assert.equal((await request('recovery', 'POST', admin)).code, 405);
+  assert.equal((await request('recovery-status', 'GET', admin)).code, 405);
+  assert.equal((await request('recovery-status', 'POST', { ...admin, origin: 'https://other.example' }, reference)).code, 403);
+
+  const catalog = await request('recovery', 'GET', admin);
+  assert.equal(catalog.code, 200);
+  assert.match(catalog.headers['Cache-Control'], /no-store/);
+  const status = await request('recovery-status', 'POST', admin, reference);
+  assert.equal(status.code, 200);
+  assert.deepEqual(status.body, { ok: true, id, status: 'busy', published: 0 });
+  assert.deepEqual(calls, [['list', { cursor: 'next-page' }], ['status', reference]]);
+});
+
 test('full admin route uses the verified Instagram account and resolves the private token once across inventory checks and container polls', async () => {
   const memory = memoryBlob();
   const videoUrl = 'https://private.example/video';

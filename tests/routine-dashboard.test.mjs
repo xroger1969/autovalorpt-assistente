@@ -3,15 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = (await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
+const scripts = await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')));
+const script = scripts.join('\n');
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const startedAt = `${today()}T08:00:00Z`;
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
 
 async function dashboard(options = {}) {
   const elements = new Map(); const calls = []; let interval;
+  const windowEvents = {};
   const element = () => ({ textContent: '', className: '', children: [], hidden: false, checked: true, value: '', handlers: {},
-    addEventListener(name, callback) { this.handlers[name] = callback; }, replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }, removeAttribute(name) { delete this[name]; }, getAttribute(name) { return this[name] || null; } });
+    addEventListener(name, callback) { this.handlers[name] = callback; }, replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }, setAttribute(name, value) { this[name] = value; }, removeAttribute(name) { delete this[name]; }, getAttribute(name) { return this[name] || null; },
+    showModal() { this.open = true; }, close() { this.open = false; } });
   const document = { hidden: false, getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); }, createElement: element };
   const fetch = async (endpoint, init = {}) => {
     calls.push({ endpoint, init });
@@ -24,9 +27,10 @@ async function dashboard(options = {}) {
     if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
     return response({ configuration: { enabled: true }, lastResult: { status: 'no_new_stock', at: startedAt, published: 0 } });
   };
-  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '', pathname: options.pathname || '/rotina.html' }, URL, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
+  const code = options.withoutEditorialModules ? scripts.at(-1) : script;
+  vm.runInNewContext(code, { document, fetch, location: { hash: options.hash || '', pathname: options.pathname || '/rotina.html' }, URL, URLSearchParams, Date, Intl, AbortController, BroadcastChannel: options.BroadcastChannel, addEventListener: (name, handler) => { windowEvents[name] = handler; }, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
   await new Promise(resolve => setImmediate(resolve));
-  return { get: id => document.getElementById(id), calls, document, tick: () => interval() };
+  return { get: id => document.getElementById(id), calls, document, windowEvents, tick: () => interval() };
 }
 
 test('private monitor makes no status requests before authentication', async () => {
@@ -36,6 +40,19 @@ test('private monitor makes no status requests before authentication', async () 
   assert.deepEqual(app.calls.map(call => call.endpoint), ['/api/admin-session']);
   app.tick(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(app.calls.length, 1);
+});
+
+test('login and stock status remain usable when editorial modules are unavailable', async () => {
+  const app = await dashboard({ authenticated: false, withoutEditorialModules: true,
+    fetch: (endpoint, init) => endpoint === '/api/admin-session' && init.method === 'POST' ? response({ authenticated: true }) : null });
+  assert.equal(app.get('loginButton').disabled, false);
+  assert.equal(app.get('dashboardView').hidden, true);
+  app.get('accessCode').value = 'codigo-ficticio';
+  await app.get('loginForm').handlers.submit({ preventDefault() {} });
+  assert.equal(app.get('dashboardView').hidden, false);
+  assert.equal(app.get('loginView').hidden, true);
+  assert.equal(app.get('sourceCount').textContent, '9');
+  assert.match(app.get('extraStatus').textContent, /publicação extra está indisponível/);
 });
 
 test('counts stay independent and a finished cycle does not hide catalog authorization failure', async () => {
@@ -61,6 +78,33 @@ test('a Story read failure remains visible while the catalog result is shown', a
   assert.equal(app.get('dashboardView').hidden, false);
 });
 
+test('available channel results appear while another channel is still loading', async () => {
+  const slowCatalog = Promise.withResolvers();
+  const app = await dashboard({ fetch: endpoint => endpoint.includes('integration=meta-catalog') ? slowCatalog.promise : null });
+  try {
+    assert.match(app.get('instagramBrief').textContent, /Foto sem novidades/);
+    assert.match(app.get('dashboardStatus').textContent, /A consultar os registos/);
+  } finally {
+    slowCatalog.resolve(response({ error: 'catalog_unavailable' }, 503));
+  }
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.get('catalogBadge').textContent, 'Leitura indisponível');
+  assert.match(app.get('dashboardStatus').textContent, /Alguns registos/);
+});
+
+test('selecting a historical day fetches only that execution', async () => {
+  const app = await dashboard();
+  const before = app.calls.length;
+  const historicalDay = new Date(Date.parse(`${today()}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  app.get('cycleDay').value = historicalDay;
+  await app.get('cycleDay').handlers.change();
+  assert.deepEqual(app.calls.slice(before).map(call => call.endpoint), [
+    `/api/stock?integration=morning-flow&action=status&day=${historicalDay}`
+  ]);
+  assert.equal(app.get('sourceCount').textContent, '9');
+  assert.match(app.get('cycleSummary').textContent, /Não há uma execução registada/);
+});
+
 test('expired access hides and clears results rather than leaving stale private data', async () => {
   const app = await dashboard({ fetch: endpoint => endpoint.includes('stories-status') ? response({ error: 'private_access_required' }, 401) : null });
   assert.equal(app.get('dashboardView').hidden, true);
@@ -70,21 +114,68 @@ test('expired access hides and clears results rather than leaving stale private 
   assert.match(app.get('loginStatus').textContent, /sessão terminou/);
 });
 
-test('last cycle search stops at a recorded day and never marks today started', async () => {
-  let dayReads = 0;
+test('confirmed logout clears the routine in both open tabs', async () => {
+  const listeners = new Map();
+  class BroadcastChannel {
+    addEventListener(name, callback) { listeners.set(this, callback); }
+    postMessage(data) { for (const [channel, callback] of listeners) if (channel !== this) callback({ data }); }
+  }
+  const first = await dashboard({ BroadcastChannel });
+  const second = await dashboard({ BroadcastChannel, pathname: '/stock-rapido.html' });
+  await first.get('logoutButton').handlers.click();
+  for (const app of [first, second]) {
+    assert.equal(app.get('dashboardView').hidden, true);
+    assert.equal(app.get('sourceCount').textContent, '—');
+    assert.match(app.get('loginStatus').textContent, /Sessão terminada/);
+  }
+  assert.ok(second.calls.every(call => call.init.method !== 'POST'));
+});
+
+test('returning to a tab revalidates the session even with fresh channel results', async () => {
+  let reads = 0;
   const app = await dashboard({ fetch: endpoint => {
-    if (!endpoint.includes('morning-flow') || endpoint.includes('mode=manual')) return null;
-    dayReads++;
-    return dayReads === 3 ? response({ status: 'finished', startedAt: '2026-11-12T08:00:00Z' }) : null;
+    if (endpoint !== '/api/admin-session') return null;
+    reads++;
+    return response({ configured: true, authenticated: reads === 1 });
   } });
-  assert.equal(dayReads, 1);
+  assert.equal(app.get('dashboardView').hidden, false);
+  await app.windowEvents.focus();
+  assert.equal(reads, 2);
+  assert.equal(app.get('dashboardView').hidden, true);
+  assert.equal(app.get('sourceCount').textContent, '—');
+});
+
+test('opening the morning history finds the prior run with one read and never marks today started', async () => {
+  const yesterday = new Date(today() + 'T12:00:00Z');
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const priorDay = yesterday.toISOString().slice(0, 10);
+  const app = await dashboard({ fetch: endpoint => endpoint.includes('action=latest-prior')
+    ? response({ ok: true, day: today(), latest: { day: priorDay, startedAt: priorDay + 'T08:00:00Z' } }) : null });
+  const before = app.calls.length;
+  assert.equal(app.calls.some(call => call.endpoint.includes('action=latest-prior')), false);
   app.get('historyPanel').open = true;
   app.get('historyPanel').handlers.toggle();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(dayReads, 3);
+  assert.deepEqual(app.calls.slice(before).map(call => call.endpoint), ['/api/stock?integration=morning-flow&action=latest-prior']);
+  assert.ok(readOnly(app.calls.slice(before)));
   assert.equal(app.get('cycleBadge').textContent, 'Ainda não iniciada');
   assert.match(app.get('latestCycle').textContent, /Última execução encontrada/);
+  assert.ok(app.get('latestCycle').textContent.includes(priorDay));
   assert.match(app.get('cycleSummary').textContent, /Não há uma execução registada para este dia/);
+});
+
+test('morning history distinguishes a confirmed empty window from an unavailable read', async () => {
+  for (const [result, message] of [
+    [response({ ok: true, day: today(), latest: null }), /Sem execução registada nos últimos sete dias/],
+    [response({ ok: false }, 503), /ficou indisponível/],
+    [response({ ok: true, day: today() }), /ficou indisponível/]
+  ]) {
+    const app = await dashboard({ fetch: endpoint => endpoint.includes('action=latest-prior') ? result : null });
+    app.get('historyPanel').open = true;
+    app.get('historyPanel').handlers.toggle();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(app.get('latestCycle').textContent, message);
+  }
 });
 
 test('hidden page does not poll and rendered provider content is never used as HTML', async () => {
@@ -204,7 +295,7 @@ test('WhatsApp withdrawal proof and uncertainty remain separate from publication
   assert.match(closed.get('whatsappWithdrawal').textContent, /sem confirmação de eliminação/);
 });
 
-test('the main action submits one manual request, including a double tap and a stale first read', async () => {
+test('the main action submits one manual request after confirmation, including a double tap and a stale first read', async () => {
   let resolveStart; let state = { status: 'not_started' };
   const app = await dashboard({ fetch: (path, init) => {
     if (path.includes('action=manual-start')) {
@@ -215,13 +306,26 @@ test('the main action submits one manual request, including a double tap and a s
     return null;
   } });
   assert.equal(app.get('runNow').disabled, false);
-  const first = app.get('runNow').handlers.click();
+  assert.equal(app.get('runNow').getAttribute('aria-haspopup'), 'dialog');
+  assert.match(app.get('runNow').getAttribute('aria-describedby'), /manualPublicationHint/);
+  app.get('runNow').handlers.click();
+  assert.equal(app.get('manualStartDialog').open, true);
+  assert.ok(readOnly(app.calls));
+  app.get('manualStartBack').handlers.click();
+  assert.equal(app.get('manualStartDialog').open, false);
+  assert.ok(readOnly(app.calls));
+  app.get('runNow').handlers.click();
+  const first = app.get('manualStartConfirm').handlers.click();
+  await app.get('manualStartConfirm').handlers.click();
   await app.get('runNow').handlers.click();
+  assert.equal(app.get('manualStartDialog').open, false);
   assert.equal(app.get('runNow').disabled, true);
   resolveStart(response({ status: 'queued', day: today() }, 202));
   await first;
   assert.equal(app.get('runNow').disabled, false);
   assert.equal(app.get('runNow').textContent, 'Ver progresso');
+  assert.equal(app.get('runNow').getAttribute('aria-haspopup'), null);
+  assert.doesNotMatch(app.get('runNow').getAttribute('aria-describedby'), /manualPublicationHint/);
   await app.get('runNow').handlers.click();
   assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
   state = { status: 'finished', verification: { catalog: { catalogConfirmed: false } }, results: { photo: { status: 'published' }, story: { status: 'no_new_stock' } } };
@@ -486,6 +590,17 @@ test('checking results from the installed shortcut cannot resume a cycle that ch
   await app.get('runNow').handlers.click();
   assert.ok(readOnly(app.calls));
   assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+  }
+});
+
+test('the visible status consultation only reads even when the shortcut finds a resumable cycle', async () => {
+  for (const entry of [{ pathname: '/stock-rapido.html' }, { hash: '#atalho' }]) {
+    let state = { status: 'not_started' };
+    const app = await dashboard({ ...entry, fetch: path => path.includes('mode=manual') ? response(state) : null });
+    state = { status: 'queued', stalled: true, startedAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date(Date.now() - 120000).toISOString() };
+    await app.get('refreshButton').handlers.click();
+    assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+    assert.ok(readOnly(app.calls));
   }
 });
 

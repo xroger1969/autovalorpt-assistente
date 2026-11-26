@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 const script = await readFile(new URL('../manual-stories.js', import.meta.url), 'utf8');
@@ -52,11 +53,13 @@ function dashboard(overrides = {}, storage = new Map(), collapsible = false, pre
   const context = { document: { hidden: false, getElementById: element, createElement: () => new Element(),
     addEventListener: (name, callback) => documentEvents.set(name, callback) },
     fetch: async (url, options) => {
-      const action = new URL(url, 'https://example.test').searchParams.get('action').replace('stories-manual-', '');
+      const query = new URL(url, 'https://example.test').searchParams;
+      const action = query.get('action').replace('stories-manual-', '');
+      const cursor = query.get('cursor');
       const body = options.body ? JSON.parse(options.body) : undefined;
-      calls.push({ action, body }); const result = await handlers[action](body);
+      calls.push({ action, body, ...(cursor !== null && { cursor }) }); const result = await handlers[action](body, cursor);
       return { ok: true, status: 200, json: async () => result };
-    }, location: { origin: 'https://example.test' }, URL, AbortController,
+    }, location: { origin: 'https://example.test' }, URL, AbortController, crypto: webcrypto,
     clearTimeout: id => timers.delete(id), setTimeout: (callback, delay) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; },
     localStorage: { get length() { return preparationStorage.size; }, key: index => [...preparationStorage.keys()][index],
       getItem: key => preparationStorage.get(key), setItem: (key, value) => preparationStorage.set(key, value), removeItem: key => preparationStorage.delete(key) },
@@ -91,6 +94,43 @@ test('manual stock is fetched on demand and searched by make, model, ID and unfo
     input.value = value; input.emit('input'); assert.equal(app.results().length, matches, value);
   }
   assert.deepEqual(app.calls.map(call => call.action), ['stock']);
+});
+
+test('a browser with empty storage can recover a video and inspect a Story without starting or publishing either', async () => {
+  const app = dashboard({
+    'video-recovery': () => ({ ok: true, items: [{ id: stock[0].id, jobId, status: 'preview_ready', startedAt: new Date().toISOString() }], nextCursor: null }),
+    recovery: () => ({ ok: true, items: [{ id: stock[1].id, generation: 3, status: 'review_required' }], nextCursor: null }),
+    'recovery-status': ({ id }) => ({ ok: true, id, status: 'published', published: true })
+  });
+  assert.equal(app.calls.length, 0);
+  app.click('loadRecovery'); await flush();
+  assert.deepEqual(app.calls, [{ action: 'video-recovery', body: undefined }, { action: 'recovery', body: undefined }]);
+  app.element('recoveredVideos').children[0].children[0].emit('click'); await flush();
+  assert.deepEqual(app.calls.at(-1), { action: 'progress', body: { id: stock[0].id, jobId } });
+  assert.equal(app.element('vehiclePreview').hidden, false);
+  app.element('recoveredStories').children[0].children[0].emit('click'); await flush();
+  assert.deepEqual(app.calls.at(-1), { action: 'recovery-status', body: { id: stock[1].id, generation: 3 } });
+  assert.match(app.element('manualRecoveryStatus').textContent, /confirmou a publicação/);
+  assert.equal(app.calls.some(call => ['create', 'publish'].includes(call.action)), false);
+  app.setSession(false);
+  assert.equal(app.element('recoveredVideos').hidden, true);
+  assert.equal(app.element('recoveredStories').hidden, true);
+});
+
+test('recovery can paginate across empty pages and exposes incomplete results', async () => {
+  const cursor = 'opaque=next';
+  const app = dashboard({
+    'video-recovery': () => { throw new Error('temporary outage'); },
+    recovery: (_body, page) => ({ ok: true, items: page ? [{ id: stock[0].id, generation: 3, status: 'busy' }] : [], nextCursor: page ? null : cursor })
+  });
+  app.click('loadRecovery'); await flush();
+  assert.match(app.element('manualRecoveryStatus').textContent, /incompleta/);
+  assert.equal(app.element('moreRecovery').hidden, false);
+  app.click('moreRecovery'); await flush();
+  assert.deepEqual(app.calls.at(-1), { action: 'recovery', body: undefined, cursor });
+  assert.equal(app.element('recoveredStories').hidden, false);
+  assert.equal(app.element('moreRecovery').hidden, true);
+  assert.match(app.element('manualRecoveryStatus').textContent, /incompleta/);
 });
 
 test('preview/download and canceled confirmation never publish; repeated confirmation binds one request to the selected video', async () => {
@@ -229,6 +269,85 @@ test('reopening in a new tab recovers the saved video with progress only and nev
   assert.deepEqual(next.calls, [{ action: 'progress', body: { id: stock[1].id, jobId } }]);
   assert.equal(next.element('vehiclePreview').hidden, false);
   assert.equal(next.element('vehicleName').textContent, 'Renault Zoe');
+  assert.equal(storage.size, 0);
+});
+
+test('preparations started in separate tabs can finish or be recovered independently', async () => {
+  const sharedStorage = new Map();
+  const anotherJobId = '12345678-1234-4234-8234-123456789abd';
+  let finishFirst;
+  const first = dashboard({ progress: () => new Promise(resolve => { finishFirst = resolve; }) }, new Map(), false, sharedStorage);
+  const second = dashboard({
+    create: ({ id }) => ({ ok: true, status: 'preparing', id, jobId: anotherJobId }),
+    progress: ({ id }) => ({ ok: true, status: 'preparing', id, jobId: anotherJobId })
+  }, new Map(), false, sharedStorage);
+  await first.open(); await second.open();
+  await first.select(0, false); await second.select(1, false);
+  assert.equal(sharedStorage.size, 2);
+
+  const chooser = dashboard({ progress: ({ id, jobId: requestedJob }) => ({ ...preview(id), jobId: requestedJob }) }, new Map(), false, sharedStorage);
+  assert.deepEqual(chooser.calls, []);
+  const pending = chooser.element('pendingVideos');
+  assert.equal(pending.hidden, false);
+  assert.equal(pending.children.length, 2);
+  pending.children.find(button => button.textContent.includes(stock[1].title)).emit('click');
+  await flush();
+  assert.deepEqual(chooser.calls, [{ action: 'progress', body: { id: stock[1].id, jobId: anotherJobId } }]);
+  assert.equal(sharedStorage.size, 1);
+  assert.equal(JSON.parse([...sharedStorage.values()][0]).id, stock[0].id);
+
+  finishFirst({ ...preview(stock[0].id), jobId });
+  await flush();
+  assert.equal(first.element('vehicleName').textContent, stock[0].title);
+  assert.equal(chooser.element('vehicleName').textContent, stock[1].title);
+  assert.equal(sharedStorage.size, 0);
+});
+
+test('an ambiguous session failure hides the tools but keeps both types of recovery records until explicit logout', async () => {
+  const savedVideo = { id: stock[0].id, title: stock[0].title, startedAt: Date.now() - 3600_000, jobId };
+  const receipt = { id: stock[1].id, fingerprint, reviewToken: '1.1000.old' };
+  const storage = new Map([
+    ['autovalorpt.manual-video.preparation.v1', JSON.stringify(savedVideo)],
+    ['autovalorpt.manual-story.receipt.' + receipt.id, JSON.stringify(receipt)]
+  ]);
+  const app = dashboard({ status: ({ id }) => ({ id, status: 'busy' }) }, new Map(), false, storage);
+  assert.equal(app.element('resumeVideo').hidden, false);
+  app.setSession(false, undefined, undefined, { preserveRecovery: true });
+  await app.tick(0);
+  assert.equal(app.element('resumeVideo').hidden, true);
+  assert.equal(app.element('pendingVideos').hidden, true);
+  assert.equal(storage.size, 2);
+  assert.deepEqual(app.calls, []);
+
+  app.setSession(true);
+  await app.tick(0);
+  assert.deepEqual(app.calls, [{ action: 'status', body: receipt }]);
+  app.click('resumeVideo');
+  await flush();
+  assert.deepEqual(app.calls.at(-1), { action: 'progress', body: { id: savedVideo.id, jobId } });
+  assert.equal(app.element('vehicleName').textContent, savedVideo.title);
+  assert.equal(storage.size, 1);
+  app.setSession(false);
+  assert.equal(storage.size, 0);
+});
+
+test('automatic video progress stops after a bounded number of reads and a manual check uses the same job', async () => {
+  const storage = new Map(); let ready = false;
+  const app = dashboard({ progress: ({ id }) => ready ? { ...preview(id), jobId } : { ok: true, status: 'preparing', id, jobId } }, storage);
+  await app.open(); await app.select(0, false);
+  for (let index = 0; index < 45; index++) await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 40);
+  assert.equal(app.timers.size, 0);
+  assert.equal(app.element('resumeVideo').hidden, false);
+  assert.match(app.element('vehicleStatus').textContent, /consulta automática terminou/);
+  assert.equal(storage.size, 1);
+
+  app.click('resumeVideo'); await flush(); await app.tick();
+  assert.equal(app.calls.filter(call => call.action === 'progress').length, 41);
+  assert.equal(app.timers.size, 0);
+  ready = true; app.click('resumeVideo'); await flush();
+  assert.deepEqual(app.calls.at(-1), { action: 'progress', body: { id: stock[0].id, jobId } });
+  assert.equal(app.element('vehiclePreview').hidden, false);
   assert.equal(storage.size, 0);
 });
 

@@ -24,7 +24,18 @@
     </${previewTag}>
     <p id="vehicleStatus" class="ms-message" role="status" aria-live="polite"></p>
     <button id="resumeVideo" class="ms-action" type="button" hidden>Acompanhar vídeo</button>
+    <div id="pendingVideos" class="ms-actions" role="group" aria-label="Vídeos por acompanhar" hidden></div>
     <div id="pendingStories" class="ms-actions"></div>
+    <details id="manualRecovery" class="ms-recovery">
+      <summary>Recuperar pedidos de vídeo e Stories</summary>
+      <p id="manualRecoveryStatus" class="ms-message" role="status"></p>
+      <ul id="recoveredVideos" class="ms-recovery-list" aria-label="Vídeos recuperados" hidden></ul>
+      <ul id="recoveredStories" class="ms-recovery-list" aria-label="Stories recuperados" hidden></ul>
+      <div class="ms-actions">
+        <button id="loadRecovery" class="ms-action" type="button">Procurar pedidos</button>
+        <button id="moreRecovery" class="ms-action" type="button" hidden>Procurar mais pedidos</button>
+      </div>
+    </details>
     <dialog id="confirmStory" class="ms-dialog" aria-labelledby="confirmStoryTitle" aria-describedby="confirmStoryText">
       <h2 id="confirmStoryTitle">Publicar o Story no Instagram?</h2><p id="confirmStoryText"></p>
       <div class="ms-actions"><button id="cancelStory" class="ms-action" type="button" autofocus>Voltar ao vídeo</button>
@@ -38,7 +49,17 @@
   const maxStatusChecks = 48;
   const maxAutomaticResumes = 3;
   const preparationKey = 'autovalorpt.manual-video.preparation.v1';
+  const preparationPrefix = 'autovalorpt.manual-video.preparation.v2.';
+  const preparationInterval = 8000;
+  const maxPreparationReads = 40;
+  // The server gives each video job a five-minute lease.
+  const maxPreparationFollowTime = 5 * 60_000 + 30_000;
   const validJob = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+  const recoverySources = [
+    { action: 'video-recovery', list: 'recoveredVideos', video: true },
+    { action: 'recovery', list: 'recoveredStories', video: false }
+  ];
+  const validCursor = value => typeof value === 'string' && /^[!-~]{1,1024}$/.test(value);
   const prices = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const sourceError = 'Não foi possível confirmar os dois inventários no Standvirtual. Volta a consultar o stock.';
   const reasons = {
@@ -87,7 +108,9 @@
   let authenticated = false, onExpiry, notifyPending, sessionVersion = 0, busy = false;
   let stock = [], stockAt = 0, preview = null, phase = '', confirmation = null;
   let pending = new Map();
-  let preparation = null, preparationTimer = null, preparationRequest = null, preparationVersion = 0;
+  let preparation = null, preparationTimer = null, preparationRequest = null, preparationVersion = 0, preparationReads = 0;
+  let renderedPreparations = '';
+  let recoveredPages = new Map(), recoveryBusy = false;
 
   function message(text = '', tone = '') {
     $('vehicleStatus').textContent = text;
@@ -149,9 +172,15 @@
   }
   function restoreAttempts(active) {
     try {
-      const legacy = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
-      if (active && Array.isArray(legacy)) for (const receipt of legacy.filter(validReceipt)) track(receipt);
-      if (!active || legacy.every(receipt => localStorage.getItem(publicationPrefix + receipt.id))) sessionStorage.removeItem(storageKey);
+      if (!active) sessionStorage.removeItem(storageKey);
+      else {
+        const legacy = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+        if (Array.isArray(legacy)) {
+          const receipts = legacy.filter(validReceipt);
+          for (const receipt of receipts) track(receipt);
+          if (receipts.every(receipt => localStorage.getItem(publicationPrefix + receipt.id))) sessionStorage.removeItem(storageKey);
+        }
+      }
     } catch {}
     try {
       for (let index = localStorage.length - 1; index >= 0; index--) {
@@ -182,12 +211,14 @@
     $('resumeVideo').hidden = !authenticated || !preparation || busy;
     $('resumeVideo').disabled = !authenticated || busy;
     $('resumeVideo').textContent = preparation?.failed ? 'Tentar criar novamente' : 'Acompanhar vídeo';
+    renderSavedPreparations();
     $('publishStory').disabled = !canPublish() && !canPrepareAnother();
     const labels = { published: 'Preparar novo Story desta viatura', preparing: 'Continuar este envio',
       busy: 'A aguardar o resultado', review_required: 'A aguardar o resultado' };
     $('publishStory').textContent = labels[phase] || (canPrepareAnother() ? 'Rever vídeo desta viatura' : 'Publicar Story agora');
     $('sendStory').disabled = !confirmation || !canPublish();
     for (const button of host.querySelectorAll('.ms-row, #pendingStories button')) button.disabled = busy;
+    updateRecoveryControls();
   }
   function renderPending() {
     const container = $('pendingStories'); container.replaceChildren();
@@ -237,12 +268,13 @@
       return url.origin === 'https://ireland.apollo.olxcdn.com' && !url.username && !url.password && url.pathname.startsWith('/v1/files/') ? url.href : '';
     } catch { return ''; }
   }
-  async function request(action, body) {
+  async function request(action, body, cursor) {
     const version = sessionVersion;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), action === 'publish' ? 20000 : 35000);
     try {
-      const response = await fetch('/api/stock?integration=instagram-sync&action=stories-manual-' + action, {
+      const query = cursor ? '&cursor=' + encodeURIComponent(cursor) : '';
+      const response = await fetch('/api/stock?integration=instagram-sync&action=stories-manual-' + action + query, {
         method: body ? 'POST' : 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
         headers: { Accept: 'application/json', ...(body && { 'Content-Type': 'application/json' }) },
         ...(body && { body: JSON.stringify(body) }), signal: controller.signal
@@ -310,11 +342,78 @@
     } finally { if (version === sessionVersion) { busy = false; updateControls(); } }
     if (selected) await prepare(selected);
   }
-  function savePreparation() {
+  function isPreparationKey(key) {
+    return key === preparationKey || key?.startsWith(preparationPrefix);
+  }
+  function readPreparationRecord(key) {
     try {
-      if (preparation) localStorage.setItem(preparationKey, JSON.stringify(preparation));
-      else localStorage.removeItem(preparationKey);
-    } catch { /* Keep the current request available when browser storage is disabled. */ }
+      const video = JSON.parse(localStorage.getItem(key) || 'null');
+      if (video && typeof video.id === 'string' && validId.test(video.id) &&
+          typeof video.title === 'string' && video.title.length <= 300 &&
+          (!video.jobId || validJob.test(video.jobId)) && Number.isSafeInteger(video.startedAt) &&
+          video.startedAt <= Date.now() + 60000 && Date.now() - video.startedAt < 24 * 3600000) {
+        return { key, id: video.id, title: video.title, startedAt: video.startedAt,
+          ...(video.jobId ? { jobId: video.jobId } : {}), ...(video.failed === true ? { failed: true } : {}) };
+      }
+    } catch { /* Ignore malformed or unavailable browser storage. */ }
+    return null;
+  }
+  function savedPreparations(clear = false) {
+    const saved = [];
+    try {
+      for (let index = localStorage.length - 1; index >= 0; index--) {
+        const key = localStorage.key(index);
+        if (!isPreparationKey(key)) continue;
+        const job = clear ? null : readPreparationRecord(key);
+        if (job) saved.push(job);
+        else localStorage.removeItem(key);
+      }
+    } catch { /* Recovery remains available in memory when storage is disabled. */ }
+    return saved.sort((a, b) => b.startedAt - a.startedAt);
+  }
+  function samePreparation(a, b) {
+    return Boolean(a && a.key === b.key && a.id === b.id && a.startedAt === b.startedAt);
+  }
+  function savePreparation(job, isNew = false) {
+    const { key, ...stored } = job;
+    try {
+      if (isNew || samePreparation(readPreparationRecord(key), job)) {
+        localStorage.setItem(key, JSON.stringify(stored));
+        return true;
+      }
+    } catch { /* Keep following the current request if storage is disabled. */ }
+    return false;
+  }
+  function discardPreparation(job) {
+    try {
+      if (samePreparation(readPreparationRecord(job.key), job)) localStorage.removeItem(job.key);
+    } catch { /* Ignore unavailable storage. */ }
+  }
+  function renderSavedPreparations() {
+    const list = $('pendingVideos');
+    const saved = authenticated && !busy
+      ? savedPreparations().filter(job => !preparation || !samePreparation(job, preparation))
+      : [];
+    list.hidden = saved.length === 0;
+    const signature = JSON.stringify(saved);
+    if (signature === renderedPreparations) return;
+    renderedPreparations = signature;
+    list.replaceChildren();
+    for (const job of saved) {
+      const button = document.createElement('button');
+      button.className = 'ms-action';
+      button.type = 'button';
+      button.textContent = (job.failed ? 'Tentar novamente · ' : 'Acompanhar · ') + job.title + ' (' + job.id + ')';
+      button.addEventListener('click', () => {
+        if (!authenticated || busy) return;
+        const current = readPreparationRecord(job.key);
+        if (!samePreparation(current, job)) { updateControls(); return; }
+        clearPreview(); setPicker(false);
+        preparation = current; preparationReads = 0;
+        void resumePreparation();
+      });
+      list.appendChild(button);
+    }
   }
   function stopPreparationPolling() {
     clearTimeout(preparationTimer); preparationTimer = null; preparationRequest = null; preparationVersion++;
@@ -358,22 +457,35 @@
     clearTimeout(preparationTimer); preparationTimer = null;
     busy = false;
     if (preparation && ['manual_video_job_invalid', 'manual_video_job_not_found', 'manual_video_job_expired'].includes(error.code)) {
-      preparation.failed = true; savePreparation();
+      preparation.failed = true; savePreparation(preparation);
     }
     message(error.message + (preparation && !preparation.failed ? ' Usa «Acompanhar vídeo» para consultar o mesmo pedido.' : ''), 'error');
     updateControls();
   }
+  function canFollowPreparation() {
+    return preparation && preparationReads < maxPreparationReads && Date.now() - preparation.startedAt < maxPreparationFollowTime;
+  }
   function queuePreparationPoll(version, run) {
     clearTimeout(preparationTimer); preparationTimer = null;
-    // Poll only while a requested video is active and the page is visible.
-    if (!document.hidden && authenticated && preparation && !preparationRequest && version === sessionVersion && run === preparationVersion) {
-      preparationTimer = setTimeout(() => { preparationTimer = null; void readPreparation(version, run); }, 8000);
+    if (!authenticated || !preparation || preparationRequest || version !== sessionVersion || run !== preparationVersion) return;
+    if (!canFollowPreparation()) {
+      busy = false;
+      message('A consulta automática terminou. Toca em «Acompanhar vídeo» para verificar este pedido.');
+      updateControls();
+      return;
     }
+    if (document.hidden) return;
+    preparationTimer = setTimeout(() => {
+      preparationTimer = null;
+      if (canFollowPreparation()) void readPreparation(version, run);
+      else queuePreparationPoll(version, run);
+    }, preparationInterval);
   }
   async function readPreparation(version = sessionVersion, run = preparationVersion) {
     if (!authenticated || !preparation?.jobId || preparationRequest || version !== sessionVersion || run !== preparationVersion) return;
     const job = preparation;
     const reading = {}; preparationRequest = reading; let pollAgain = false;
+    preparationReads++;
     busy = true; updateControls();
     try {
       const data = await request('progress', { id: job.id, jobId: job.jobId });
@@ -383,12 +495,12 @@
         preparationMessage(); pollAgain = true; return;
       }
       if (data.status === 'failed') {
-        job.failed = true; savePreparation();
+        job.failed = true; savePreparation(job);
         throw new Error(reasons[data.reason] || reasons.manual_video_job_failed);
       }
       applyPreview(job, data);
       clearTimeout(preparationTimer); preparationTimer = null;
-      preparation = null; savePreparation(); busy = false; updateControls();
+      discardPreparation(job); preparation = null; busy = false; updateControls();
     } catch (error) {
       if (version === sessionVersion && run === preparationVersion && preparation === job) preparationError(error);
     } finally {
@@ -396,19 +508,21 @@
       if (pollAgain) queuePreparationPoll(version, run);
     }
   }
-  async function startPreparation(item) {
+  async function startPreparation(item, previous) {
     const version = sessionVersion;
     stopPreparationPolling(); const run = preparationVersion;
     clearPreview(); setPicker(false);
-    preparation = { id: item.id, title: title(item), startedAt: Date.now() };
-    savePreparation(); busy = true; updateControls(); preparationMessage();
+    preparation = { key: preparationPrefix + crypto.randomUUID(), id: item.id, title: title(item), startedAt: Date.now() };
+    preparationReads = 0;
+    if (savePreparation(preparation, true) && previous) discardPreparation(previous);
+    busy = true; updateControls(); preparationMessage();
     try {
       const data = await request('create', { id: item.id });
       if (version !== sessionVersion || run !== preparationVersion) return;
       if (data.ok !== true || data.status !== 'preparing' || data.id !== item.id || !validJob.test(data.jobId)) {
         throw new Error(reasons[data.reason] || 'Não foi possível confirmar o pedido de criação do vídeo.');
       }
-      preparation.jobId = data.jobId; savePreparation();
+      preparation.jobId = data.jobId; savePreparation(preparation);
       await readPreparation(version, run);
     } catch (error) {
       if (version === sessionVersion && run === preparationVersion) preparationError(error);
@@ -420,9 +534,107 @@
   }
   async function resumePreparation() {
     if (!authenticated || busy || !preparation) return;
-    if (preparation.failed || !preparation.jobId) return startPreparation(preparation);
+    if (preparation.failed || !preparation.jobId) return startPreparation(preparation, preparation);
     stopPreparationPolling(); preparationMessage();
     await readPreparation();
+  }
+  function updateRecoveryControls() {
+    const disabled = !authenticated || busy || recoveryBusy;
+    $('loadRecovery').disabled = disabled;
+    $('moreRecovery').disabled = disabled;
+    $('moreRecovery').hidden = !recoverySources.some(source => recoveredPages.get(source.action)?.cursor);
+    for (const button of $('manualRecovery').querySelectorAll('li button')) button.disabled = disabled;
+  }
+  function renderRecovery() {
+    for (const source of recoverySources) {
+      const list = $(source.list);
+      const items = recoveredPages.get(source.action)?.items || [];
+      list.replaceChildren(); list.hidden = !items.length;
+      for (const item of items) {
+        const row = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'ms-action';
+        button.textContent = (source.video ? 'Acompanhar vídeo · ' : 'Consultar Story · ') + item.id;
+        button.addEventListener('click', () => {
+          if (!authenticated || busy || recoveryBusy) return;
+          if (source.video) {
+            clearPreview(); setPicker(false);
+            const saved = savedPreparations().find(job => job.id === item.id && job.jobId === item.jobId);
+            preparation = saved || { key: preparationPrefix + item.jobId, id: item.id, jobId: item.jobId,
+              title: item.id, startedAt: Date.parse(item.startedAt) };
+            preparationReads = 0;
+            void resumePreparation();
+          } else void inspectRecoveredStory(item);
+        });
+        row.appendChild(button); list.appendChild(row);
+      }
+    }
+    updateRecoveryControls();
+  }
+  function recoveryItem(item, video) {
+    if (!validId.test(item?.id)) return null;
+    const { id, status } = item;
+    if (video) {
+      if (!validJob.test(item.jobId) || !['preparing', 'preview_ready'].includes(status) || !Number.isFinite(Date.parse(item.startedAt))) return null;
+      return { id, jobId: item.jobId, startedAt: item.startedAt };
+    }
+    if (!Number.isSafeInteger(item.generation) || item.generation < 1 || item.generation > 99_999_999 ||
+        !['busy', 'preparing', 'review_required'].includes(status)) return null;
+    return { id, generation: item.generation };
+  }
+  async function loadRecovery(more = false) {
+    if (!authenticated || busy || recoveryBusy) return;
+    const sources = more ? recoverySources.filter(source => recoveredPages.get(source.action)?.cursor) : recoverySources;
+    if (!sources.length) return;
+    const version = sessionVersion;
+    recoveryBusy = true; updateRecoveryControls();
+    $('manualRecoveryStatus').textContent = 'A procurar pedidos no servidor…';
+    const results = await Promise.allSettled(sources.map(source => request(source.action, undefined,
+      more ? recoveredPages.get(source.action).cursor : undefined)));
+    if (version !== sessionVersion) return;
+    recoveryBusy = false;
+    for (const [index, source] of sources.entries()) {
+      const data = results[index].value;
+      const previous = recoveredPages.get(source.action);
+      if (!data?.ok || !Array.isArray(data.items) || data.items.length > 12 ||
+          data.nextCursor !== null && (!validCursor(data.nextCursor) || more && data.nextCursor === previous?.cursor)) {
+        recoveredPages.set(source.action, { items: previous?.items || [], cursor: previous?.cursor, partial: true });
+        continue;
+      }
+      const items = new Map((more ? previous.items : []).map(item => [item.id, item]));
+      let partial = data.partial === true || more && previous.partial;
+      for (const row of data.items) {
+        const item = recoveryItem(row, source.video);
+        if (item) items.set(item.id, item);
+        else partial = true;
+      }
+      recoveredPages.set(source.action, { items: [...items.values()], cursor: data.nextCursor, partial });
+    }
+    renderRecovery();
+    const pages = [...recoveredPages.values()];
+    $('manualRecoveryStatus').textContent = pages.some(page => page.partial) ? 'A consulta de alguns pedidos ficou incompleta. Podes voltar a procurar.'
+      : pages.some(page => page.items.length) ? 'Escolhe um pedido para acompanhar o resultado.'
+      : pages.some(page => page.cursor) ? 'Esta página de resultados está vazia. Podes procurar mais pedidos.'
+      : 'Não foram encontrados pedidos pendentes.';
+  }
+  async function inspectRecoveredStory(item) {
+    const version = sessionVersion;
+    recoveryBusy = true; updateRecoveryControls();
+    $('manualRecoveryStatus').textContent = 'A consultar o envio do Story…';
+    try {
+      const data = await request('recovery-status', item);
+      if (version !== sessionVersion) return;
+      if (data.id !== item.id || !Object.hasOwn(outcomes, data.status)) throw new Error('invalid_recovery_status');
+      const note = data.status === 'ready' ? 'Este envio deixou de estar disponível neste registo.'
+        : data.status === 'preparing' ? 'O envio precisa de ser retomado. Volta ao seletor de viaturas e revê o vídeo.'
+          : outcomes[data.status];
+      const date = data.status === 'published' && lastPublished(data.publishedAt);
+      $('manualRecoveryStatus').textContent = item.id + ' · ' + note + (date ? ' ' + date + '.' : '');
+    } catch {
+      if (version === sessionVersion) $('manualRecoveryStatus').textContent = 'Não foi possível consultar o envio. Podes voltar a tentar.';
+    } finally {
+      if (version === sessionVersion) { recoveryBusy = false; updateRecoveryControls(); }
+    }
   }
   function showOutcome(result, attempt, fromStatus = false) {
     if (pending.get(attempt.id) !== attempt) return;
@@ -540,6 +752,11 @@
   });
   $('vehicleSearch').addEventListener('input', renderStock);
   $('resumeVideo').addEventListener('click', () => { void resumePreparation(); });
+  $('loadRecovery').addEventListener('click', () => { void loadRecovery(); });
+  $('moreRecovery').addEventListener('click', () => { void loadRecovery(true); });
+  globalThis.addEventListener?.('storage', event => {
+    if (event.key === null || isPreparationKey(event.key)) renderSavedPreparations();
+  });
   document.addEventListener('visibilitychange', () => {
     for (const attempt of pending.values()) {
       clearTimeout(attempt.timer); attempt.timer = null;
@@ -585,31 +802,27 @@
       if (!validId.test(id)) return;
       host.scrollIntoView({ block: 'start' }); void openStock(id);
     },
-    setSession(active, expire, onPendingChange = notifyPending) {
+    setSession(active, expire, onPendingChange = notifyPending, { preserveRecovery = false } = {}) {
       authenticated = active; onExpiry = expire; sessionVersion++; busy = false;
-      stopPreparationPolling(); preparation = null;
+      stopPreparationPolling(); preparation = null; preparationReads = 0;
+      recoveredPages = new Map(); recoveryBusy = false;
+      $('manualRecovery').open = false; $('manualRecoveryStatus').textContent = '';
+      renderRecovery();
       notifyPending = onPendingChange;
       for (const attempt of pending.values()) clearTimeout(attempt.timer);
       clearPreview(); setPicker(false); message(''); stock = []; stockAt = 0; pending = new Map();
       $('vehicleResults').replaceChildren(); $('vehicleSearch').value = '';
-      restoreAttempts(active);
-      if (active) {
-        try {
-          const video = JSON.parse(localStorage.getItem(preparationKey) || 'null');
-          if (video && validId.test(video.id) && typeof video.title === 'string' && video.title.length <= 300 &&
-              (!video.jobId || validJob.test(video.jobId)) && Number.isSafeInteger(video.startedAt) &&
-              video.startedAt <= Date.now() + 60000 && Date.now() - video.startedAt < 24 * 3600000) {
-            preparation = { id: video.id, title: video.title, startedAt: video.startedAt,
-              ...(video.jobId ? { jobId: video.jobId } : {}), ...(video.failed === true ? { failed: true } : {}) };
-          } else localStorage.removeItem(preparationKey);
-        } catch { /* Ignore unavailable storage. */ }
-      } else savePreparation();
+      if (active || !preserveRecovery) restoreAttempts(active);
+      const saved = active ? savedPreparations() : [];
+      if (saved.length === 1) preparation = saved[0];
+      if (!active && !preserveRecovery) savedPreparations(true);
       for (const attempt of pending.values()) queueStatus(attempt, 0);
       renderPending(); updateControls();
       if (active && preparation) {
         message('Tens um pedido de vídeo de ' + preparation.title + '. Podes acompanhar o resultado.');
-        if (preparation.jobId && !preparation.failed) void resumePreparation();
+        if (preparation.jobId && !preparation.failed && canFollowPreparation()) void resumePreparation();
       }
+      if (saved.length > 1) message('Tens vários pedidos de vídeo. Escolhe qual queres acompanhar.');
       if (!active) notifyPending = undefined;
     }
   };

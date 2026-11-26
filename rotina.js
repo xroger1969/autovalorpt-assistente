@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { imageUrl, renderPreviewLinks, appendHistoryCaptions } = globalThis.AutoValorEditorialPreview;
+  const editorialPreview = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Histórico Instagram'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
@@ -14,9 +14,12 @@
   let verifying = false, manualTitle = 'Atualizar tudo', manualRequest = null, dashboardRequest = null;
   let followRequest = false; let lastResume = 0;
   let manualInProgress = false; let manualPollingUntil = 0; let pollingManual = false; let lastDashboardRead = 0;
-  let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
+  let viewedCycle = null; let historyVersion = 0; let cycleRead = 0; let lastSearch = null;
   let editorialPost = null;
-  let channelCheck = null, stockCheck = null, currentCycle = null, pendingManualStories = 0, calendarState = '';
+  let channelCheck = null, stockCheck = null, currentChannels = null, currentCycle = null, pendingManualStories = 0, calendarState = '';
+  let sessionRecheck = null;
+  let sessionChannel;
+  try { sessionChannel = new BroadcastChannel('autovalorpt-admin-session'); } catch { /* Revalidate on return when unavailable. */ }
   const fromShortcut = typeof location !== 'undefined' &&
     (location.pathname === '/stock-rapido.html' || location.hash === '#atalho');
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
@@ -53,20 +56,23 @@
       return data;
     } finally { clearTimeout(timer); }
   }
-  function sessionView(value, message = '') {
+  function sessionView(value, message = '', { preserveRecovery = true } = {}) {
+    const wasAuthenticated = authenticated;
     authenticated = value; generation++;
+    $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
+    $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
     const expire = () => sessionView(false, 'A sessão terminou. Volta a entrar.');
     globalThis.AutoValorRoutineCalendar?.setSession(value, expire);
     globalThis.AutoValorWhatsappEditorial?.setSession(value, expire);
-    globalThis.AutoValorExtraEditorial.setSession(value, expire, refreshAll);
+    globalThis.AutoValorExtraEditorial?.setSession(value, expire, refreshAll);
+    if (value && !globalThis.AutoValorExtraEditorial) text('extraStatus', 'A publicação extra está indisponível. Recarrega a página para tentar novamente.');
     globalThis.AutoValorManualStories?.setSession(value, expire, pending => {
       pendingManualStories = pending;
       showCheckOverview();
-    });
-    $('dashboardView').hidden = !value; $('privateNav').hidden = !value; $('loginView').hidden = value;
-    $('accessCode').value = ''; $('loginButton').disabled = false; text('loginStatus', message);
+    }, { preserveRecovery });
     if (!value) {
-      channelCheck = null; stockCheck = null; currentCycle = null; pendingManualStories = 0; calendarState = '';
+      if ($('manualStartDialog').open) $('manualStartDialog').close();
+      channelCheck = null; stockCheck = null; currentChannels = null; currentCycle = null; pendingManualStories = 0; calendarState = '';
       viewedCycle = null; lastSearch = null; historyVersion++; followingToday = true;
       verifying = false; manualRequest = null; dashboardRequest = null; setBusy(false); text('checkStatus', '');
       $('stockActionDetails').open = false; text('manualHint', ''); text('checkDetails', '');
@@ -79,12 +85,19 @@
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
       badge('cycleBadge', 'Por consultar'); badge('catalogBadge', 'Por consultar'); badge('whatsappBadge', 'Por consultar'); $('stepsList').replaceChildren();
     }
+    if (value !== wasAuthenticated) $(value ? 'pageTitle' : 'accessCode').focus?.();
   }
   function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
   const progressText = { source: 'A procurar viaturas nos dois inventários.', catalog: 'A sincronizar o catálogo da Meta.', retirements: 'A preservar o histórico do Instagram.', photo: 'A verificar a fotografia do Instagram.', story: 'A preparar o vídeo e o Story do Instagram.', verify: 'A confirmar os resultados.' };
   function showManualButton() {
-    text('runNow', verifying ? 'A verificar…' : manualTitle);
-    $('runNow').disabled = verifying || submitting || !manualAction;
+    const button = $('runNow');
+    const requiresConfirmation = manualAction === 'manual-start';
+    button.textContent = verifying ? 'A verificar…' : manualTitle;
+    button.disabled = verifying || submitting || !manualAction;
+    button.setAttribute('aria-describedby', requiresConfirmation ? 'manualPublicationHint manualStatus checkStatus' : 'manualStatus checkStatus');
+    if (requiresConfirmation) button.setAttribute('aria-haspopup', 'dialog');
+    else button.removeAttribute('aria-haspopup');
+    $('manualPublicationHint').hidden = !requiresConfirmation;
   }
   function renderManual(data, message = '') {
     manualAction = 'verify';
@@ -125,6 +138,7 @@
     } else if (state === 'production_only') {
       hint = 'A atualização só está disponível no painel de produção.';
     }
+    if (manualAction !== 'manual-start' && $('manualStartDialog').open) $('manualStartDialog').close();
     manualTitle = title; showManualButton();
     const routineHint = state === 'finished' || manualAction === 'manual-start';
     text('manualHint', routineHint ? hint : '');
@@ -262,7 +276,7 @@
     const version = generation;
     const action = manualAction;
     if (action === 'verify' || action === 'refresh') { await verifyPanel(action === 'verify'); return; }
-    manualRead++; manualRequest = null; stockCheck = null; text('checkStatus', ''); text('checkDetails', ''); manualAction = ''; submitting = true; $('runNow').disabled = true;
+    manualRead++; manualRequest = null; stockCheck = null; text('checkStatus', ''); text('checkDetails', ''); manualAction = ''; submitting = true; showManualButton();
     if (action === 'resume') lastResume = Date.now();
     text('manualStatus', action === 'resume' ? 'A retomar o pedido…' : 'A registar o pedido…');
     try {
@@ -360,7 +374,7 @@
     if (!authenticated || !$('historyPanel').open || !viewedCycle) return;
     const { day, current } = viewedCycle;
     const currentDay = today();
-    if (day !== currentDay || !current || current.startedAt) {
+    if (day !== currentDay || current?.status !== 'not_started' || current.ok === false || current.startedAt) {
       text('latestCycle', day !== currentDay ? 'Os outros resultados mostram a verificação mais recente de cada canal.'
         : current?.startedAt ? 'Última execução encontrada: ' + date(current.startedAt) + '.' : 'Última execução por confirmar.');
       return;
@@ -369,17 +383,16 @@
     const version = ++historyVersion;
     const session = generation;
     const relevant = () => session === generation && version === historyVersion && viewedCycle?.day === day && $('historyPanel').open;
-    let message = 'A procurar a última execução…';
-    lastSearch = { day, message }; text('latestCycle', message);
+    lastSearch = { day, message: 'A procurar a última execução…' }; text('latestCycle', lastSearch.message);
     try {
-      message = 'Sem execução registada nos últimos sete dias.';
-      for (let offset = 1; offset <= 7; offset++) {
-        const prior = new Date(day + 'T12:00:00Z'); prior.setUTCDate(prior.getUTCDate() - offset);
-        const previousDay = prior.toISOString().slice(0, 10);
-        const previous = await api(url('morning-flow', 'status', previousDay));
-        if (!relevant()) return;
-        if (previous.startedAt) { message = 'Última execução encontrada: ' + date(previous.startedAt) + '. Escolhe ' + previousDay + ' para ver as etapas.'; break; }
+      const { ok, day: searchDay, latest } = await api(url('morning-flow', 'latest-prior'));
+      if (!relevant()) return;
+      if (ok !== true || searchDay !== day || (latest !== null &&
+          (!validDay(latest?.day) || latest.day >= day || !Number.isFinite(Date.parse(latest.startedAt))))) {
+        throw new Error('morning_history_unavailable');
       }
+      const message = latest ? 'Última execução encontrada: ' + date(latest.startedAt) + '. Escolhe ' + latest.day + ' para ver as etapas.'
+        : 'Sem execução registada nos últimos sete dias.';
       lastSearch = { day, message }; text('latestCycle', message);
     } catch (error) {
       if (!relevant()) return;
@@ -404,8 +417,8 @@
   }
 
   function clearEditorial() {
-    renderPreviewLinks();
-    editorialPost = null; globalThis.AutoValorExtraEditorial.setStatus(null);
+    editorialPreview?.renderPreviewLinks();
+    editorialPost = null; globalThis.AutoValorExtraEditorial?.setStatus(null);
     for (const id of ['editorialSchedule','editorialResult','editorialTitle','editorialDate','editorialCaption','editorialPreviewNote']) text(id, '');
     $('editorialNext').hidden = true; $('editorialImage').hidden = true;
     $('editorialImage').removeAttribute('src'); $('editorialImage').alt = '';
@@ -423,14 +436,16 @@
 
   function editorialImageUrl(post) {
     if (!validDay(post?.date) || post?.format === 'REELS' || !Number.isSafeInteger(post?.slideCount) || post.slideCount < 1 || post.slideCount > 10) return null;
-    return imageUrl(post, 0);
+    return editorialPreview?.imageUrl(post, 0);
   }
   function loadEditorialPreview() {
     if (!authenticated || !$('editorialPanel').open) return;
     const src = editorialImageUrl(editorialPost); const image = $('editorialImage');
     if (!src) return;
     if (image.getAttribute('src') !== src) image.src = src;
-    image.alt = typeof editorialPost.title === 'string' ? editorialPost.title : 'Conteúdo AutoValorPT';
+    const alt = editorialPost.altTexts?.[0];
+    image.alt = typeof alt === 'string' && alt.trim() ? alt
+      : typeof editorialPost.title === 'string' ? editorialPost.title : 'Conteúdo AutoValorPT';
     image.hidden = false;
   }
   function editorialResultLabel(result) {
@@ -448,7 +463,7 @@
     const config = data.configuration || {}; const auth = data.authorization || {};
     const configured = config.tokenConfigured === true && config.accountConfigured === true && config.validApi === true && config.imagesConfigured === true && config.production !== false;
     const last = data.lastResult;
-    globalThis.AutoValorExtraEditorial.setStatus(data);
+    globalThis.AutoValorExtraEditorial?.setStatus(data);
     if (data.active) {
       const uncertain = /unknown|uncertain/.test(data.active.phase || '');
       badge('editorialBadge', uncertain ? 'Publicação por confirmar' : 'Publicação em curso', uncertain ? 'error' : 'pending');
@@ -463,7 +478,7 @@
     const valid = validDay(post?.date) && (post.format === 'REELS' || Number.isSafeInteger(post.slideCount) && post.slideCount >= 1 && post.slideCount <= 10);
     editorialPost = valid ? post : null;
     globalThis.AutoValorRoutineCalendar?.setNextPost(editorialPost);
-    renderPreviewLinks(editorialPost);
+    editorialPreview?.renderPreviewLinks(editorialPost);
     $('editorialNext').hidden = !valid;
     const image = $('editorialImage'); const src = editorialImageUrl(editorialPost);
     if (!src || image.getAttribute('src') !== src) { image.removeAttribute('src'); image.hidden = true; image.alt = ''; }
@@ -485,7 +500,7 @@
       item.appendChild(node('span',editorialResultLabel(row),'badge ' + (published ? 'good' : ISSUES.has(row.status) ? 'error' : 'pending')));
       const link = published ? postLink(row.permalink) : null;
       if (link) { const a = node('a','Ver publicação'); a.href=link; a.target='_blank'; a.rel='noopener noreferrer'; item.appendChild(a); }
-      appendHistoryCaptions(item, row);
+      editorialPreview?.appendHistoryCaptions(item, row);
       history.appendChild(item);
     }
   }
@@ -498,34 +513,111 @@
     });
     return dashboardRequest;
   }
-  async function readDashboard() {
+  function selectedCycleDay() {
     $('cycleDay').max = today(); if (followingToday) $('cycleDay').value = today();
-    const day = $('cycleDay').value; if (!validDay(day)) return;
-    setBusy(true); lastDashboardRead = Date.now(); const version = generation; text('dashboardStatus', 'A consultar os registos…');
-    const results = await Promise.allSettled([api(url('morning-flow', 'status', day)), api(url('meta-catalog', 'status')), api(url('instagram-sync', 'status')), api(url('instagram-sync', 'stories-status')), api(url('whatsapp-status', 'status')), api(url('editorial', 'status'))]);
-    if (version !== generation) return;
-    if (results.some(r => r.status === 'rejected' && r.reason.status === 401)) { sessionView(false, 'A sessão terminou. Volte a entrar para consultar os resultados.'); return; }
-    const value = index => results[index].status === 'fulfilled' ? results[index].value : null;
-    const error = index => results[index].status === 'rejected' ? results[index].reason : null;
-    showCycle(value(0), error(0)); showCatalog(value(1), error(1)); showPublication('photoSummary', 'Fotografias', value(2), error(2)); showPublication('storySummary', 'Stories', value(3), error(3)); showWhatsapp(value(4), error(4));
-    showInstagram(value(2), value(3), error(2), error(3)); showEditorial(value(5), error(5));
+    return $('cycleDay').value;
+  }
+  async function readState(endpoint, version, render) {
+    let value = null, error = null;
+    try { value = await api(endpoint); } catch (failure) { error = failure; }
+    if (version === generation) {
+      if (error?.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar para consultar os resultados.');
+      else render(value, error);
+    }
+    return { value, error };
+  }
+  function readCycle(day, version) {
+    const request = ++cycleRead;
+    return readState(url('morning-flow', 'status', day), version, (value, error) => {
+      if (request !== cycleRead) return;
+      showCycle(value, error);
+      if (day === today()) currentCycle = { day, value, error };
+      if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value?.startedAt) {
+        historyVersion++; lastSearch = null; text('latestCycle', '');
+      }
+      viewedCycle = { day, current: value };
+      void loadHistory();
+    });
+  }
+  function updateCurrentOverview() {
+    if (!currentChannels) return;
     const currentDay = today();
-    if (day === currentDay) currentCycle = { day, value: value(0), error: error(0) };
-    updateCheckOverview({ catalog: value(1), photos: value(2), stories: value(3), whatsapp: value(4), editorial: value(5),
+    updateCheckOverview({ ...currentChannels,
       cycle: currentCycle?.day === currentDay ? currentCycle.value : null,
       cycleError: currentCycle?.day !== currentDay || currentCycle.error });
+  }
+  async function refreshHistoryDay() {
+    if (!authenticated) return;
+    const day = selectedCycleDay(); if (!validDay(day)) return;
+    const version = generation;
+    historyVersion++; lastSearch = null; viewedCycle = null;
+    badge('cycleBadge', 'A consultar…'); text('cycleSummary', 'A consultar a execução deste dia…');
+    text('cycleTime', ''); text('latestCycle', ''); $('stepsList').replaceChildren();
+    await readCycle(day, version);
+    if (version === generation && day === today()) updateCurrentOverview();
+  }
+  async function readDashboard() {
+    const day = selectedCycleDay(); if (!validDay(day)) return;
+    setBusy(true); lastDashboardRead = Date.now(); const version = generation; text('dashboardStatus', 'A consultar os registos…');
+    const read = (integration, action, render) => readState(url(integration, action), version, render);
+    const instagram = Promise.all([
+      read('instagram-sync', 'status', (value, error) => showPublication('photoSummary', 'Fotografias', value, error)),
+      read('instagram-sync', 'stories-status', (value, error) => showPublication('storySummary', 'Stories', value, error))
+    ]).then(([photo, story]) => {
+      if (version === generation) showInstagram(photo.value, story.value, photo.error, story.error);
+      return [photo, story];
+    });
+    const [cycle, catalog, [photos, stories], whatsapp, editorial] = await Promise.all([
+      readCycle(day, version), read('meta-catalog', 'status', showCatalog), instagram,
+      read('whatsapp-status', 'status', showWhatsapp), read('editorial', 'status', showEditorial)
+    ]);
+    if (version !== generation) return;
+    currentChannels = { catalog: catalog.value, photos: photos.value, stories: stories.value, whatsapp: whatsapp.value, editorial: editorial.value };
+    updateCurrentOverview();
     text('readAt', 'Consulta de ' + date(new Date().toISOString()) + '.');
-    text('dashboardStatus', results.some(r => r.status === 'rejected') ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
-    if (!viewedCycle || viewedCycle.day !== day || viewedCycle.current?.startedAt !== value(0)?.startedAt) {
-      historyVersion++; lastSearch = null; text('latestCycle', '');
-    }
-    viewedCycle = { day, current: value(0) };
-    void loadHistory();
     const sections = ['rotina das 08h00', 'catálogo WhatsApp', 'fotografias do Instagram', 'Stories do Instagram', 'Estado WhatsApp', 'publicações criativas'];
-    return sections.filter((_, index) => error(index));
+    const results = [cycle, catalog, photos, stories, whatsapp, editorial];
+    const unavailable = sections.filter((_, index) => results[index].error);
+    text('dashboardStatus', unavailable.length ? 'Alguns registos não puderam ser consultados. Os resultados indisponíveis estão identificados abaixo.' : '');
+    return unavailable;
   }
   function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
-  $('runNow').addEventListener('click', submitManual);
+  function consultStatus() {
+    if (!authenticated || submitting) return;
+    return Promise.all([readManualStatus(), refresh()]);
+  }
+  function signedOut() {
+    sessionView(false, 'Sessão terminada.', { preserveRecovery: false });
+  }
+  sessionChannel?.addEventListener('message', event => {
+    if (event.data === 'logout' && authenticated) signedOut();
+  });
+  function recheckOnReturn() {
+    if (document.hidden || !authenticated || sessionRecheck || closing) return sessionRecheck;
+    const version = generation;
+    sessionRecheck = api('/api/admin-session').then(session => {
+      if (generation !== version) return;
+      if (session.authenticated !== true) {
+        sessionView(false, 'A sessão terminou. Volta a entrar.');
+      } else if (Date.now() - lastDashboardRead >= 60_000) {
+        void consultStatus();
+      }
+    }).catch(error => {
+      if (generation === version && error.status === 401) sessionView(false, 'A sessão terminou. Volta a entrar.');
+    }).finally(() => { sessionRecheck = null; });
+    return sessionRecheck;
+  }
+  $('runNow').addEventListener('click', () => {
+    if (manualAction !== 'manual-start') return submitManual();
+    if (authenticated && !$('runNow').disabled && !$('manualStartDialog').open) $('manualStartDialog').showModal();
+  });
+  $('manualStartBack').addEventListener('click', () => $('manualStartDialog').close());
+  $('manualStartConfirm').addEventListener('click', () => {
+    const dialog = $('manualStartDialog');
+    if (!dialog.open) return;
+    dialog.close();
+    if (manualAction === 'manual-start') return submitManual();
+  });
   $('editorialPanel').addEventListener('toggle', loadEditorialPreview);
   $('historyPanel').addEventListener('toggle', () => {
     if ($('historyPanel').open) void loadHistory();
@@ -535,24 +627,26 @@
     event.preventDefault(); const access = $('accessCode').value.trim(); if (!access) return;
     $('loginButton').disabled = true; text('loginStatus', 'A verificar o acesso…');
     try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ access }) }); sessionView(true); await refreshAll(); }
-    catch (error) { $('accessCode').value = ''; text('loginStatus', error.status === 401 ? 'Código de acesso inválido.' : error.status === 429 ? 'Demasiadas tentativas. Aguarde antes de voltar a tentar.' : 'Não foi possível entrar. Tente novamente.'); }
+    catch (error) { $('accessCode').value = ''; text('loginStatus', error.status === 401 ? 'Código de acesso inválido.' : error.status === 429 ? 'Demasiadas tentativas. Aguarde antes de voltar a tentar.' : 'Não foi possível entrar. Tente novamente.'); $('accessCode').focus?.(); }
     finally { $('loginButton').disabled = false; }
   });
   $('logoutButton').addEventListener('click', async () => {
     if (closing) return; closing = true; $('logoutButton').disabled = true;
-    try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) }); sessionView(false, 'Sessão terminada.'); }
+    try {
+      await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) });
+      signedOut();
+      sessionChannel?.postMessage('logout');
+    }
     catch { text('dashboardStatus', 'Não foi possível terminar a sessão. Tente novamente.'); }
     finally { closing = false; $('logoutButton').disabled = false; }
   });
-  $('refreshButton').addEventListener('click', refreshAll);
+  $('refreshButton').addEventListener('click', consultStatus);
   $('cycleDay').value = today(); $('cycleDay').max = today();
-  $('cycleDay').addEventListener('change', () => { followingToday = false; refresh(); });
-  $('todayButton').addEventListener('click', () => { followingToday = true; refresh(); });
-  // Idle dashboards never poll Blob: each channel is read on explicit request,
-  // initial load, or return to the page after a one-minute cooldown.
-  document.addEventListener?.('visibilitychange', () => {
-    if (!document.hidden && authenticated && Date.now() - lastDashboardRead >= 60_000) void refreshAll();
-  });
+  $('cycleDay').addEventListener('change', () => { followingToday = false; return refreshHistoryDay(); });
+  $('todayButton').addEventListener('click', () => { followingToday = true; return refreshHistoryDay(); });
+  document.addEventListener?.('visibilitychange', recheckOnReturn);
+  globalThis.addEventListener?.('focus', recheckOnReturn);
+  globalThis.addEventListener?.('pageshow', event => { if (event.persisted) void recheckOnReturn(); });
   // Only an active manual cycle is followed, with a bounded read budget.
   // The scheduled routine continues on the server independently of the panel.
   async function pollActive() {

@@ -99,12 +99,12 @@
       if (player.src !== active.url) player.src = active.url;
     } else if (player.hasAttribute('src')) { player.pause(); player.removeAttribute('src'); player.load(); }
   }
-  function showLogin(text = '', kind = '') {
+  function showLogin(text = '', kind = '', { preserveRecovery = true } = {}) {
     version += 1; fullHistory = false; resumeTarget = null;
     if ($('resumeDialog').open) $('resumeDialog').close();
     message('resumeStatus');
     Object.assign(model, { status: null, verification: null, busy: false });
-    globalThis.AutoValorManualStories?.setSession(false);
+    globalThis.AutoValorManualStories?.setSession(false, undefined, undefined, { preserveRecovery });
     render();
     $('historyList').replaceChildren(); $('stockRecovery').hidden = true;
     $('technicalDetails').open = false;
@@ -154,7 +154,7 @@
   });
   $('logoutButton').addEventListener('click', async () => {
     if (model.busy) return; model.busy = true; render();
-    try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) }); showLogin('Sessão terminada.'); }
+    try { await api('/api/admin-session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) }); showLogin('Sessão terminada.', '', { preserveRecovery: false }); }
     catch (error) { handleError(error); } finally { model.busy = false; render(); }
   });
   $('refreshButton').addEventListener('click', refreshStatus);
