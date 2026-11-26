@@ -1,0 +1,2 @@
+# Native source is built by Expo, independently of the web/backend deployment.
+mobile/

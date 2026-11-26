@@ -5,7 +5,9 @@ import vm from 'node:vm';
 
 const source = await readFile(new URL('../app/sw.js', import.meta.url), 'utf8');
 const ORIGIN = 'https://autovalorpt-assistente.vercel.app';
-const BUILD = '20261126-1';
+const indexHTML = await readFile(new URL('../app/index.html', import.meta.url), 'utf8');
+const BUILD = indexHTML.match(/name="autovalor-app-build" content="([^"]+)"/)?.[1];
+assert.ok(BUILD, 'the published shell must identify its release');
 const CACHE = `autovalor-catalogue-v1-${BUILD}`;
 const shellHTML = build => `<!doctype html><meta name="autovalor-app-build" content="${build}"><main>Catálogo</main>`;
 
@@ -93,7 +95,7 @@ test('catalogue worker never intercepts private routes, API calls, external phot
     assert.equal(worker.dispatch(url), undefined, url);
     assert.equal(worker.dispatch(url, { navigate: true }), undefined, url);
   }
-  assert.equal(worker.dispatch('/app/catalogue.js?v=20261126-1', { method: 'POST' }), undefined);
+  assert.equal(worker.dispatch(`/app/catalogue.js?v=${BUILD}`, { method: 'POST' }), undefined);
   assert.equal(worker.dispatch('/app/index.html?admin=1', { navigate: true }), undefined);
   assert.equal(worker.requests.length, 0);
 });
@@ -108,7 +110,7 @@ test('offline navigation keeps a vehicle link while serving one complete version
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Catálogo/);
   const count = worker.requests.length;
-  const script = await worker.dispatch('/app/catalogue.js?v=20261126-1');
+  const script = await worker.dispatch(`/app/catalogue.js?v=${BUILD}`);
   assert.equal(await script.text(), 'shell');
   assert.equal(worker.requests.length, count, 'matching script is served from the same shell cache');
 });

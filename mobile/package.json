@@ -1,0 +1,42 @@
+{
+  "name": "autovalorpt-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test && expo install --check",
+    "export:native": "expo export --platform ios --platform android --output-dir dist-native",
+    "build:ios": "eas build --platform ios --profile production",
+    "submit:ios": "eas submit --platform ios --profile production",
+    "build:android": "eas build --platform android --profile production",
+    "preview:android": "eas build --platform android --profile preview"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~58.0.26",
+    "expo-constants": "~58.0.16",
+    "expo-font": "~58.0.12",
+    "expo-image": "~58.0.18",
+    "expo-splash-screen": "~58.0.14",
+    "expo-status-bar": "~58.0.5",
+    "expo-system-ui": "~58.0.7",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.4",
+    "@types/react": "~19.3.0",
+    "eas-cli": "27.11.0",
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

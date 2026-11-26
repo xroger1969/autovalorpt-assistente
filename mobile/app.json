@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "AutoValorPT",
+    "slug": "autovalorpt-catalogo",
+    "version": "1.0.0",
+    "scheme": "autovalorpt",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#F8F7F4",
+    "primaryColor": "#0B2030",
+    "ios": {
+      "bundleIdentifier": "pt.autovalor.catalogo",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "pt",
+        "CFBundleLocalizations": [
+          "pt-PT"
+        ]
+      },
+      "appleTeamId": "QBU2Z3YJ88"
+    },
+    "android": {
+      "package": "pt.autovalor.catalogo",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/monochrome-icon.png",
+        "backgroundColor": "#0B2030"
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B2030",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 150
+        }
+      ],
+      "expo-image",
+      "expo-font"
+    ],
+    "owner": "cvasconcelos1969s-team",
+    "extra": {
+      "eas": {
+        "projectId": "99e2814b-559a-42fe-899b-19b167c1c05c"
+      }
+    }
+  }
+}
