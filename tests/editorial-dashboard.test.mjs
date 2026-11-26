@@ -30,7 +30,7 @@ async function dashboard(options = {}) {
     return response(options.status || ready());
   };
   vm.runInNewContext(script, { document, fetch, URL, URLSearchParams, Date, Intl, AbortController,
-    setTimeout, clearTimeout, setInterval: callback => { tick = callback; }, navigator: { clipboard: { writeText: async () => {} } } });
+    setTimeout, clearTimeout, setInterval: callback => { tick = callback; }, navigator: { clipboard: { writeText: options.copy || (async () => {}) } } });
   await flush();
   return { get: id => document.getElementById(id), calls, document, tick: () => tick() };
 }
@@ -201,7 +201,7 @@ test('editorial preview shows verified sources and clears them on a later provis
 });
 
 test('only supported image versions and the extra flag are retained on the editorial preview', async () => {
-  for (const [metadata, expected] of [['v=v2&extra=0', '&v=v2'], ['v=v3', '&v=v3'], ['v=v3&extra=1', '&v=v3&extra=1'], ['version=v1&extra=1', '&v=v1&extra=1'], ['v=v9&x=invalid', '']]) {
+  for (const [metadata, expected] of [['v=v2&extra=0', '&v=v2'], ['v=v3', '&v=v3'], ['v=v4&extra=1', '&v=v4&extra=1'], ['v=v3&extra=1', '&v=v3&extra=1'], ['version=v1&extra=1', '&v=v1&extra=1'], ['v=v9&x=invalid', '']]) {
     const data = ready(); data.nextPost.images = ['/api/stock?integration=editorial-image&' + metadata];
     const app = await dashboard({ status: data });
     assert.equal(app.get('previewImage').src, '/api/stock?integration=editorial-image&date=2026-11-21&slide=1' + expected);
@@ -272,4 +272,19 @@ test('author credit follows the returned caption origin and recognizes dated Ast
     await app.get('refreshButton').handlers.click();
     assert.equal(line.textContent, expected); assert.equal(line.hidden, !expected);
   }
+});
+
+test('private history distinguishes the archived and suggested text, copying the latter locally without submitting a publication', async () => {
+  let copied;
+  const data = ready();
+  data.history = [{ date: '2026-11-26', title: '42 km por dia', status: 'published',
+    caption: 'Legenda efetivamente enviada.', suggestedCaption: 'Abre o simulador no link do perfil @autovalorpt.' }];
+  const app = await dashboard({ status: data, copy: async text => { copied = text; } });
+  const [sent, suggestion] = app.get('historyList').children[0].children.slice(-2);
+  assert.equal(sent.children[0].textContent, 'Legenda enviada');
+  assert.equal(sent.children[1].textContent, data.history[0].caption);
+  assert.equal(suggestion.children[1].textContent, data.history[0].suggestedCaption);
+  const copy = suggestion.children[2]; await copy.handlers.click();
+  assert.equal(copy.textContent, 'Legenda copiada'); assert.equal(copied, data.history[0].suggestedCaption);
+  assert.ok(app.calls.every(({ init }) => (init.method || 'GET') === 'GET'));
 });

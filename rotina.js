@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { imageUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
+  const { imageUrl, renderPreviewLinks, appendHistoryCaptions } = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Histórico Instagram'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
@@ -483,6 +483,7 @@
       item.appendChild(node('span',editorialResultLabel(row),'badge ' + (published ? 'good' : ISSUES.has(row.status) ? 'error' : 'pending')));
       const link = published ? postLink(row.permalink) : null;
       if (link) { const a = node('a','Ver publicação'); a.href=link; a.target='_blank'; a.rel='noopener noreferrer'; item.appendChild(a); }
+      appendHistoryCaptions(item, row);
       history.appendChild(item);
     }
   }

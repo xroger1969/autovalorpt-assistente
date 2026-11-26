@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const { validDay, imageUrl, renderCopyCredit } = globalThis.AutoValorEditorialPreview;
+  const { validDay, imageUrl, renderCopyCredit, renderSimulatorLinks } = globalThis.AutoValorEditorialPreview;
   const api = '/api/stock?integration=editorial&action=';
   const modes = new Set(['publish', 'resume', 'verify']);
   let authenticated = false, onExpiry, refresh, status = null;
@@ -29,7 +29,7 @@
   function clear() {
     revision++;
     controller?.abort(); controller = null; phase = 'closed'; review = null;
-    renderCopyCredit($('extraCopyOrigin'), null);
+    renderCopyCredit($('extraCopyOrigin'), null); renderSimulatorLinks(null, 'extra');
     $('extraArtwork').replaceChildren(); $('extraReviewTitle').textContent = ''; $('extraReviewCaption').textContent = '';
     controls();
   }
@@ -81,7 +81,7 @@
       if (![origin, 'https://autovalorpt-assistente.vercel.app'].includes(url.origin) || url.pathname !== '/api/stock' ||
           url.username || url.password || url.hash || url.searchParams.get('integration') !== 'editorial-image' ||
           url.searchParams.get('date') !== post.date || url.searchParams.get('slide') !== '1' ||
-          url.searchParams.get('extra') !== '1' || !['v1', 'v2', 'v3'].includes(version)) return null;
+          url.searchParams.get('extra') !== '1' || !['v1', 'v2', 'v3', 'v4'].includes(version)) return null;
       return imageUrl(post, 0);
     } catch { return null; }
   }
@@ -90,7 +90,7 @@
     if (result.ok !== true || !modes.has(result.mode) || !src) throw new Error('invalid_preview');
     const current = { id: post.id, fingerprint: post.fingerprint, mode: result.mode, loaded: false };
     review = current; phase = 'review';
-    renderCopyCredit($('extraCopyOrigin'), post);
+    renderCopyCredit($('extraCopyOrigin'), post); renderSimulatorLinks(post, 'extra');
     $('extraReviewTitle').textContent = post.title; $('extraReviewCaption').textContent = post.caption;
     const image = document.createElement('img');
     image.className = 'editorial-image'; image.width = 1080; image.height = 1350;

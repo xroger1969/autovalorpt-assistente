@@ -27,7 +27,7 @@
         }
       } catch { /* Use the date, slide and version from the preview. */ }
     }
-    if (['v1', 'v2', 'v3'].includes(version)) query.set('v', version);
+    if (['v1', 'v2', 'v3', 'v4'].includes(version)) query.set('v', version);
     else if (extra) query.set('v', 'v1');
     if (extra) query.set('extra', '1');
     return '/api/stock?' + query;
@@ -59,6 +59,31 @@
     if (link.hidden) link.removeAttribute('href');
     else link.href = approvedUrl;
   }
+  function renderSimulatorLinks(post, prefix) {
+    simulatorLink(prefix + 'Simulator', post?.simulatorUrl, 'https://carregador.vercel.app/');
+    simulatorLink(prefix + 'CreditSimulator', post?.creditSimulatorUrl, 'https://credicarros.vercel.app/simulador-ano.html');
+  }
+  function appendHistoryCaptions(host, row) {
+    if (row?.status !== 'published' || typeof row.caption !== 'string' || !row.caption.trim()) return;
+    function section(label, value) {
+      const details = document.createElement('details'), summary = document.createElement('summary');
+      const caption = document.createElement('p');
+      summary.textContent = label;
+      caption.className = 'caption history-caption'; caption.textContent = value;
+      details.appendChild(summary); details.appendChild(caption); host.appendChild(details);
+      return details;
+    }
+    section('Legenda enviada', row.caption);
+    if (typeof row.suggestedCaption !== 'string' || !row.suggestedCaption.trim()) return;
+    const suggestion = section('Legenda sugerida para editar no Instagram', row.suggestedCaption);
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.className = 'button quiet'; copy.textContent = 'Copiar legenda sugerida';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(row.suggestedCaption); copy.textContent = 'Legenda copiada'; }
+      catch { copy.textContent = 'Seleciona o texto acima para copiar'; }
+    });
+    suggestion.appendChild(copy);
+  }
   function copyCredit(post) {
     if (post?.copyOrigin === 'editorial') return 'Legenda da redação AutoValorPT.';
     if (post?.copyOrigin !== 'ai') return '';
@@ -76,8 +101,7 @@
   function renderPreviewLinks(post) {
     renderCopyCredit(document.getElementById('editorialCopyOrigin'), post);
     renderSources(post?.sources);
-    simulatorLink('editorialSimulator', post?.simulatorUrl, 'https://carregador.vercel.app/');
-    simulatorLink('editorialCreditSimulator', post?.creditSimulatorUrl, 'https://credicarros.vercel.app/simulador-ano.html');
+    renderSimulatorLinks(post, 'editorial');
   }
   function videoUrl(value) {
     if (typeof value !== 'string' || !value) return null;
@@ -87,5 +111,5 @@
       return ['/assets/editorial/rotina-web-v1.mp4', '/assets/editorial/test-drive-web-v1.mp4'].includes(url.pathname) ? url.pathname : null;
     } catch { return null; }
   }
-  globalThis.AutoValorEditorialPreview = { validDay, imageUrl, videoUrl, renderSources, renderCopyCredit, renderPreviewLinks };
+  globalThis.AutoValorEditorialPreview = { validDay, imageUrl, videoUrl, renderSources, renderCopyCredit, renderPreviewLinks, renderSimulatorLinks, appendHistoryCaptions };
 })();

@@ -37,7 +37,7 @@ export async function verifyAndPrepareEditorial(publisher, log = console, checkM
   // Use the dashboard's dated draft; further builds and the cron reuse it.
   try {
     const { post } = await publisher.preview();
-    if (post?.version !== 'v3') return;
+    if (!['v3', 'v4'].includes(post?.version)) return;
     const origin = logEdition(log, 'editorial_next_draft_ready', post);
     if (origin === 'editorial' && checkModel) {
       log.info('editorial_model_access', JSON.stringify(await checkModel()));

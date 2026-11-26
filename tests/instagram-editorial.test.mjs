@@ -6,6 +6,7 @@ import { editorialPlan } from '../lib/editorial-content.js';
 import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 import { createAdminSession, hashAdminToken, ADMIN_COOKIE_NAME } from '../lib/admin-security.js';
+import { feedEditorialPlan } from '../lib/editorial-simulator.js';
 import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
 import { scheduledEditorialPlan } from '../lib/electric-editorial-calendar.js';
 
@@ -449,7 +450,7 @@ test('production prewarming is limited to the next two daily slots and reuses th
 
 test('v3 daily and extra use separate frozen captions, media URLs and history attribution', async () => {
   let prepared = 0;
-  const f = fixture({ time: '2026-11-26T17:00:00Z', planFor: adviceEditorialPlan,
+  const f = fixture({ time: '2026-11-26T17:00:00Z', planFor: adviceEditorialPlan, extraPlanFor: day => adviceEditorialPlan(day, true),
     prepareElectricEdition: async base => { prepared++; return { caption: 'Legenda ' + base.id, sources: [],
       copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' }; } });
   const daily = (await f.publisher.preview()).post, extra = (await f.publisher.extraPreview(session)).post;
@@ -538,4 +539,61 @@ test('extra preview and run require the same authenticated browser and an explic
   assert.equal((await invoke('extra-preview', 'GET', headers)).code, 200);
   assert.equal((await invoke('extra-run', 'POST', headers, { confirmation: { id, fingerprint } })).code, 200);
   assert.deepEqual(seen, [hashAdminToken(auth), { extra: true, session: hashAdminToken(auth), confirmation: { id, fingerprint } }]);
+});
+
+test('upgrading a reviewed v3 extra reuses its exact frozen draft, requires fresh confirmation and sends the v4 captions and artwork in their proper slots', async () => {
+  let extraPlanner = adviceEditorialPlan, prepared = 0;
+  const date = '2026-11-26';
+  const f = fixture({ time: date + 'T07:53:00Z', planFor: adviceEditorialPlan,
+    extraPlanFor: day => extraPlanner(day, true),
+    prepareElectricEdition: async original => {
+      prepared++;
+      return { caption: 'Texto da redação sobre ' + original.title + '\n\n' + original.caption,
+        sources: [], copyOrigin: 'ai', copyModel: 'gpt-6.2-astra' };
+    } });
+  const originalExtra = await reviewExtra(f.publisher);
+  const originalDaily = (await f.publisher.preview()).post;
+  extraPlanner = feedEditorialPlan; f.setPlan(feedEditorialPlan);
+  const extra = (await f.publisher.extraPreview(session)).post, daily = (await f.publisher.preview()).post;
+  assert.equal(prepared, 2);
+  assert.equal(f.calls.length, 0);
+  assert.ok(daily.caption.includes(originalDaily.title) && daily.caption.includes('Texto da redação'));
+  assert.ok(extra.caption.includes('Texto da redação') && extra.caption.includes('33,26 €') && extra.caption.includes('85,68 €'));
+  await assert.rejects(f.publisher.run(originalExtra), { code: 'editorial_review_stale' });
+  assert.equal(f.posts().length, 0);
+  assert.equal((await f.publisher.run(await reviewExtra(f.publisher))).status, 'published');
+  const afterExtra = await f.publisher.status();
+  assert.equal(afterExtra.extra.usedToday, true); assert.equal(afterExtra.nextPost.id, daily.id);
+  f.setTime(date + 'T19:01:00Z');
+  assert.equal((await f.publisher.run()).status, 'published');
+  assert.equal((await f.publisher.run()).status, 'already_published');
+  assert.equal(prepared, 2);
+  const create = f.calls.filter(call => call.method === 'POST' && call.url.endsWith('/media'));
+  const records = JSON.parse(f.memory.records.get(STATE).text);
+  for (const [i, review, record] of [[0, extra, records.extraItems[date]], [1, daily, records.items[date]]]) {
+    const params = new URLSearchParams(create[i].body);
+    assert.equal(params.get('caption'), review.caption);
+    assert.equal(params.get('image_url'), review.images[0]); assert.equal(new URL(review.images[0]).searchParams.get('v'), 'v4');
+    assert.ok(params.get('alt_text').includes('https://carregador.vercel.app/'));
+    assert.equal(review.caption.split('\n')[0].includes('link do perfil'), true);
+    assert.equal(record.caption, review.caption); assert.equal(record.copyModel, 'gpt-6.2-astra');
+  }
+  assert.equal(create.length, 2);
+});
+
+test('the private history offers the sent and suggested captions for an already published v3 extra without consuming another slot or changing its record', async () => {
+  let extraPlanner = adviceEditorialPlan;
+  const date = '2026-11-26';
+  const f = fixture({ time: date + 'T07:53:00Z', planFor: feedEditorialPlan, extraPlanFor: day => extraPlanner(day, true),
+    prepareElectricEdition: async post => ({ caption: post.caption, sources: [], copyOrigin: 'editorial' }) });
+  const old = (await f.publisher.extraPreview(session)).post;
+  await f.publisher.run(await reviewExtra(f.publisher));
+  const before = f.memory.records.get(STATE).text;
+  extraPlanner = feedEditorialPlan;
+  const status = await f.publisher.status();
+  assert.equal(status.extra.available, false); assert.equal(status.extra.usedToday, true);
+  assert.equal(status.history[0].caption, old.caption);
+  assert.equal(status.history[0].suggestedCaption, feedEditorialPlan(date, true).caption);
+  assert.equal(f.memory.records.get(STATE).text, before);
+  assert.equal(f.posts().length, 1);
 });

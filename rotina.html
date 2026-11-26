@@ -28,6 +28,8 @@
     h2 { font-size: 21px; line-height: 1.25; letter-spacing: -.025em; }
     p, li { line-height: 1.5; }
     button, input { font: inherit; }
+    .history-caption { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #editorialHistory details { flex-basis: 100%; min-width: 0; }
     button, summary, .link { cursor: pointer; touch-action: manipulation; }
     button, .link { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 650; }
     button:disabled { cursor: default; }
@@ -112,10 +114,10 @@
   </style>
   <link rel="stylesheet" href="/manual-stories.css">
   <script src="/manual-stories.js?v=20261125-5" defer></script>
-  <script src="/editorial-preview.js?v=20261125-6" defer></script>
+  <script src="/editorial-preview.js?v=20261126-1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
-  <script src="/extra-editorial.js" defer></script>
-  <script src="/rotina.js?v=20261125-6" defer></script>
+  <script src="/extra-editorial.js?v=20261126-1" defer></script>
+  <script src="/rotina.js?v=20261126-1" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -151,6 +153,8 @@
         <div id="extraReview" hidden>
           <h3 id="extraReviewTitle" tabindex="-1"></h3>
           <div id="extraArtwork"></div>
+          <a id="extraSimulator" class="link" target="_blank" rel="noopener noreferrer" hidden>Simular custos de um elétrico</a>
+          <a id="extraCreditSimulator" class="link" target="_blank" rel="noopener noreferrer" hidden>Simular a prestação</a>
           <p id="extraReviewCaption" class="status"></p>
           <p id="extraCopyOrigin" class="hint" hidden></p>
           <div class="links">
@@ -187,7 +191,7 @@
         <details id="editorialPanel"><summary><strong>Publicações criativas</strong><span id="editorialBadge" class="badge">Por consultar</span></summary>
           <div class="details-body">
             <p id="editorialSchedule" class="status"></p><p id="editorialResult" class="status"></p>
-            <section id="editorialNext" hidden class="editorial-next"><p class="hint">Próximo conteúdo</p><h3 id="editorialTitle"></h3><p id="editorialDate" class="time"></p>
+            <section id="editorialNext" hidden class="editorial-next"><p class="hint">Próxima publicação das 19h00</p><h3 id="editorialTitle"></h3><p id="editorialDate" class="time"></p>
               <img id="editorialImage" class="editorial-image" alt="" width="1080" height="1350" decoding="async" loading="lazy" hidden>
               <p id="editorialPreviewNote" class="hint"></p>
               <a id="editorialSimulator" class="link" target="_blank" rel="noopener noreferrer" hidden>Simular custos de um elétrico</a>

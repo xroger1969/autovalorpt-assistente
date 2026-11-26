@@ -4,6 +4,7 @@ import { createInstagramEditorial } from '../lib/instagram-editorial.js';
 import { createInstagramEditorialHandler } from '../lib/instagram-editorial-handler.js';
 import { editorialPlan } from '../lib/editorial-content.js';
 import { scheduledEditorialPlan } from '../lib/electric-editorial-calendar.js';
+import { feedEditorialPlan } from '../lib/editorial-simulator.js';
 import { adviceEditorialPlan } from '../lib/editorial-advice-calendar.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
 
@@ -32,7 +33,7 @@ test('one private read returns seven real Lisbon plans and all authored visuals,
   assert.equal(result.blocked, false);
   assert.deepEqual(result.items.map(x => x.date), ['2026-11-26','2026-11-27','2026-11-28','2026-11-29','2026-11-30','2026-12-01','2026-12-02']);
   for (const slot of result.items) {
-    const plan = adviceEditorialPlan(slot.date);
+    const plan = feedEditorialPlan(slot.date);
     assert.equal(slot.scheduledAt, slot.date + 'T19:00:00.000Z');
     assert.equal(slot.status, 'scheduled');
     assert.equal(slot.provisional, true);
@@ -80,6 +81,8 @@ test('separates a paused agenda, unavailable deployment and unconfirmed sends; n
   } } });
   const running = (await f.publisher.calendar()).items;
   assert.equal(running[0].status, 'preparing');
+  assert.equal(running[0].version, 'v3');
+  assert.notEqual(running[0].id, feedEditorialPlan(activeDate).id);
   assert.equal(running[0].caption, 'Legenda exata da tentativa já preparada.');
   assert.equal(running[0].provisional, false);
   assert.equal(running[0].sources.length, 1);

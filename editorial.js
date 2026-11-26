@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { imageUrl, videoUrl, renderPreviewLinks } = globalThis.AutoValorEditorialPreview;
+  const { imageUrl, videoUrl, renderPreviewLinks, appendHistoryCaptions } = globalThis.AutoValorEditorialPreview;
   const $ = id => document.getElementById(id);
   const API = '/api/stock?integration=editorial&action=';
   const LABELS = {
@@ -191,7 +191,7 @@
       if (href) {
         const link = element('a', 'Ver publicação ↗'); link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer'; bottom.appendChild(link);
       }
-      item.appendChild(bottom); $('historyList').appendChild(item);
+      item.appendChild(bottom); appendHistoryCaptions(item, row); $('historyList').appendChild(item);
       if (row.reason === 'ai_label_unconfirmed') item.appendChild(element('p', 'Indicação de IA por confirmar no Instagram.', 'small muted'));
     }
   }
