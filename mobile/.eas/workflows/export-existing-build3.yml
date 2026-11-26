@@ -1,0 +1,66 @@
+name: AutoValorPT build 3 — export saved screenshots
+
+# Export only: no build, simulator, Maestro, submission or application changes.
+# Base directory: mobile. Keep manual until the reviewed one-time trigger.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [codex/appstore-screenshots-build3]
+
+jobs:
+  export_saved_captures:
+    name: Export six original build 3 screenshots
+    runs_on: macos-medium
+    image: sdk-58
+    env:
+      EXPORT_RUN_ID: ${{ workflow.id }}
+    steps:
+      - uses: eas/checkout
+      - name: Verify unchanged build 3 application sources
+        run: node .eas/screenshots/verify-source.mjs
+      - name: Retrieve saved Maestro captures and convert PNGs to opaque JPEGs
+        run: node .eas/screenshots/export-existing-captures.mjs
+      - name: Upload iPhone catalogue JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-iphone-01-catalogue.jpg
+          path: /tmp/autovalorpt-build3-export/iphone-01-catalogue.jpg
+      - name: Upload iPhone vehicle JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-iphone-02-viatura.jpg
+          path: /tmp/autovalorpt-build3-export/iphone-02-viatura.jpg
+      - name: Upload iPhone tools JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-iphone-03-mais.jpg
+          path: /tmp/autovalorpt-build3-export/iphone-03-mais.jpg
+      - name: Upload iPad catalogue JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-ipad-01-catalogue.jpg
+          path: /tmp/autovalorpt-build3-export/ipad-01-catalogue.jpg
+      - name: Upload iPad vehicle JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-ipad-02-viatura.jpg
+          path: /tmp/autovalorpt-build3-export/ipad-02-viatura.jpg
+      - name: Upload iPad tools JPEG
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-ipad-03-mais.jpg
+          path: /tmp/autovalorpt-build3-export/ipad-03-mais.jpg
+      - name: Upload safe capture manifest
+        uses: eas/upload_artifact
+        with:
+          type: other
+          name: autovalorpt-build3-export-manifest.json
+          path: /tmp/autovalorpt-build3-export/capture-manifest.json
+      - name: Confirm six raw JPEG artifacts with the official CLI
+        run: node .eas/screenshots/export-existing-captures.mjs --verify-uploads
