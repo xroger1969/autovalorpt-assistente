@@ -1,17 +1,17 @@
 # AutoValorPT — ficha da loja em português de Portugal
 
-**Estado: ficha Apple criada, versão 1.0.0 em preparação para envio.** O Apple ID é `6839660385`; a equipa é `QBU2Z3YJ88` e o SKU é `AUTOVALORPT-IOS-001`. A descrição, palavras-chave, URLs de apoio/marketing, notas de revisão, ausência de login e lançamento manual foram guardados no App Store Connect em 26/11/2026. Os textos abaixo são a base editorial; rever a versão guardada antes da submissão.
+**Estado em 26/11/2026: ficha Apple criada, versão 1.0.0 em rascunho, com lançamento manual.** O Apple ID é `6839660385`; a equipa é `QBU2Z3YJ88` e o SKU é `AUTOVALORPT-IOS-001`. A descrição, palavras-chave, URLs de apoio/marketing, notas de revisão e ausência de login foram guardados no App Store Connect. O subtítulo **O teu próximo automóvel**, a categoria **Compras** e o URL de privacidade também foram confirmados como guardados. Os textos abaixo são a base editorial; rever a versão guardada antes da submissão.
 
-[App Store Connect — AutoValorPT](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight). Estes textos só devem ser submetidos depois de confirmar que a build final apresenta as funcionalidades descritas. Este documento não comprova a existência de uma IPA, uma aprovação TestFlight ou uma publicação na App Store.
+[App Store Connect — AutoValorPT](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight). A [build nativa de simulador iOS `ae9ca583-0113-4179-90c2-86bb90af9117`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/ae9ca583-0113-4179-90c2-86bb90af9117) terminou com sucesso, versão **1.0.0 (1)**, a partir do commit `e7f0cb0e7f04498c45bc4aa6bf0cc9460d1b661a`. **Ainda não existe IPA assinada, build no TestFlight, validação visual nativa ou screenshots de iPhone/iPad.** Confirmar as funcionalidades na build final antes de submeter a ficha à revisão.
 
 ## Identificação
 
-| Campo | Valor proposto |
+| Campo | Valor e estado |
 | --- | --- |
 | Nome | AutoValorPT |
-| Subtítulo | O teu próximo automóvel — preenchido; confirmação de gravação pendente |
+| Subtítulo | O teu próximo automóvel — guardado no App Store Connect |
 | Idioma | Português de Portugal (`pt-PT`) |
-| Categoria principal | Compras — selecionada; confirmação de gravação pendente |
+| Categoria principal | Compras — guardada no App Store Connect |
 | Dispositivos iOS | iPhone e iPad; a configuração atual tem `supportsTablet: true` |
 | Bundle ID | `pt.autovalor.catalogo` — registado na equipa Apple `QBU2Z3YJ88` |
 | Número de contacto | +351 965 637 736 |
@@ -19,7 +19,7 @@
 | Política de privacidade | https://autovalorpt-assistente.vercel.app/app/privacidade.html |
 | URL de suporte | https://autovalorpt-assistente.vercel.app/app/apoio.html |
 
-Os dois URLs são os endereços previstos. Confirmar que estão publicados, acessíveis sem autenticação e atualizados para a aplicação nativa antes de preencher a ficha Apple.
+O URL de privacidade foi guardado na Apple e verificado em produção com resposta **HTTP 200**, em 26/11/2026. O URL de apoio também está guardado na ficha. Rever o conteúdo de ambos contra a aplicação nativa final antes da submissão.
 
 ## Descrição curta
 
@@ -103,18 +103,21 @@ Capturar a aplicação nativa final num iPhone e num iPad. Não apresentar captu
 
 Preparar os formatos exigidos pela especificação Apple vigente. Na documentação consultada, existe uma categoria iPhone Dynamic Island de ecrã médio, com formatos como **1206 × 2622** e **1179 × 2556**. Como há suporte iPad, é também necessária a categoria de screenshots **iPad de 13 polegadas**. Confirmar os tamanhos aceites no momento do upload. As imagens não podem incluir transparência.
 
-**Estado dos screenshots:** pendentes; não há ficheiros, dispositivos usados ou aprovação de revisão registados neste documento.
+**Estado dos screenshots:** pendentes; a interface ainda não foi executada num dispositivo ou simulador nativo. O catálogo web existente foi verificado em desktop e a 390/320 px, mas essas capturas não são screenshots nativas para a App Store.
 
-## Dados de conta e publicação pendentes
+## Dados de conta e publicação
 
 | Campo | Estado |
 | --- | --- |
 | Titular legal / nome do vendedor | Pendente de confirmação na conta Apple |
-| Apple Team ID | Pendente; não inventar |
-| Apple ID numérico da app / `ascAppId` | Pendente de registo real no App Store Connect |
-| SKU | Pendente de definição pelo titular |
-| Conta Expo / EAS Project ID | Pendentes de associação à conta correta |
-| Disponibilidade do bundle ID proposto | Pendente de validação |
+| Apple Team ID | `QBU2Z3YJ88` — confirmado |
+| Apple ID numérico da app / `ascAppId` | `6839660385` — app criada e perfil de submissão configurado |
+| SKU | `AUTOVALORPT-IOS-001` — registado |
+| Conta Expo / EAS Project ID | `cvasconcelos1969s-team` / `99e2814b-559a-42fe-899b-19b167c1c05c`; projeto `autovalorpt-catalogo` ligado ao GitHub, pasta `mobile` |
+| Bundle ID | `pt.autovalor.catalogo` — registado na equipa Apple confirmada |
+| Perfil de assinatura App Store | `AutoValorPT Catalogo App Store 20261126`, para `QBU2Z3YJ88.pt.autovalor.catalogo`, válido até 14/10/2027. Gerado na Apple; transferência e carregamento no Expo pendentes. |
+| IPA assinada | Pendente; existe apenas a build iOS de simulador referida acima |
+| Publicação Android | Pendente; ainda não foi executada uma build nativa Android |
 | Preço da aplicação e territórios | Pendentes de confirmação |
 | Classificação etária | Pendente das respostas sobre o conteúdo e funcionalidades reais |
 | Copyright | Pendente de confirmação do titular legal |

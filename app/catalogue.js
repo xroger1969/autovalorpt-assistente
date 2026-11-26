@@ -1,7 +1,7 @@
 import {
   normalizeInventory, fuelCategory, filterVehicles, readFavoriteIds,
   saveFavoriteIds, FAVORITES_KEY, formatPrice, formatMileage, vehicleShareUrl, whatsappUrl,
-} from './catalogue-core.js?v=20261126-2';
+} from './catalogue-core.js?v=20261126-3';
 
 const $ = id => document.getElementById(id);
 const SNAPSHOT_KEY = 'autovalor.catalogue.snapshot.v1';
