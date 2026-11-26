@@ -26,6 +26,7 @@
     source_changed: ['Origem alterada durante a leitura', 'O inventário ou o ficheiro mudou durante a verificação. A próxima execução volta a comparar os dados antes de importar.'],
     products_rejected: ['Artigos rejeitados pela Meta', 'A Meta assinalou artigos rejeitados. Repetir a importação não confirma a sua aprovação.'],
     products_pending: ['Artigos ainda por publicar', 'Há artigos com aprovação ou publicação pendente. A contagem no catálogo não confirma a apresentação no WhatsApp.'],
+    whatsapp_unconfirmed: ['Fotografias sincronizadas · WhatsApp por confirmar', 'Os artigos estão publicados no catálogo e as fotografias e galerias foram verificadas. A aprovação e a apresentação no WhatsApp continuam por confirmar.'],
     review_required: ['Resultado a rever', 'Os dados devolvidos pela Meta ainda não permitem confirmar ou corrigir o catálogo com segurança. A rotina preservou os artigos existentes.'],
     sync_disabled: ['Correção automática desativada', 'Foi encontrada uma diferença, mas a importação automática ainda não está ativa.'],
     production_required: ['Verificação fora de produção', 'Esta página pode consultar o diagnóstico. As importações são executadas apenas no servidor de produção.'],
@@ -61,6 +62,12 @@
   function needsStockRefresh(r) {
     return r.status === 'source_invalid' && ['stock_source_changed', 'stock_not_synchronized'].includes(r.reason);
   }
+  function publishedWithUnconfirmedWhatsApp(r) {
+    return r.status === 'products_pending' && r.imagesVerified === true &&
+      Array.isArray(r.notPublishedIds) && r.notPublishedIds.length === 0 &&
+      Array.isArray(r.pendingReviewIds) && r.pendingReviewIds.length > 0 &&
+      r.pendingReviewIds.every(id => typeof id === 'string' && /^ID[A-Za-z0-9]{5,30}$/.test(id));
+  }
   function setBusy(value) {
     busy = value;
     $('refreshButton').disabled = value; $('checkButton').disabled = value || !privateAccess;
@@ -83,6 +90,14 @@
     } finally { clearTimeout(timer); }
   }
   function showPhotos(r) {
+    if (publishedWithUnconfirmedWhatsApp(r)) {
+      // These diagnostics cover vehicles from one source, not photo totals.
+      // The remote gallery verification is the relevant result in this state.
+      $('photoCounts').replaceChildren();
+      $('photoStatus').textContent = 'Fotografias principais e galerias das viaturas verificadas na Meta.';
+      $('photoNote').textContent = 'O catálogo utiliza exclusivamente fotografias originais do Standvirtual, sem adicionar fundos ou modificar imagens.';
+      return;
+    }
     const diagnostics = Array.isArray(r.imageDiagnostics) ? r.imageDiagnostics.filter(entry =>
       entry && typeof entry.id === 'string' && /^ID[A-Za-z0-9]{5,30}$/.test(entry.id) && Object.hasOwn(photoLabels, entry.status)) : [];
     const byVehicle = new Map(diagnostics.map(entry => [entry.id, entry.status]));
@@ -107,7 +122,8 @@
     $('sourceCount').textContent = count(r.sourceCount);
     $('feedCount').textContent = count(r.expectedCount);
     $('metaCount').textContent = count(r.actualCount);
-    const known = needsStockRefresh(r) ? labels.stock_refresh_required : r.status === 'catalog_matches'
+    const known = needsStockRefresh(r) ? labels.stock_refresh_required : publishedWithUnconfirmedWhatsApp(r)
+      ? labels.whatsapp_unconfirmed : r.status === 'catalog_matches'
       ? r.catalogConfirmed === true ? labels[r.imagesVerified === true ? 'catalog_matches' : 'catalog_matches_legacy']
         : labels[r.imagesVerified === true ? 'review_required' : 'images_not_checked']
       : labels[r.status];
