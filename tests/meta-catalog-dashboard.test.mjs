@@ -203,3 +203,68 @@ test('a recovery already in progress disables all actions and cannot be duplicat
   assert.equal(text('stateBadge'), 'Origem por confirmar');
   assert.equal(text.calls.length, 2);
 });
+
+const publishedGalleryReport = {
+  status: 'products_pending', imagesVerified: true, catalogConfirmed: false, sourceValid: true, catalogValidated: true,
+  sourceCount: 8, expectedCount: 8, actualCount: 8, authorization: { ready: true, source: 'dedicated' },
+  pendingReviewIds: ['ID8Q19HN', 'ID8Q1hSv', 'ID8Q1lYB', 'ID8Q1myC', 'ID8Q1n7N', 'ID8Q1nvd', 'ID8Q1pLS', 'ID8Q1pSL'],
+  notPublishedIds: [], rejectedIds: [], imageMismatchIds: [], imageUnverifiedIds: [], imagePendingIds: [],
+  imageDiagnostics: ['ID8Q1nvd', 'ID8Q1pLS', 'ID8Q1pSL'].map(id => ({ id, status: 'unchanged' })),
+  import: { latest: { status: 'completed', errorCount: 0, invalidCount: 0, persistedCount: 8, deletedCount: 0 },
+    pending: false, unverified: false },
+};
+
+test('verified galleries and published articles distinguish unconfirmed WhatsApp approval without claiming a review queue', async () => {
+  const report = structuredClone(publishedGalleryReport);
+  const text = await dashboard(report, { configuration: { enabled: true } });
+  assert.equal(text('stateBadge'), 'Fotografias sincronizadas · WhatsApp por confirmar');
+  assert.equal(text('stateText'), 'Os artigos estão publicados no catálogo e as fotografias e galerias foram verificadas. A aprovação e a apresentação no WhatsApp continuam por confirmar.');
+  assert.equal(text.element('stateBadge').className, 'badge pending');
+  assert.equal(report.catalogConfirmed, false);
+  assert.equal(text('photoStatus'), 'Fotografias principais e galerias das viaturas verificadas na Meta.');
+  assert.equal(text.element('photoCounts').children.length, 0, 'three unchanged vehicles are not a count of imported photos');
+  assert.doesNotMatch(text('photoStatus') + text('photoNote'), /\d|fila|em revisão/i);
+  for (const id of ['sourceCount', 'feedCount', 'metaCount']) assert.equal(text(id), '8');
+  assert.equal(text.element('syncButton').disabled, false);
+  assert.deepEqual(text.calls.map(call => [call.url.split('action=')[1], call.method]), [['status', 'GET']]);
+});
+
+test('incomplete or invalid review arrays cannot imply that articles are already published', async () => {
+  for (const variant of [
+    { notPublishedIds: undefined }, { notPublishedIds: null }, { notPublishedIds: '' },
+    { pendingReviewIds: undefined }, { pendingReviewIds: null }, { pendingReviewIds: [] },
+    { pendingReviewIds: ['invalid'] }, { pendingReviewIds: ['ID8Q19HN', null] },
+  ]) {
+    const text = await dashboard({ ...publishedGalleryReport, ...variant });
+    assert.equal(text('stateBadge'), 'Artigos ainda por publicar');
+    assert.doesNotMatch(text('stateText'), /artigos estão publicados/i);
+    assert.doesNotMatch(text('photoStatus'), /galerias.*verificadas/i);
+  }
+});
+
+test('legacy or unverified images cannot gain a gallery synchronization claim from review and visibility arrays', async () => {
+  for (const imagesVerified of [undefined, null, false, 'true']) {
+    const text = await dashboard({ ...publishedGalleryReport, imagesVerified });
+    assert.equal(text('stateBadge'), 'Artigos ainda por publicar');
+    assert.doesNotMatch(text('stateText'), /galerias foram verificadas/);
+    assert.doesNotMatch(text('photoStatus'), /galerias.*verificadas/i);
+    assert.equal(text.element('stateBadge').className, 'badge pending');
+  }
+});
+
+test('articles not confirmed as published keep the conservative publication message', async () => {
+  const text = await dashboard({ ...publishedGalleryReport, notPublishedIds: ['ID8Q19HN'] });
+  assert.equal(text('stateBadge'), 'Artigos ainda por publicar');
+  assert.equal(text('stateText'), 'Há artigos com aprovação ou publicação pendente. A contagem no catálogo não confirma a apresentação no WhatsApp.');
+  assert.equal(text.element('stateBadge').className, 'badge pending');
+});
+
+test('rejections, mismatches and review failures retain their own status even with verified images', async () => {
+  for (const [status, label] of [['products_rejected', 'Artigos rejeitados pela Meta'],
+    ['catalog_mismatch', 'Diferença encontrada'], ['review_required', 'Resultado a rever']]) {
+    const text = await dashboard({ ...publishedGalleryReport, status });
+    assert.equal(text('stateBadge'), label);
+    assert.doesNotMatch(text('stateText'), /artigos estão publicados/i);
+    assert.equal(text.element('stateBadge').className, 'badge pending');
+  }
+});
