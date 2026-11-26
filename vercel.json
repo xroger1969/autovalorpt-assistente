@@ -65,6 +65,21 @@
   ],
   "headers": [
     {
+      "source": "/app/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' https://ireland.apollo.olxcdn.com; style-src 'self'; script-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
+    {
+      "source": "/app/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/app/" }
+      ]
+    },
+    {
       "source": "/editorial.html",
       "headers": [
         { "key": "Cache-Control", "value": "private, no-store, max-age=0" },

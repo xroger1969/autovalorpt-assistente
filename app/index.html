@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B2030">
+  <meta name="description" content="Descubra as viaturas AutoValorPT. Consulte preços, guarde os seus favoritos e fale connosco por WhatsApp.">
+  <meta name="autovalor-app-build" content="20261126-1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AutoValorPT">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="color-scheme" content="light">
+  <link rel="manifest" href="/app/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/app/icons/app-192.png">
+  <link rel="apple-touch-icon" href="/app/icons/apple-touch-icon.png">
+  <link rel="canonical" href="https://autovalorpt-assistente.vercel.app/app/index.html">
+  <link rel="stylesheet" href="/app/styles.css?v=20261126-1">
+  <title>AutoValorPT · O seu próximo carro</title>
+  <script type="module" src="/app/catalogue.js?v=20261126-1"></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-car" viewBox="0 0 24 24"><path d="m5 7 1.5-3h11L19 7l2 3v8H3v-8l2-3Zm0 0h14M3 11h18M6 18v3m12-3v3M6.5 14h1m9 0h1"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a9 9 0 0 1-13.4 7.9L3 21l1.6-4.6A9 9 0 1 1 21 11.5Z"/><path d="M8 11.5h.01m4 0h.01m4 0h.01"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9M13 4v6M7 14v6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 6a8 8 0 0 1 13 1M4.9 17a8 8 0 0 0 13 1"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 16V3m-4 4 4-4 4 4M7 11H4v10h16V11h-3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18"/></symbol>
+    <symbol id="i-road" viewBox="0 0 24 24"><path d="m6 3-3 18M18 3l3 18M12 3v3m0 4v4m0 4v3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  </svg>
+  <a class="skip-link" href="#catalogue">Saltar para as viaturas</a>
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand" href="/app/index.html" aria-label="AutoValorPT — início"><span class="brand-mark" aria-hidden="true">AV</span><span>AutoValor<span class="brand-pt">PT</span></span></a>
+      <button class="header-install install-trigger" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Instalar app</span></button>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero" id="hero" aria-labelledby="hero-title">
+      <div class="hero-inner">
+        <div class="hero-copy"><p class="eyebrow">O CATÁLOGO AUTOVALORPT</p><h1 id="hero-title">O seu próximo carro.<br><span>Comece por aqui.</span></h1><p class="hero-description">Explore as viaturas, guarde as suas preferidas<br class="desktop-break"> e fale connosco quando encontrar a certa.</p></div>
+        <div class="hero-detail"><div class="hero-rule"></div><p class="hero-label">UMA ESCOLHA À SUA MEDIDA</p><p class="hero-number" id="hero-count">—</p><p class="hero-caption">viaturas para descobrir</p><span class="hero-origin"><span class="status-dot"></span>O mesmo stock do nosso WhatsApp</span></div>
+      </div>
+    </section>
+    <div class="content-wrap">
+      <section id="catalogue" aria-labelledby="catalogue-title">
+        <div class="section-title"><div><p class="eyebrow" id="section-kicker">ENCONTRE A SUA VIATURA</p><h2 id="catalogue-title">O nosso stock</h2></div><button type="button" id="refresh" class="icon-button refresh-button" aria-label="Atualizar catálogo"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg></button></div>
+        <div class="search-toolbar">
+          <label class="search-box"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="sr-only">Pesquisar marca, modelo ou versão</span><input id="search" type="search" placeholder="Marca, modelo ou versão" autocomplete="off" maxlength="120"></label>
+          <button type="button" class="filter-button" id="open-filters" aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg><span>Filtros</span><span class="filter-count" id="filter-count" hidden>0</span></button>
+        </div>
+        <div class="fuel-filters" role="group" aria-label="Filtrar por combustível">
+          <button type="button" data-fuel="all" class="chip active" aria-pressed="true">Todos</button>
+          <button type="button" data-fuel="electric" class="chip" aria-pressed="false">Elétricos</button>
+          <button type="button" data-fuel="hybrid" class="chip" aria-pressed="false">Híbridos</button>
+          <button type="button" data-fuel="petrol" class="chip" aria-pressed="false">Gasolina</button>
+          <button type="button" data-fuel="diesel" class="chip" aria-pressed="false">Gasóleo</button>
+        </div>
+        <div id="connection-notice" class="notice" role="status" hidden></div>
+        <div class="results-meta"><p id="results-count" role="status" aria-live="polite">A carregar as viaturas…</p><p id="updated-at"></p></div>
+        <div id="vehicle-grid" class="vehicle-grid" aria-busy="true"></div>
+        <section id="empty-state" class="empty-state" hidden aria-labelledby="empty-title"><svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><h3 id="empty-title">Ainda não há resultados</h3><p id="empty-description"></p><button id="empty-action" class="button button-dark" type="button">Limpar filtros</button></section>
+        <p class="availability-note" id="availability-note" hidden>Preços e disponibilidade sujeitos a confirmação. As fotografias são as dos anúncios originais.</p>
+        <aside class="install-card" id="install-card"><div class="mini-app-icon" aria-hidden="true">AV</div><div><h3>O seu catálogo, sempre à mão.</h3><p>Adicione a AutoValorPT ao ecrã do telemóvel.</p></div><button class="install-trigger text-button" type="button">Instalar <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></aside>
+      </section>
+      <section id="contact" class="contact-section" hidden aria-labelledby="contact-title">
+        <p class="eyebrow">ESTAMOS POR PERTO</p><h1 id="contact-title">Encontrou uma viatura<br>de que gosta?</h1><p class="contact-intro">Peça mais informações ou combine uma visita. Falamos consigo pelo WhatsApp.</p>
+        <a id="contact-whatsapp" class="button button-whatsapp" href="https://wa.me/351965637736" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Falar com a AutoValorPT</a>
+        <p class="contact-number">+351 965 637 736</p>
+        <div class="contact-note"><h2>Uma conversa, uma escolha mais informada.</h2><p>Abra a ficha de uma viatura para nos enviar o modelo que lhe interessa. Pode perguntar pelo estado, equipamento, retoma ou condições de compra.</p></div>
+        <button type="button" id="contact-stock" class="text-button">Voltar às viaturas <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+      </section>
+      <footer class="app-footer"><span class="footer-brand">AutoValor<span>PT</span></span><p>Viaturas. Pessoas. Confiança.</p></footer>
+    </div>
+  </main>
+  <nav class="bottom-nav" aria-label="Navegação principal">
+    <button type="button" class="nav-item active" data-view="stock" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>Viaturas</span></button>
+    <button type="button" class="nav-item" data-view="favorites"><span class="nav-icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg><span id="favorite-count" class="favorite-count" hidden>0</span></span><span>Favoritos</span></button>
+    <button type="button" class="nav-item" data-view="contact"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>Contacto</span></button>
+  </nav>
+  <dialog id="filter-dialog" class="sheet" aria-labelledby="filter-title">
+    <div class="dialog-heading"><div><p class="eyebrow">À SUA MEDIDA</p><h2 id="filter-title">Filtrar viaturas</h2></div><button type="button" class="icon-button" data-close="filter-dialog" aria-label="Fechar filtros"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <form id="filter-form" class="filter-form">
+      <label for="brand-filter">Marca</label><select id="brand-filter" name="brand"><option value="all">Todas as marcas</option></select>
+      <label for="price-filter">Preço máximo</label><select id="price-filter" name="maxPrice"><option value="">Sem limite</option><option value="15000">Até 15 000 €</option><option value="20000">Até 20 000 €</option><option value="25000">Até 25 000 €</option><option value="30000">Até 30 000 €</option><option value="40000">Até 40 000 €</option><option value="50000">Até 50 000 €</option></select>
+      <label for="sort-filter">Ordenar por</label><select id="sort-filter" name="sort"><option value="price-asc">Preço: mais baixo primeiro</option><option value="price-desc">Preço: mais alto primeiro</option><option value="year-desc">Ano: mais recente primeiro</option><option value="mileage-asc">Menos quilómetros</option><option value="title">Marca e modelo</option></select>
+      <div class="filter-actions"><button type="button" id="reset-filters" class="button button-light">Limpar</button><button type="submit" class="button button-dark">Ver resultados</button></div>
+    </form>
+  </dialog>
+  <dialog id="vehicle-dialog" class="vehicle-dialog" aria-labelledby="vehicle-title">
+    <div class="vehicle-dialog-top"><span class="eyebrow">AUTOVALORPT · VIATURA</span><div><button type="button" class="icon-button" id="share-vehicle" aria-label="Partilhar viatura"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg></button><button type="button" class="icon-button" data-close="vehicle-dialog" aria-label="Fechar ficha"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div></div>
+    <div id="vehicle-details">
+      <div class="detail-image-wrap"><img id="detail-image" alt="" width="1000" height="750"><span class="photo-placeholder" hidden>Fotografia indisponível</span></div>
+      <div class="detail-content"><div class="detail-title-row"><div><p id="detail-brand" class="eyebrow"></p><h2 id="vehicle-title"></h2></div><button type="button" id="detail-favorite" class="icon-button favorite-button" aria-label="Guardar nos favoritos" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></button></div><p id="detail-price" class="detail-price"></p><dl id="detail-specs" class="detail-specs"></dl><p id="detail-note" class="detail-note">Consulte o anúncio original para ver mais fotografias e todos os detalhes.</p><a id="detail-source" class="text-button source-link" target="_blank" rel="noopener noreferrer">Ver anúncio e fotografias <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a><label id="share-fallback" class="share-fallback" hidden>Copie esta ligação<input id="share-url" type="text" readonly></label><p class="detail-disclaimer">Confirme o preço e a disponibilidade connosco antes de se deslocar.</p></div>
+    </div>
+    <div id="unavailable-vehicle" class="empty-state" hidden><h2>Esta viatura já não está no catálogo.</h2><p>Consulte o stock atual para descobrir outras opções.</p><button type="button" class="button button-dark" data-close="vehicle-dialog">Ver outras viaturas</button></div>
+    <div id="detail-actions" class="detail-actions"><a id="detail-whatsapp" class="button button-whatsapp" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Pedir informações por WhatsApp</a></div>
+  </dialog>
+  <dialog id="install-dialog" class="sheet install-dialog" aria-labelledby="install-title"><div class="dialog-heading"><div><p class="eyebrow">AUTOVALORPT NO TELEMÓVEL</p><h2 id="install-title">O catálogo, numa app.</h2></div><button type="button" class="icon-button" data-close="install-dialog" aria-label="Fechar instruções"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><p>Guarde o acesso no ecrã principal para abrir o catálogo com um toque.</p><div id="install-ios"><h3>No iPhone ou iPad</h3><ol><li>Abra esta página no <strong>Safari</strong>.</li><li>Toque em <strong>Partilhar</strong> <svg class="icon inline-icon" aria-hidden="true"><use href="#i-share"/></svg>.</li><li>Escolha <strong>Adicionar ao ecrã principal</strong>. Se surgir, mantenha <strong>Abrir como aplicação web</strong> ativo e confirme em <strong>Adicionar</strong>.</li></ol></div><div id="install-other"><h3>No Android ou computador</h3><p>Abra o menu do navegador e escolha <strong>Instalar aplicação</strong> ou <strong>Adicionar ao ecrã principal</strong>, se a opção estiver disponível.</p></div><button type="button" id="native-install" class="button button-dark" hidden>Instalar AutoValorPT</button><p class="install-footnote">O catálogo utiliza a sua ligação à Internet para receber as atualizações.</p></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <template id="vehicle-template"><article class="vehicle-card"><div class="card-image-wrap"><button type="button" class="card-image-button"><img class="card-image" width="800" height="600" loading="lazy" decoding="async" alt=""><span class="photo-placeholder" hidden>Fotografia indisponível</span></button><span class="fuel-badge"></span><button type="button" class="icon-button favorite-button card-favorite" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></button></div><div class="card-body"><p class="card-brand"></p><h3 class="card-title"></h3><p class="card-meta"><span class="card-year"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span></span></span><span class="card-mileage"><svg class="icon" aria-hidden="true"><use href="#i-road"/></svg><span></span></span></p><div class="card-bottom"><p class="card-price"></p><button type="button" class="card-open">Ver viatura <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div></div></article></template>
+  <noscript><p class="noscript-message">Ative o JavaScript para consultar as viaturas. Também pode <a href="https://wa.me/351965637736">falar connosco por WhatsApp</a>.</p></noscript>
+</body>
+</html>
