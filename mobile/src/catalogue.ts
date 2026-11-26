@@ -3,6 +3,7 @@ export const CATALOGUE_ENDPOINT = 'https://autovalorpt-assistente.vercel.app/api
 export const WHATSAPP_NUMBER = '351965637736';
 export const MAX_COMPARISON_VEHICLES = 3;
 export const STOCK_STALE_AFTER_MS = 36 * 60 * 60 * 1000;
+export const MAX_VEHICLE_IMAGES = 100;
 const VEHICLE_ID = /^ID[A-Za-z0-9]{5,30}$/;
 const REVISION = /^[a-f0-9]{64}$/;
 const MAX_VEHICLES = 2000;
@@ -16,6 +17,7 @@ export interface Vehicle {
   price: number;
   fuel: string;
   image: string;
+  images: string[];
   url: string;
 }
 
@@ -95,6 +97,17 @@ function publicUrl(value: unknown, kind: 'advert' | 'image', id?: string): strin
   return value;
 }
 
+/** Older API responses and saved snapshots contain only the cover image. */
+function normalizeImages(value: unknown, cover: string): string[] {
+  if (value === undefined) return [cover];
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_VEHICLE_IMAGES) throw invalidInventory();
+  const images = [...new Set(value.map(image => publicUrl(image, 'image')))];
+  // Keep the cover and gallery consistent; a malformed response must never
+  // silently replace a known-good local catalogue.
+  if (images[0] !== cover) throw invalidInventory();
+  return images;
+}
+
 /** Reject the complete response if a row, count or identifier is invalid. */
 export function normalizeInventory(payload: unknown): Snapshot {
   if (!isRecord(payload) || payload.ok !== true || typeof payload.revision !== 'string' ||
@@ -114,12 +127,13 @@ export function normalizeInventory(payload: unknown): Snapshot {
       throw invalidInventory();
     }
     ids.add(item.id);
+    const image = publicUrl(item.image, 'image');
     // Never spread the server object into local storage or components.
     return {
       id: item.id, title: text(item.title, 500), brand: text(item.brand, 100),
       year: item.year as number | null, mileage: item.mileage as number | null,
       price: item.price, fuel: text(item.fuel, 100, true),
-      image: publicUrl(item.image, 'image'), url: publicUrl(item.url, 'advert', item.id),
+      image, images: normalizeImages(item.images, image), url: publicUrl(item.url, 'advert', item.id),
     };
   });
   return { updatedAt, revision: payload.revision, items };

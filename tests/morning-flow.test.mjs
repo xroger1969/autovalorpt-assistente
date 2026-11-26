@@ -85,6 +85,66 @@ test('preparing photo resumes only its saved container and never selects another
   assert.equal(runs, 2); assert.equal((await f.flow.status()).results.photo.published, 1);
 });
 
+test('carousel children resume through the morning flow before a parent container exists', async () => {
+  const f = fixture(); let runs = 0;
+  f.services.photo.run = async () => ({ ok: true, status: ++runs === 1 ? 'preparing' : 'published',
+    id, published: runs === 1 ? 0 : 1, mediaType: 'CAROUSEL', imageCount: 20 });
+  f.services.photo.status = async () => ({ active: runs === 1
+    ? { id, phase: 'preparing_children', mediaType: 'CAROUSEL', preparedImages: 7, imageCount: 20, containerId: null }
+    : null });
+  await f.start(); await f.drain(); await f.start(); await f.drain();
+  const state = await f.flow.status();
+  assert.equal(runs, 2);
+  assert.equal(state.attempts.photo, 2);
+  assert.equal(state.results.photo.status, 'published');
+  assert.equal(state.results.photo.published, 1);
+});
+
+test('private carousel leases can return busy until the same photo publisher resumes safely', async () => {
+  for (const phase of ['creating_children', 'creating_carousel']) {
+    const f = fixture(); let runs = 0;
+    f.services.photo.run = async () => ({ ok: true, id,
+      status: ++runs === 1 ? 'preparing' : runs < 4 ? 'busy' : 'published', published: runs === 4 ? 1 : 0 });
+    f.services.photo.status = async () => ({ active: runs < 4 ? { id, phase, mediaType: 'CAROUSEL' } : null });
+    await f.start(); await f.drain();
+    assert.equal(runs, 4, phase);
+    assert.equal((await f.flow.status()).results.photo.published, 1);
+    assert.equal(f.options.now(), Date.parse('2026-11-15T08:01:30Z'));
+  }
+});
+
+test('carousel resume permission never includes uncertain publications, Stories or another vehicle', async () => {
+  const cases = [
+    ['photo', { id, phase: 'publishing', mediaType: 'CAROUSEL' }],
+    ['photo', { id, phase: 'unknown', mediaType: 'CAROUSEL' }],
+    ['photo', { id, phase: 'creating', mediaType: 'CAROUSEL' }],
+    ['photo', { id, phase: 'preparing_children', mediaType: 'IMAGE' }],
+    ['photo', { id: 'ID8other1', phase: 'preparing_children', mediaType: 'CAROUSEL' }],
+    ['story', { id, phase: 'preparing_children', mediaType: 'CAROUSEL' }],
+    ['story', { id, phase: 'creating_children', mediaType: 'CAROUSEL' }],
+    ['story', { id, phase: 'creating_carousel', mediaType: 'CAROUSEL' }],
+    ['photo', null],
+  ];
+  for (const [step, active] of cases) {
+    const f = fixture(); let runs = 0;
+    f.services[step].run = async () => { runs++; return { ok: true, status: 'preparing', id, published: 0 }; };
+    f.services[step].status = async () => ({ active });
+    await f.start(); await f.drain();
+    assert.equal(runs, 1, `${step}: ${active?.phase ?? 'missing'}`);
+    assert.equal((await f.flow.status()).results[step].reason, 'resume_state_changed');
+  }
+});
+
+test('carousel preparation cannot cause an unbounded morning-flow retry loop', async () => {
+  const f = fixture(); let runs = 0;
+  f.services.photo.run = async () => { runs++; return { ok: true, status: 'preparing', id, published: 0 }; };
+  f.services.photo.status = async () => ({ active: { id, phase: 'preparing_children', mediaType: 'CAROUSEL' } });
+  await f.start(); await f.drain();
+  assert.equal(runs, 20);
+  assert.equal((await f.flow.status()).attempts.photo, 20);
+  assert.equal((await f.flow.status()).results.photo.published, 0);
+});
+
 test('changed resume identity stops publication and retains a review marker', async () => {
   const f = fixture(); let runs = 0;
   f.services.photo.run = async () => { runs++; return { status: 'preparing', id }; };

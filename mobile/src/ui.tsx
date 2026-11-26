@@ -26,7 +26,7 @@ export function IconButton({ name, label, onPress, selected = false, light = fal
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label}
     accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => [s.iconButton, light && s.iconButtonLight, pressed && s.pressed]}>
+    style={({ pressed }) => [s.iconButton, light && s.iconButtonLight, pressed && s.pressed, disabled && s.disabled]}>
     <Icon name={name} color={selected ? colors.green : light ? colors.white : colors.ink} />
   </Pressable>;
 }

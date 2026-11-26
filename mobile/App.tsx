@@ -18,6 +18,7 @@ import {
   type FuelCategory, type SortOrder, type Vehicle,
 } from './src/catalogue';
 import { BrandMark, Button, Chip, colors, EmptyState, Icon, IconButton, Notice, VehicleImage, type IconName } from './src/ui';
+import { VehicleGallery } from './src/VehicleGallery';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const ORIGIN = 'https://autovalorpt-assistente.vercel.app';
@@ -79,7 +80,6 @@ function CatalogueApp() {
   const [sort, setSort] = useState<SortOrder>('price-asc');
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [photoVisible, setPhotoVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const items = catalogue.snapshot?.items ?? [];
   const availableWidth = width - insets.left - insets.right;
@@ -119,8 +119,8 @@ function CatalogueApp() {
     }
     setToast(wasSelected ? 'Viatura retirada da comparação' : 'Viatura adicionada à comparação');
   };
-  const openVehicle = (vehicle: Vehicle) => { setPhotoVisible(false); setSelectedId(vehicle.id); };
-  const closeVehicle = () => { setPhotoVisible(false); setSelectedId(null); };
+  const openVehicle = (vehicle: Vehicle) => { setSelectedId(vehicle.id); };
+  const closeVehicle = () => { setSelectedId(null); };
   const refreshControl = <RefreshControl refreshing={catalogue.isRefreshing && !catalogue.isLoading}
     onRefresh={() => void catalogue.refresh()} tintColor={colors.navy} colors={[colors.navy]} />;
 
@@ -281,10 +281,7 @@ function CatalogueApp() {
           <IconButton name="close" label="Fechar viatura" onPress={closeVehicle} /></View></View>
         {selected ? <>
           <ScrollView contentContainerStyle={s.detailContent}>
-            <Pressable onPress={() => setPhotoVisible(true)} accessibilityRole="button" accessibilityLabel={`Ampliar fotografia de ${selected.title}`}>
-              <VehicleImage uri={selected.image} title={selected.title} style={s.detailPhoto} />
-              <View style={s.expandPhoto}><Icon name="expand-outline" size={18} color={colors.white} /></View>
-            </Pressable>
+            <VehicleGallery key={selected.id} vehicle={selected} />
             <View style={s.detailBody}>
               <View style={s.detailBrandRow}><Text style={s.eyebrow}>{selected.brand.toUpperCase()}</Text><Text style={s.fuelText}>{selected.fuel || 'Combustível por confirmar'}</Text></View>
               <Text accessibilityRole="header" style={s.detailTitle}>{selected.title}</Text><Text style={s.detailPrice}>{formatPrice(selected.price)}</Text>
@@ -298,8 +295,8 @@ function CatalogueApp() {
               <View style={s.wrap}><Button title="Partilhar" icon="share-outline" variant="secondary" onPress={() => void shareVehicle(selected)} style={s.flex} />
                 <Button title={preferences.comparisonIds.includes(selected.id) ? 'Na comparação' : 'Comparar'} icon="swap-horizontal-outline" variant="secondary"
                   disabled={!preferences.isReady} onPress={() => compareVehicle(selected)} style={s.flex} /></View>
-              <Button title="Ver todas as fotografias no anúncio" icon="open-outline" variant="secondary" onPress={() => void openExternal(selected.url)} />
-              <Text style={s.detailNote}>Fotografia original do anúncio. Disponibilidade e dados sujeitos a confirmação.</Text>
+              <Button title="Ver anúncio original" icon="open-outline" variant="secondary" onPress={() => void openExternal(selected.url)} />
+              <Text style={s.detailNote}>Fotografias originais do anúncio. Disponibilidade e dados sujeitos a confirmação.</Text>
             </View>
           </ScrollView>
           <View style={s.modalFooter}><Button title="Pedir informações" icon="logo-whatsapp" variant="whatsapp" onPress={() => void openExternal(whatsappUrl(selected))} />
@@ -308,14 +305,6 @@ function CatalogueApp() {
           message={catalogue.isLoading ? 'Estamos a atualizar o catálogo.' : 'Esta viatura já não consta do stock disponível ou não foi possível confirmar os seus dados.'}
           action="Voltar ao catálogo" onAction={closeVehicle} />}
         {toast && <View pointerEvents="none" accessibilityLiveRegion="polite" style={[s.toast, { bottom: 125 }]}><Text style={s.toastText}>{toast}</Text></View>}
-        <Modal visible={photoVisible && Boolean(selected)} animationType="fade" onRequestClose={() => setPhotoVisible(false)}>
-          <SafeAreaProvider><SafeAreaView style={s.photoViewer}><StatusBar style="light" /><View style={s.photoViewerHeader}>
-            <Text style={s.photoViewerTitle}>Fotografia original</Text><IconButton name="close" label="Fechar fotografia" light onPress={() => setPhotoVisible(false)} /></View>
-            <ScrollView maximumZoomScale={3} minimumZoomScale={1} centerContent contentContainerStyle={s.photoScroll}>
-              {selected && <VehicleImage uri={selected.image} title={selected.title} style={{ height: Math.max(240, width * 0.9), aspectRatio: undefined, backgroundColor: colors.navy }} />}
-            </ScrollView><Text style={s.photoCaption}>{selected?.title}</Text>
-          </SafeAreaView></SafeAreaProvider>
-        </Modal>
       </SafeAreaView></SafeAreaProvider>
     </Modal>
   </View>;
@@ -399,7 +388,6 @@ const s = StyleSheet.create({
   toast: { position: 'absolute', alignSelf: 'center', backgroundColor: colors.navy, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, maxWidth: '90%', zIndex: 5 }, toastText: { color: colors.white, fontSize: 13, textAlign: 'center' },
   modalRoot: { flex: 1, backgroundColor: colors.paper }, modalHeader: { paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.white }, modalTitle: { flex: 1, fontSize: 17, lineHeight: 23, fontWeight: '700', color: colors.ink }, inlineActions: { flexDirection: 'row', gap: 5 }, modalFooter: { padding: 18, gap: 7, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line },
   filterContent: { padding: 22, gap: 15 }, sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '700', marginTop: 5 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, sortOptions: { backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: 'hidden', marginBottom: 12 }, sortOption: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, gap: 12 }, sortLabel: { fontSize: 15, color: colors.ink, flex: 1 },
-  detailContent: { width: '100%', maxWidth: 850, alignSelf: 'center', paddingBottom: 14 }, detailPhoto: { aspectRatio: 1.35 }, expandPhoto: { position: 'absolute', right: 14, bottom: 14, backgroundColor: '#0B2030CC', padding: 9, borderRadius: 11 }, detailBody: { padding: 22, gap: 17 }, detailBrandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }, fuelText: { color: colors.green, fontSize: 12, fontWeight: '600' }, detailTitle: { fontSize: 28, lineHeight: 35, fontWeight: '800', color: colors.ink, letterSpacing: -0.7 }, detailPrice: { fontSize: 36, lineHeight: 44, fontWeight: '800', color: colors.ink, letterSpacing: -1 },
+  detailContent: { width: '100%', maxWidth: 850, alignSelf: 'center', paddingBottom: 14 }, detailBody: { padding: 22, gap: 17 }, detailBrandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }, fuelText: { color: colors.green, fontSize: 12, fontWeight: '600' }, detailTitle: { fontSize: 28, lineHeight: 35, fontWeight: '800', color: colors.ink, letterSpacing: -0.7 }, detailPrice: { fontSize: 36, lineHeight: 44, fontWeight: '800', color: colors.ink, letterSpacing: -1 },
   specsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, spec: { flexGrow: 1, flexBasis: '44%', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 15, gap: 7 }, specLabel: { color: colors.muted, fontSize: 12 }, specValue: { color: colors.ink, fontSize: 16, lineHeight: 23, fontWeight: '700' }, detailNote: { color: colors.muted, fontSize: 12, lineHeight: 19 }, whatsappHint: { color: colors.muted, fontSize: 11, textAlign: 'center' },
-  photoViewer: { flex: 1, backgroundColor: colors.navy }, photoViewerHeader: { padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, photoViewerTitle: { color: colors.white, fontSize: 16, fontWeight: '600' }, photoScroll: { flexGrow: 1, justifyContent: 'center' }, photoCaption: { color: colors.white, textAlign: 'center', fontSize: 15, lineHeight: 23, padding: 24 },
 });

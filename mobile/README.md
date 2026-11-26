@@ -10,6 +10,8 @@ Em **26/11/2026**, a build iOS de produção **1.0.0 (3)** foi compilada, submet
 
 A build 3 inclui as ferramentas da bio, a secção Mais, o atalho no catálogo e o logótipo comum descritos em **«Ferramentas e contactos da build 3»**. A descrição e as notas da ficha pública foram atualizadas e guardadas na Apple com estas funcionalidades.
 
+A galeria completa de fotografias descrita abaixo é uma atualização posterior à build 3, preparada no código para a próxima build nativa. A build 3 já processada no TestFlight continua a mostrar uma fotografia por viatura; receber a nova galeria exige compilar e distribuir a próxima build.
+
 | Etapa | Estado verificado em 26/11/2026 |
 | --- | --- |
 | TypeScript e testes de lógica | Build 3: verificação de tipos e 8 testes nativos aprovados em 26/11/2026. O gate obrigatório do preview Vercel do mesmo commit aprovou os 727 testes web/backend, sem falhas. |
@@ -53,12 +55,20 @@ A lógica de consulta pede os dados ao abrir a app, ao regressar ao primeiro pla
 Funcionalidades implementadas no código, com validação final em dispositivo ainda pendente:
 
 - Pesquisa, filtros por combustível e marca, limite de preço e ordenação.
-- Fotografia original, preço, ano e quilómetros quando esses dados existem no catálogo.
+- Galeria de fotografias originais com deslize, contador e abertura em ecrã inteiro; preço, ano e quilómetros quando esses dados existem no catálogo.
 - Favoritos guardados no dispositivo e comparação de até três viaturas.
 - Partilha através do sistema e contacto AutoValorPT pelo número **+351 965 637 736**.
 - Consulta da última cópia válida do catálogo quando a atualização falha, com indicação de que os dados precisam de confirmação.
 
 O primeiro carregamento do catálogo requer internet. A cópia local conserva dados comerciais e preferências; não garante que todas as fotografias estejam disponíveis sem ligação. Preços e disponibilidade devem ser confirmados com a AutoValorPT. Os contactos externos dependem dos serviços correspondentes.
+
+## Galeria completa — próxima build
+
+A galeria usa `images` (até 100 fotografias originais, com a capa na primeira posição); `image` continua a ser a capa usada nos cartões. As respostas e cópias antigas que só tenham `image` continuam válidas como galerias de uma fotografia. O cliente valida todas as ligações da galeria e rejeita uma resposta incoerente sem substituir a última cópia válida. O visualizador carrega poucas páginas de cada vez e conserva a fotografia escolhida quando o stock é atualizado. No iOS, o ecrã inteiro suporta zoom com dois dedos e o botão de ampliação; no Android, o botão permite ampliar e deslocar a fotografia. A navegação por botões continua disponível durante o zoom.
+
+Esta alteração da galeria requer uma nova build nativa para chegar ao iPhone; a publicação do backend não atualiza um binário já instalado. A validação visual final do deslize, do zoom e da rotação continua a exigir iPhone/iPad ou simuladores nativos.
+
+Verificações da galeria em 26/11/2026: TypeScript e os 12 testes do catálogo aprovados; exportação local dos bundles iOS e Android concluída com `EXPO_OFFLINE=1 EXPO_NO_TELEMETRY=1 CI=1`, sem compilação ou publicação EAS. As builds de produção 2 e 3 e a referência de simulador acima são anteriores a esta galeria. A combinação da galeria com a marca, os contactos e as ferramentas da build 3 está preservada no código da próxima build.
 
 ## Ferramentas e contactos da build 3
 

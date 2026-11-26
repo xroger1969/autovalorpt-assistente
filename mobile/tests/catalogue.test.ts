@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cleanVehicleIds, filterVehicles, formatMileage, formatPrice, fuelCategory,
-  isSnapshotStale, MAX_COMPARISON_VEHICLES, normalizeInventory, STOCK_STALE_AFTER_MS,
+  isSnapshotStale, MAX_COMPARISON_VEHICLES, MAX_VEHICLE_IMAGES, normalizeInventory, STOCK_STALE_AFTER_MS,
   toggleComparisonIds, vehicleShareMessage, vehicleShareUrl, whatsappUrl,
   type Vehicle,
 } from '../src/catalogue.ts';
@@ -10,6 +10,7 @@ import {
 const car = (id: string, changes: Partial<Vehicle> = {}): Vehicle => ({
   id, title: 'Renault Zoe Intens 50', brand: 'Renault', year: 2020, mileage: 150_870,
   price: 12990, fuel: 'Elétrico', image: 'https://ireland.apollo.olxcdn.com/v1/files/original/image',
+  images: ['https://ireland.apollo.olxcdn.com/v1/files/original/image'],
   url: `https://www.standvirtual.com/carros/anuncio/renault-zoe-${id}.html`, ...changes,
 });
 const vehicle = car('ID8Q1pLS');
@@ -52,6 +53,47 @@ test('allows only original images and adverts belonging to the matching public v
     'https://www.standvirtual.com/carros/anuncio/renault-ID8Q1lYB.html',
     'https://www.standvirtual.com/carros/anuncio/renault-ID8Q1pLS.html?secret=x',
   ]) assert.throws(() => normalizeInventory(payload([{ ...vehicle, url }])));
+});
+
+test('preserves the full original gallery in order and makes an independent copy', () => {
+  const side = 'https://ireland.apollo.olxcdn.com/v1/files/side/image';
+  const interior = 'https://ireland.apollo.olxcdn.com/v1/files/interior/image';
+  const images = [vehicle.image, side, interior, side];
+  const snapshot = normalizeInventory(payload([{ ...vehicle, images }]));
+  assert.deepEqual(snapshot.items[0].images, [vehicle.image, side, interior]);
+  assert.equal(snapshot.items[0].image, vehicle.image);
+  assert.notEqual(snapshot.items[0].images, images);
+  assert.equal(images.length, 4);
+});
+
+test('legacy saved catalogues without a gallery remain usable with the original cover', () => {
+  const { images: _gallery, ...legacy } = vehicle;
+  const base = payload();
+  const snapshot = normalizeInventory({ ...base, items: [legacy] });
+  assert.deepEqual(snapshot.items[0].images, [vehicle.image]);
+  assert.equal(snapshot.items[0].image, vehicle.image);
+});
+
+test('rejects unsafe or inconsistent galleries without hiding invalid entries', () => {
+  const other = 'https://ireland.apollo.olxcdn.com/v1/files/side/image';
+  for (const images of [
+    null, [], 'not-an-array', [vehicle.image, null], [vehicle.image, { url: other }],
+    [other, vehicle.image],
+    [vehicle.image, 'https://untrusted.example/image'],
+    [vehicle.image, `${other}?token=private`],
+    [vehicle.image, 'javascript:alert(1)'],
+  ]) {
+    assert.throws(() => normalizeInventory({ ...payload(), items: [{ ...vehicle, images }] }));
+  }
+});
+
+test('retains a complete 100-photo gallery and rejects unbounded input', () => {
+  const images = [vehicle.image, ...Array.from({ length: MAX_VEHICLE_IMAGES - 1 }, (_, index) =>
+    `https://ireland.apollo.olxcdn.com/v1/files/photo-${index}/image`)];
+  const snapshot = normalizeInventory(payload([{ ...vehicle, images }]));
+  assert.deepEqual(snapshot.items[0].images, images);
+  assert.equal(snapshot.items[0].images.length, 100);
+  assert.throws(() => normalizeInventory(payload([{ ...vehicle, images: [...images, images[0]] }])));
 });
 
 test('hybrids remain separate even when fuel also mentions electricity or gasoline', () => {

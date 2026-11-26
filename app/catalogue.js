@@ -1,7 +1,7 @@
 import {
   normalizeInventory, fuelCategory, filterVehicles, readFavoriteIds,
   saveFavoriteIds, FAVORITES_KEY, formatPrice, formatMileage, vehicleShareUrl, whatsappUrl,
-} from './catalogue-core.js?v=20261126-3';
+} from './catalogue-core.js?v=20261126-4';
 
 const $ = id => document.getElementById(id);
 const SNAPSHOT_KEY = 'autovalor.catalogue.snapshot.v1';
@@ -17,6 +17,7 @@ const state = {
 };
 let installPrompt = null;
 let toastTimer;
+const gallery = { id: null, images: [], index: 0, zoomed: false, suppressClickUntil: 0 };
 
 function safeStorage() { try { return window.localStorage; } catch { return null; } }
 function storedInventory() {
@@ -205,6 +206,117 @@ function showDialog(id) {
 }
 function closeDialog(id) { $(id).close(); }
 function currentVehicle() { return state.inventory?.items.find(item => item.id === state.activeId); }
+
+function galleryImage(imageId, placeholderId, source, label) {
+  const img = $(imageId);
+  img.alt = label;
+  // A routine stock refresh must not reload the selected photo or briefly
+  // blank it out while the visitor is inspecting the vehicle.
+  if (img.dataset.photo === source && !img.hidden) return;
+  img.dataset.photo = source;
+  img.hidden = false; $(placeholderId).hidden = true;
+  img.onerror = () => { img.hidden = true; $(placeholderId).hidden = false; };
+  img.onload = () => { img.hidden = false; $(placeholderId).hidden = true; };
+  img.src = source;
+}
+function setPhotoZoom(zoomed) {
+  gallery.zoomed = zoomed;
+  $('photo-dialog').classList.toggle('is-zoomed', zoomed);
+  $('photo-zoom').setAttribute('aria-pressed', String(zoomed));
+  $('photo-zoom').textContent = zoomed ? 'Reduzir' : 'Ampliar';
+  $('photo-zoom-image').setAttribute('aria-label', zoomed ? 'Reduzir fotografia' : 'Ampliar fotografia');
+  $('photo-viewport').scrollTop = 0;
+  $('photo-viewport').scrollLeft = 0;
+}
+function paintGallery() {
+  const item = currentVehicle();
+  if (!item || !gallery.images.length) return;
+  const source = gallery.images[gallery.index];
+  const label = `${item.title} — fotografia ${gallery.index + 1} de ${gallery.images.length}`;
+  galleryImage('detail-image', 'detail-photo-placeholder', source, label);
+  $('detail-photo-open').setAttribute('aria-label', `Ver fotografia ${gallery.index + 1} de ${gallery.images.length} em ecrã inteiro`);
+  for (const id of ['detail-photo-count', 'photo-count']) {
+    $(id).textContent = `${gallery.index + 1} / ${gallery.images.length}`;
+    $(id).setAttribute('aria-label', `Fotografia ${gallery.index + 1} de ${gallery.images.length}`);
+  }
+  document.querySelectorAll('[data-photo-step]').forEach(button => { button.hidden = gallery.images.length < 2; });
+  $('detail-thumbnails').querySelectorAll('button').forEach((button, index) => {
+    button.setAttribute('aria-pressed', String(index === gallery.index));
+  });
+  if ($('photo-dialog').open) {
+    $('photo-title').textContent = item.title;
+    galleryImage('photo-image', 'photo-placeholder', source, label);
+  }
+}
+function selectPhoto(index) {
+  if (!gallery.images.length) return;
+  gallery.index = (index + gallery.images.length) % gallery.images.length;
+  setPhotoZoom(false);
+  paintGallery();
+  // Scroll the strip only, so moving through photos never shifts the dialog.
+  const thumbnail = $('detail-thumbnails').children[gallery.index];
+  const strip = $('detail-thumbnails');
+  if (thumbnail && !strip.hidden) {
+    const left = thumbnail.offsetLeft;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (left + thumbnail.offsetWidth > strip.scrollLeft + strip.clientWidth) {
+      strip.scrollLeft = left + thumbnail.offsetWidth - strip.clientWidth;
+    }
+  }
+}
+function fillGallery(item) {
+  const images = item.images;
+  const sameVehicle = gallery.id === item.id;
+  const previous = sameVehicle ? gallery.images[gallery.index] : null;
+  const changed = !sameVehicle || images.length !== gallery.images.length ||
+    images.some((image, index) => image !== gallery.images[index]);
+  if (changed) {
+    if (!sameVehicle && $('photo-dialog').open) closeDialog('photo-dialog');
+    gallery.id = item.id; gallery.images = [...images];
+    gallery.index = Math.max(0, images.indexOf(previous));
+    const buttons = images.length > 1 ? images.map((source, index) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'photo-thumbnail';
+      button.setAttribute('aria-label', `Ver fotografia ${index + 1} de ${images.length}`);
+      const img = document.createElement('img');
+      img.src = source; img.alt = ''; img.width = 80; img.height = 60; img.loading = 'lazy'; img.decoding = 'async';
+      img.addEventListener('error', () => { img.hidden = true; button.classList.add('photo-thumbnail-unavailable'); }, { once: true });
+      const number = document.createElement('span'); number.textContent = String(index + 1); number.setAttribute('aria-hidden', 'true');
+      button.append(img, number); button.addEventListener('click', () => selectPhoto(index));
+      return button;
+    }) : [];
+    $('detail-thumbnails').replaceChildren(...buttons);
+    $('detail-thumbnails').hidden = images.length < 2;
+    if (!sameVehicle) $('detail-thumbnails').scrollLeft = 0;
+    setPhotoZoom(false);
+  }
+  paintGallery();
+}
+function openPhotos() {
+  if (!currentVehicle() || !gallery.images.length || Date.now() < gallery.suppressClickUntil) return;
+  setPhotoZoom(false);
+  showDialog('photo-dialog');
+  paintGallery();
+}
+function enablePhotoSwipe(surface) {
+  let start = null;
+  surface.addEventListener('touchstart', event => {
+    start = event.touches.length === 1 && !gallery.zoomed
+      ? { x: event.touches[0].clientX, y: event.touches[0].clientY, id: event.touches[0].identifier }
+      : null;
+  }, { passive: true });
+  surface.addEventListener('touchcancel', () => { start = null; }, { passive: true });
+  surface.addEventListener('touchend', event => {
+    const from = start; start = null;
+    if (!from || gallery.zoomed || event.touches.length || gallery.images.length < 2) return;
+    const touch = [...event.changedTouches].find(point => point.identifier === from.id);
+    if (!touch) return;
+    const dx = touch.clientX - from.x; const dy = touch.clientY - from.y;
+    if (Math.abs(dx) < 45 || Math.abs(dx) <= Math.abs(dy) * 1.3) return;
+    gallery.suppressClickUntil = Date.now() + 500;
+    selectPhoto(gallery.index + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+}
 function fillVehicle(item) {
   $('vehicle-details').hidden = !item;
   $('unavailable-vehicle').hidden = Boolean(item);
@@ -212,6 +324,8 @@ function fillVehicle(item) {
   $('share-vehicle').hidden = !item;
   $('share-fallback').hidden = true;
   if (!item) {
+    if ($('photo-dialog').open) closeDialog('photo-dialog');
+    gallery.id = null; gallery.images = []; gallery.index = 0;
     $('vehicle-dialog').setAttribute('aria-label', 'Viatura indisponível');
     $('vehicle-dialog').removeAttribute('aria-labelledby');
     return;
@@ -221,10 +335,7 @@ function fillVehicle(item) {
   $('vehicle-title').textContent = item.title;
   $('detail-brand').textContent = item.brand;
   $('detail-price').textContent = formatPrice(item.price);
-  const img = $('detail-image');
-  img.hidden = false; img.nextElementSibling.hidden = true; img.alt = item.title;
-  img.onerror = () => { img.hidden = true; img.nextElementSibling.hidden = false; };
-  img.src = item.image;
+  fillGallery(item);
   const specs = [['Ano', item.year === null ? 'Por confirmar' : item.year], ['Quilómetros', formatMileage(item.mileage)], ['Combustível', item.fuel || 'Por confirmar']];
   $('detail-specs').replaceChildren(...specs.map(([label, value]) => {
     const group = document.createElement('div'); const dt = document.createElement('dt'); const dd = document.createElement('dd');
@@ -234,7 +345,7 @@ function fillVehicle(item) {
   $('detail-source').href = item.url;
   $('detail-whatsapp').href = whatsappUrl(item, window.location.origin);
   $('detail-note').textContent = state.confirmed && navigator.onLine
-    ? 'Consulte o anúncio original para ver mais fotografias e todos os detalhes.'
+    ? 'Fotografias originais do anúncio. Consulte o Standvirtual para ver todos os detalhes.'
     : 'Está a ver uma versão guardada. Confirme o preço e a disponibilidade quando tiver ligação.';
 }
 function openVehicle(id, changeUrl = true) {
@@ -304,6 +415,25 @@ $('empty-action').addEventListener('click', () => {
 });
 $('refresh').addEventListener('click', () => { void refreshInventory(true); });
 $('detail-favorite').addEventListener('click', () => { const item = currentVehicle(); if (item) toggleFavorite(item); });
+$('detail-photo-open').addEventListener('click', openPhotos);
+$('photo-zoom').addEventListener('click', () => setPhotoZoom(!gallery.zoomed));
+$('photo-zoom-image').addEventListener('click', () => {
+  if (Date.now() >= gallery.suppressClickUntil) setPhotoZoom(!gallery.zoomed);
+});
+document.querySelectorAll('[data-photo-step]').forEach(button => button.addEventListener('click', () => {
+  selectPhoto(gallery.index + Number(button.dataset.photoStep));
+}));
+enablePhotoSwipe($('detail-photo-open'));
+enablePhotoSwipe($('photo-zoom-image'));
+for (const id of ['vehicle-dialog', 'photo-dialog']) {
+  $(id).addEventListener('keydown', event => {
+    if (id === 'vehicle-dialog' && ($('photo-dialog').open || !event.target.closest('.detail-gallery')) ||
+        event.target.matches('input,select,textarea')) return;
+    const index = { ArrowLeft: gallery.index - 1, ArrowRight: gallery.index + 1, Home: 0, End: gallery.images.length - 1 }[event.key];
+    if (index === undefined) return;
+    event.preventDefault(); selectPhoto(index);
+  });
+}
 document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => closeDialog(button.dataset.close)));
 document.querySelectorAll('dialog').forEach(dialog => {
   dialog.addEventListener('click', event => {
@@ -313,7 +443,9 @@ document.querySelectorAll('dialog').forEach(dialog => {
   });
   dialog.addEventListener('close', () => {
     if (!document.querySelector('dialog[open]')) document.body.classList.remove('dialog-open');
+    if (dialog.id === 'photo-dialog') setPhotoZoom(false);
     if (dialog.id === 'vehicle-dialog') {
+      if ($('photo-dialog').open) closeDialog('photo-dialog');
       state.activeId = null;
       const url = new URL(window.location.href);
       if (url.searchParams.has('viatura')) {
