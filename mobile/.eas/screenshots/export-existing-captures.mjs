@@ -30,8 +30,17 @@ function workflowRun(id) {
     output = execFileSync('npx', ['--yes', 'eas-cli@27.11.0', 'workflow:view', id,
       '--json', '--non-interactive'], { encoding: 'utf8', stdio: 'pipe',
       timeout: 180000, maxBuffer: 20 * 1024 * 1024, env: { ...process.env, CI: '1' } });
-  } catch {
-    throw new Error('EAS CLI could not read the workflow using the job authentication');
+  } catch (error) {
+    // Inspect output only to select a fixed category. Never include raw command
+    // output, URLs, tokens or the original error/stack in the exported message.
+    const diagnostic = [error.stderr, error.stdout, error.message, error.code].map(value => String(value || '')).join('\n');
+    const category = /PluginError|failed to resolve plugin|config plugin/i.test(diagnostic) ? 'config-plugin'
+      : /Expo user account is required|not logged in|not authenticated|authentication|unauthorized|invalid (?:access )?token|HTTP\s+(?:401|403)/i.test(diagnostic) ? 'authentication'
+      : /ETIMEDOUT|ENOTFOUND|ECONNRESET|ECONNREFUSED|EAI_AGAIN|fetch failed|socket hang up|timed out|network/i.test(diagnostic) ? 'network'
+      : /npm (?:ERR!|error)|ERESOLVE|EINTEGRITY|ELSPROBLEMS|npm (?:ci|install)|could not determine executable to run/i.test(diagnostic) ? 'npm-install'
+      : 'unknown';
+    const status = Number.isInteger(error.status) ? error.status : 'unavailable';
+    throw new Error(`EAS CLI failure: category=${category}; exit_status=${status}; node=${process.version}`);
   }
   let run;
   try { run = JSON.parse(output); } catch { throw new Error('EAS CLI did not return valid workflow JSON'); }
