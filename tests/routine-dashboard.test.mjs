@@ -264,13 +264,24 @@ test('an unreadable manual state allows only read-only retry without hiding othe
   assert.equal(app.calls.some(c => c.init.method === 'POST'), false);
 });
 
-test('the installed shortcut keeps its URL, loads the full panel and only resumes existing queued work', async () => {
+test('the installed shortcut keeps its URL and resolves the full panel without a static file shadow', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
-  assert.equal(config.rewrites.find(rule => rule.source === '/stock-rapido.html').destination, '/rotina.html');
+  const route = config.rewrites.find(rule => rule.source === '/stock-rapido.html');
+  assert.equal(route.destination, '/rotina.html');
   assert.equal(config.redirects?.some(rule => rule.source === '/stock-rapido.html') || false, false);
+  // Vercel serves a matching filesystem path before applying rewrites.
+  await assert.rejects(readFile(new URL('..' + route.source, import.meta.url)), { code: 'ENOENT' });
+  await assert.rejects(readFile(new URL('../public' + route.source, import.meta.url)), { code: 'ENOENT' });
+  const html = await readFile(new URL('..' + route.destination, import.meta.url), 'utf8');
+  assert.match(html, /id="dashboardView"/);
+  assert.match(html, /id="brandIdentity"/);
+  assert.match(html, /src="\/rotina\.js\?/);
   const policy = config.headers.find(rule => rule.source === '/stock-rapido.html').headers.find(header => header.key === 'Content-Security-Policy').value;
   assert.match(policy, /img-src 'self' https:\/\/ireland\.apollo\.olxcdn\.com;/);
   assert.match(policy, /media-src 'self';/);
+});
+
+test('the installed shortcut only resumes existing queued work', async () => {
   for (const entry of [{ pathname: '/stock-rapido.html' }, { hash: '#atalho' }]) {
     let state = 'queued';
     const app = await dashboard({ ...entry, fetch: path => {
