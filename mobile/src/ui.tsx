@@ -8,6 +8,15 @@ export const colors = {
   white: '#FFFFFF', ink: '#102A3B', muted: '#596E7A', line: '#DCE3E4',
   green: '#225E49', greenLight: '#EAF4EE', amber: '#76521B', amberLight: '#FFF3D9',
 };
+export function BrandMark({ size = 42, style }: { size?: number; style?: StyleProp<ViewStyle> }) {
+  return <View accessible={false} style={[{
+    width: size, height: size, borderRadius: Math.round(size * 0.28),
+    overflow: 'hidden', backgroundColor: colors.navy,
+  }, style]}>
+    <Image source={require('../assets/icon.png')} contentFit="contain" transition={0}
+      accessible={false} style={StyleSheet.absoluteFill} />
+  </View>;
+}
 export type IconName = keyof typeof Ionicons.glyphMap;
 export function Icon({ name, size = 22, color = colors.ink }: { name: IconName; size?: number; color?: string }) {
   return <Ionicons name={name} size={size} color={color} accessible={false} />;
