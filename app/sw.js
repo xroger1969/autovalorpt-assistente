@@ -1,6 +1,6 @@
 /* This worker belongs only to /app/. It must never cache the shared API,
    the private manager, WhatsApp links, or vehicle photographs. */
-const BUILD = '20261126-2';
+const BUILD = '20261126-3';
 const PREFIX = 'autovalor-catalogue-v1-';
 const CACHE = `${PREFIX}${BUILD}`;
 const INDEX = '/app/index.html';
