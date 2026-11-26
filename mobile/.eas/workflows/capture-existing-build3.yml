@@ -1,10 +1,13 @@
 name: AutoValorPT build 3 — capture existing simulator build
 
 # Reuse the successful simulator binary built from unchanged source 877654a.
-# Manual only; no build, submit, OTA update or application code changes.
+# Temporary screenshot-branch trigger; no build, submit, OTA update or app changes.
+# Remove push after this capture run; use [eas skip] in the disabling commit.
 # Expo project base directory: mobile.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [codex/appstore-screenshots-build3]
 
 jobs:
   capture_iphone:
