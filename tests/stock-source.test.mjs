@@ -335,7 +335,7 @@ test('latest resolves only the committed immutable snapshot and never fetches in
   const expected = await f.source.feed(first.feedHash);
   const writes = f.blob.calls.filter(call => call.method === 'put').length; const requests = f.calls.length;
   f.data.items[0].price = '30000.00 EUR'; // Public reads must not observe an uncommitted inventory change.
-  assert.deepEqual(await f.source.feed('latest'), expected);
+  assert.deepEqual(await f.source.feed('latest'), { ...expected, checkedAt: first.checkedAt });
   assert.equal(f.blob.calls.filter(call => call.method === 'put').length, writes); assert.equal(f.calls.length, requests);
   const second = await f.source.sync();
   assert.notEqual(second.feedHash, first.feedHash);
