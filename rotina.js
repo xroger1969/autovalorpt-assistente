@@ -17,7 +17,8 @@
   let viewedCycle = null; let historyVersion = 0; let lastSearch = null;
   let editorialPost = null;
   let channelCheck = null, stockCheck = null, currentCycle = null, pendingManualStories = 0, calendarState = '';
-  const fromShortcut = typeof location !== 'undefined' && location.hash === '#atalho';
+  const fromShortcut = typeof location !== 'undefined' &&
+    (location.pathname === '/stock-rapido.html' || location.hash === '#atalho');
   const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 5000 ? String(value) : '—';
   const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
   const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' });

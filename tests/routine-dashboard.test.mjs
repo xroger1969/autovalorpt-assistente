@@ -24,7 +24,7 @@ async function dashboard(options = {}) {
     if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
     return response({ configuration: { enabled: true }, lastResult: { status: 'no_new_stock', at: startedAt, published: 0 } });
   };
-  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '' }, URL, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
+  vm.runInNewContext(script, { document, fetch, location: { hash: options.hash || '', pathname: options.pathname || '/rotina.html' }, URL, URLSearchParams, Date, Intl, AbortController, setTimeout, clearTimeout, setInterval: callback => { interval = callback; } });
   await new Promise(resolve => setImmediate(resolve));
   return { get: id => document.getElementById(id), calls, document, tick: () => interval() };
 }
@@ -264,17 +264,23 @@ test('an unreadable manual state allows only read-only retry without hiding othe
   assert.equal(app.calls.some(c => c.init.method === 'POST'), false);
 });
 
-test('the installed shortcut loads the same panel and only resumes existing queued work', async () => {
+test('the installed shortcut keeps its URL, loads the full panel and only resumes existing queued work', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
-  assert.equal(config.redirects.find(rule => rule.source === '/stock-rapido.html').destination, '/rotina.html#atalho');
-  let state = 'queued';
-  const app = await dashboard({ hash: '#atalho', fetch: path => {
-    if (path.includes('action=resume')) { state = 'running'; return response({ status: state }); }
-    if (path.includes('mode=manual')) return response({ status: state, startedAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date(Date.now() - 120000).toISOString() });
-    return null;
-  } });
-  assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
-  assert.equal(app.calls.some(c => c.endpoint.includes('manual-start')), false);
+  assert.equal(config.rewrites.find(rule => rule.source === '/stock-rapido.html').destination, '/rotina.html');
+  assert.equal(config.redirects?.some(rule => rule.source === '/stock-rapido.html') || false, false);
+  const policy = config.headers.find(rule => rule.source === '/stock-rapido.html').headers.find(header => header.key === 'Content-Security-Policy').value;
+  assert.match(policy, /img-src 'self' https:\/\/ireland\.apollo\.olxcdn\.com;/);
+  assert.match(policy, /media-src 'self';/);
+  for (const entry of [{ pathname: '/stock-rapido.html' }, { hash: '#atalho' }]) {
+    let state = 'queued';
+    const app = await dashboard({ ...entry, fetch: path => {
+      if (path.includes('action=resume')) { state = 'running'; return response({ status: state }); }
+      if (path.includes('mode=manual')) return response({ status: state, startedAt: new Date(Date.now() - 180000).toISOString(), updatedAt: new Date(Date.now() - 120000).toISOString() });
+      return null;
+    } });
+    assert.equal(app.calls.filter(c => c.init.method === 'POST').length, 1);
+    assert.equal(app.calls.some(c => c.endpoint.includes('manual-start')), false);
+  }
 });
 
 test('a matching label without explicit Meta confirmation stays unconfirmed', async () => {
@@ -458,8 +464,9 @@ test('full check exposes a failed catalog lookup and a failed live inventory loo
 });
 
 test('checking results from the installed shortcut cannot resume a cycle that changes state during the check', async () => {
+  for (const entry of [{ pathname: '/stock-rapido.html' }, { hash: '#atalho' }]) {
   let state = finishedCycle();
-  const app = await dashboard({ hash: '#atalho', fetch: path => {
+  const app = await dashboard({ ...entry, fetch: path => {
     if (path.includes('mode=manual')) return response(state);
     if (path.includes(manualStockAction)) return response(dualInventory);
     return null;
@@ -468,6 +475,7 @@ test('checking results from the installed shortcut cannot resume a cycle that ch
   await app.get('runNow').handlers.click();
   assert.ok(readOnly(app.calls));
   assert.equal(app.get('runNow').textContent, 'Continuar atualização');
+  }
 });
 
 test('creative details show source links and select electric or extra artwork without publishing', async () => {

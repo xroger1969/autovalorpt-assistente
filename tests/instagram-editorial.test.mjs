@@ -268,7 +268,15 @@ test('approved Reels use the fixed asset, current native AI label and completed 
   assert.equal(fields.get('video_url'), preview.post.videoUrl); assert.match(fields.get('caption'), /IA/);
   assert.equal(f.posts().length, 1);
   const second = fixture({ time: '2026-11-29T19:30:00Z', planFor: editorialPlan });
-  assert.match((await second.publisher.preview()).post.videoUrl, /test-drive-web-v1\.mp4$/);
+  const future = (await second.publisher.preview()).post;
+  assert.match(future.videoUrl, /test-drive-web-v1\.mp4$/);
+  assert.match(future.coverUrl, /theme=premium1&v=v1&variant=reel-cover1$/);
+  assert.equal((await second.publisher.run()).status, 'published');
+  const futureCreate = second.calls.find(call => call.method === 'POST' && call.url.endsWith('/media'));
+  const futureFields = new URLSearchParams(futureCreate.body);
+  assert.equal(futureFields.get('video_url'), future.videoUrl);
+  assert.equal(futureFields.get('cover_url'), future.coverUrl);
+  assert.equal(fields.has('cover_url'), false);
 });
 
 test('unapproved videos, absent disclosure and unsupported AI-label API fail before media creation', async () => {

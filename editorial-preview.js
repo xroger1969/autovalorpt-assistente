@@ -15,7 +15,7 @@
   function imageUrl(post, index) {
     if (!post || !validDay(post.date) || !Number.isSafeInteger(index) || index < 0 || index >= 10) return null;
     const query = new URLSearchParams({ integration: 'editorial-image', date: post.date, slide: String(index + 1) });
-    let version = post.version, extra = post.extra === true;
+    let version = post.version, extra = post.extra === true, sourceTheme, hasSource = false;
     const value = (post.imageUrls || post.images)?.[index];
     if (typeof value === 'string') {
       try {
@@ -24,10 +24,15 @@
             !source.username && !source.password && !source.hash && source.searchParams.get('integration') === 'editorial-image') {
           version = source.searchParams.get('v') ?? source.searchParams.get('version') ?? version;
           extra = extra || source.searchParams.get('extra') === '1';
+          sourceTheme = source.searchParams.get('theme'); hasSource = true;
         }
       } catch { /* Use the date, slide and version from the preview. */ }
     }
-    if (['v3','v4'].includes(version) && post.date >= (extra ? '2026-11-27' : '2026-11-26')) query.set('theme', 'navy1');
+    const theme = hasSource ? sourceTheme : ['v1','v2','v3','v4'].includes(version) &&
+      post.date >= (extra ? '2026-11-27' : '2026-11-26') ? 'premium1' : undefined;
+    if (theme === 'premium1' && ['v1','v2','v3','v4'].includes(version) || theme === 'navy1' && ['v3','v4'].includes(version))
+      query.set('theme', theme);
+    else if (theme) return null;
     if (['v1', 'v2', 'v3', 'v4'].includes(version)) query.set('v', version);
     else if (extra) query.set('v', 'v1');
     if (extra) query.set('extra', '1');

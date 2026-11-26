@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { BlobNotFoundError } from '@vercel/blob';
 import { createInstagramStories, storyFingerprint } from '../lib/instagram-stories.js';
 import { memoryBlob } from './helpers/memory-blob.mjs';
+import { instagramVideoPath } from '../lib/instagram-video-access.js';
 
 const ledgerPath = 'instagram/v1/production/stories.json';
 const publicationPath = 'instagram/v1/production/state.json';
@@ -574,4 +575,23 @@ test('explicit continuation reuses the reviewed preparing attempt and a stale re
   assert.equal(f.renders.length, 1);
   assert.equal(f.containers().length, 1);
   assert.equal((await f.stories.run()).id, 'ID8next01');
+});
+
+
+test('a new preview versions its artwork without overwriting legacy assets or changing the stock fingerprint', async () => {
+  const f = fixture();
+  const item = f.getItems()[0]; const fingerprint = storyFingerprint(item);
+  const oldPath = instagramVideoPath(item.id, fingerprint);
+  const oldAsset = { text: Buffer.alloc(2048, 7), etag: 'legacy-orange-video' };
+  f.memory.records.set(oldPath, oldAsset);
+  const first = await f.stories.preview(item.id);
+  const delivered = new URL(first.videoUrl).searchParams.get('fingerprint');
+  assert.notEqual(delivered, fingerprint, 'new work cannot reuse an unversioned previous design');
+  assert.equal(first.fingerprint, fingerprint, 'visual design does not enroll a different stock identity');
+  assert.equal(f.renders.length, 1);
+  assert.equal(f.memory.records.get(oldPath), oldAsset, 'the previous asset remains accessible');
+  const again = await f.stories.preview(item.id);
+  assert.equal(new URL(again.videoUrl).searchParams.get('fingerprint'), delivered);
+  assert.equal(f.renders.length, 1, 'an unchanged premium preview reuses its rendered video');
+  assert.equal(f.posts().length, 0);
 });

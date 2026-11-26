@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#142337">
+  <meta name="theme-color" content="#0B2030">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Stock AutoValor">
   <link rel="manifest" href="/manifest-stock-rapido.json">
   <link rel="icon" href="/avpt-icone.svg" type="image/svg+xml">
   <title>Stock e publicações · AutoValorPT</title>
   <style>
-    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182b40; background: #f4f6f8; --navy: #142337; --orange: #ff9c56; --line: #d8e0e7; --muted: #4b5e70; }
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0B2030; background: #F8F7F4; --navy: #0B2030; --navy-light: #123247; --gold: #D6B36A; --line: #d9dfe0; --muted: #4b5e70; }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
     body { margin: 0; min-height: 100svh; }
@@ -21,7 +21,7 @@
     .top, .section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .top { min-height: calc(62px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
     .brand { font-size: 21px; font-weight: 800; letter-spacing: -.045em; }
-    .brand span { color: var(--orange); }
+    .brand span { color: var(--gold); }
     main { padding-top: 26px; padding-bottom: max(44px, env(safe-area-inset-bottom)); }
     h1, h2, p { margin: 0; }
     h1 { font-size: clamp(28px, 5vw, 38px); letter-spacing: -.045em; line-height: 1.15; }
@@ -42,7 +42,7 @@
     .login label { margin: 20px 0 7px; }
     input { max-width: 100%; min-height: 48px; border-radius: 9px; border: 1px solid #9dabb8; padding: 10px; background: white; color: #182b40; }
     .login input, .primary { width: 100%; }
-    .primary { min-height: 52px; margin-top: 18px; font-size: 17px; font-weight: 750; background: var(--orange); color: #182432; }
+    .primary { min-height: 52px; margin-top: 18px; font-size: 17px; font-weight: 750; background: var(--gold); color: var(--navy); }
     .primary:disabled { background: #d9e0e6; color: #425568; }
     .action { padding: clamp(17px, 3vw, 25px); margin-top: 20px; }
     .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
@@ -72,7 +72,12 @@
     .action-details > .details-body { margin: 0; padding: 8px 0 0; }
     .action-details .hint:first-child { margin-top: 0; }
     .section-head { margin-top: 20px; }
-    .secondary { background: #e6edf2; color: #234662; }
+    .secondary { background: #e9edef; color: var(--navy-light); }
+    #manualStories .ms-launch { background: var(--navy-light); border-color: var(--navy-light); }
+    #manualStories .ms-publish { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+    .brand-covers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+    .brand-cover { display: grid; justify-items: center; gap: 8px; min-height: 44px; padding: 8px 3px; color: var(--navy-light); font-size: 13px; font-weight: 650; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    .brand-cover img { width: min(100%, 88px); height: auto; aspect-ratio: 1; border-radius: 50%; }
     .rows { margin-bottom: 16px; }
     .rows details + details { border-top: 1px solid var(--line); }
     summary { min-height: 54px; padding: 13px 16px; list-style: none; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 12px; }
@@ -117,11 +122,11 @@
   </style>
   <link rel="stylesheet" href="/manual-stories.css">
   <script src="/manual-stories.js?v=20261125-5" defer></script>
-  <script src="/editorial-preview.js?v=20261126-navy1" defer></script>
+  <script src="/editorial-preview.js?v=20261126-premium1" defer></script>
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
   <script src="/whatsapp-editorial.js?v=20261126-4" defer></script>
-  <script src="/rotina.js?v=20261126-2" defer></script>
+  <script src="/rotina.js?v=20261126-premium1" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -246,6 +251,20 @@
           <div class="details-body"><p id="cycleSummary" class="status"></p><p id="cycleTime" class="time"></p><p id="latestCycle" class="time"></p>
             <div class="toolbar"><label for="cycleDay">Dia da rotina <input id="cycleDay" type="date"></label><button id="todayButton" class="secondary" type="button">Hoje</button></div>
             <ol id="stepsList" class="steps" aria-label="Etapas da rotina"></ol>
+          </div>
+        </details>
+        <details id="brandIdentity"><summary><strong>Identidade visual</strong><span class="channel-note">AutoValorPT Premium</span></summary>
+          <div class="details-body">
+            <p>Azul-marinho, dourado e branco nas novas publicações. Fotografias das viaturas e dicas com uma apresentação coerente.</p>
+            <p>Estas capas estão prontas para os destaques do perfil. Guarda a imagem e escolhe-a ao editar a capa do destaque no Instagram.</p>
+            <div class="brand-covers" aria-label="Descarregar capas dos destaques">
+              <a class="brand-cover" href="/assets/brand/eletricos.png" download="AutoValorPT-Eletricos.png"><img src="/assets/brand/eletricos.png" alt="" width="1080" height="1080" loading="lazy">Elétricos</a>
+              <a class="brand-cover" href="/assets/brand/hibridos.png" download="AutoValorPT-Hibridos.png"><img src="/assets/brand/hibridos.png" alt="" width="1080" height="1080" loading="lazy">Híbridos</a>
+              <a class="brand-cover" href="/assets/brand/stock.png" download="AutoValorPT-Stock.png"><img src="/assets/brand/stock.png" alt="" width="1080" height="1080" loading="lazy">Stock</a>
+              <a class="brand-cover" href="/assets/brand/guias.png" download="AutoValorPT-Guias.png"><img src="/assets/brand/guias.png" alt="" width="1080" height="1080" loading="lazy">Guias</a>
+              <a class="brand-cover" href="/assets/brand/simulador.png" download="AutoValorPT-Simulador.png"><img src="/assets/brand/simulador.png" alt="" width="1080" height="1080" loading="lazy">Simulador</a>
+              <a class="brand-cover" href="/assets/brand/sobre-nos.png" download="AutoValorPT-Sobre-nos.png"><img src="/assets/brand/sobre-nos.png" alt="" width="1080" height="1080" loading="lazy">Sobre nós</a>
+            </div>
           </div>
         </details>
         <details><summary><strong>Acessos e definições</strong></summary><div class="details-body"><ul>

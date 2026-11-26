@@ -52,7 +52,7 @@ test('two read-only snapshots expose only completed, reproducible original daily
   assert.equal(daily.shareCaption.split(daily.simulatorUrl).length, 2);
   assert.ok(!daily.shareCaption.includes('link do perfil'));
   assert.match(old.media[0].url, /v=v3&extra=1&variant=wa1$/);
-  assert.match(daily.media[0].url, /v=v4&theme=navy1&variant=wa1$/);
+  assert.match(daily.media[0].url, /v=v4&theme=premium1&variant=wa1$/);
   assert.equal(items.find(x => x.id === reel.id).media[0].url, reel.videoPath);
   assert.equal(items.find(x => x.id === carousel.id).media.length, carousel.slides.length);
   assert.ok(items.every(x => x.status === 'ready' && !x.attemptId));
