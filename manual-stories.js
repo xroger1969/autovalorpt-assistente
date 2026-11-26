@@ -34,6 +34,9 @@
   const validId = /^ID[A-Za-z0-9]{5,30}$/;
   const validHash = /^[a-f0-9]{64}$/;
   const storageKey = 'autovalorpt.manual-stories.pending.v1';
+  const publicationPrefix = 'autovalorpt.manual-story.receipt.';
+  const maxStatusChecks = 48;
+  const maxAutomaticResumes = 3;
   const preparationKey = 'autovalorpt.manual-video.preparation.v1';
   const validJob = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
   const prices = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -63,6 +66,8 @@
     stock_not_synchronized: 'O stock precisa de ser sincronizado. Carrega em «Atualizar tudo» no painel.',
     facebook_authorization_required: 'A autorização da Meta precisa de ser renovada.',
     story_permissions_required: 'A Meta ainda não autorizou a publicação de Stories.',
+    story_container_not_ready: 'O Instagram não conseguiu preparar este vídeo. Revê o vídeo para tentar novamente.',
+    story_container_failed: 'O Instagram não conseguiu receber o vídeo. Revê o vídeo para tentar novamente.',
     story_publishing_limit_reached: 'O Instagram atingiu o limite de publicações. Tenta mais tarde.',
     wrong_story_account: 'A conta ligada à Meta não corresponde a @autovalorpt.',
     video_signing_not_configured: 'A ligação privada ao vídeo precisa de configuração.',
@@ -70,9 +75,9 @@
   };
   const outcomes = {
     ready: 'O servidor não registou um envio. Revê o vídeo antes de confirmar.',
-    busy: 'O pedido já está em curso. Consulta o envio para acompanhar o resultado.',
-    preparing: 'O Instagram está a preparar este vídeo. Podes continuar o mesmo envio após o rever.',
-    review_required: 'A Meta ainda não confirmou o resultado. Consulta o envio antes de voltar a publicar.',
+    busy: 'O envio está em curso. Podes sair desta página e voltar para ver o resultado.',
+    preparing: 'O envio precisa de ser retomado. Revê o vídeo e toca em «Continuar este envio».',
+    review_required: 'O Instagram ainda não confirmou se o Story foi publicado.',
     published: 'O Instagram confirmou a publicação do Story.',
     failed: 'O envio falhou. Volta a selecionar a viatura para preparar uma nova tentativa.',
     canceled: 'A disponibilidade, os dados ou as fotografias mudaram. Volta a escolher a viatura.',
@@ -105,17 +110,71 @@
       typeof value.reviewToken === 'string' && value.reviewToken.length > 0 && value.reviewToken.length < 4096;
   }
   function receiptOf({ id, fingerprint, reviewToken }) { return { id, fingerprint, reviewToken }; }
-  function storePending() {
+  function sameAttempt(a, b) {
+    return a && b && a.id === b.id && a.fingerprint === b.fingerprint &&
+      a.reviewToken.split('.')[0] === b.reviewToken.split('.')[0];
+  }
+  function track(receipt) {
+    const previous = pending.get(receipt.id);
+    if (sameAttempt(previous, receipt)) return previous;
+    clearTimeout(previous?.timer);
+    const attempt = { ...receiptOf(receipt), remaining: maxStatusChecks, automaticResumes: 0 };
+    pending.set(attempt.id, attempt);
     try {
-      if (pending.size) sessionStorage.setItem(storageKey, JSON.stringify([...pending.values()]));
-      else sessionStorage.removeItem(storageKey);
-    } catch { /* The in-memory receipt remains available in private browsing. */ }
+      const key = publicationPrefix + attempt.id;
+      const saved = JSON.parse(localStorage.getItem(key) || 'null');
+      if (validReceipt(saved) && Number(saved.reviewToken.split('.')[0]) > Number(receipt.reviewToken.split('.')[0])) {
+        Object.assign(attempt, receiptOf(saved));
+      } else localStorage.setItem(key, JSON.stringify(receiptOf(attempt)));
+    }
+    catch { // Some private browsers only permit session storage.
+      try { sessionStorage.setItem(storageKey, JSON.stringify([...pending.values()].map(receiptOf))); } catch {}
+    }
+    return attempt;
+  }
+  function finishAttempt(attempt) {
+    clearTimeout(attempt.timer);
+    pending.delete(attempt.id);
+    try {
+      const key = publicationPrefix + attempt.id;
+      // If a newer attempt was written by another tab, keep its receipt.
+      if (sameAttempt(JSON.parse(localStorage.getItem(key) || 'null'), attempt)) localStorage.removeItem(key);
+    } catch {}
+    try {
+      if (sessionStorage.getItem(storageKey)) {
+        if (pending.size) sessionStorage.setItem(storageKey, JSON.stringify([...pending.values()].map(receiptOf)));
+        else sessionStorage.removeItem(storageKey);
+      }
+    } catch {}
+  }
+  function restoreAttempts(active) {
+    try {
+      const legacy = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+      if (active && Array.isArray(legacy)) for (const receipt of legacy.filter(validReceipt)) track(receipt);
+      if (!active || legacy.every(receipt => localStorage.getItem(publicationPrefix + receipt.id))) sessionStorage.removeItem(storageKey);
+    } catch {}
+    try {
+      for (let index = localStorage.length - 1; index >= 0; index--) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(publicationPrefix)) continue;
+        if (!active) { localStorage.removeItem(key); continue; }
+        const receipt = JSON.parse(localStorage.getItem(key));
+        if (validReceipt(receipt) && key === publicationPrefix + receipt.id) track(receipt);
+      }
+    } catch {}
+  }
+  function queueStatus(attempt, delay = 8000) {
+    clearTimeout(attempt.timer); attempt.timer = null;
+    if (!authenticated || document.hidden || attempt.checking || attempt.sending ||
+        pending.get(attempt.id) !== attempt || !attempt.remaining) return;
+    attempt.timer = setTimeout(() => { attempt.timer = null; void checkAttempt(attempt); }, delay);
   }
   function canPublish() {
-    return authenticated && !busy && preview?.publicationEnabled === true && !preview.mediaError && $('vehicleVideo').readyState >= 1 && ['ready', 'preparing'].includes(phase);
+    return authenticated && !busy && preview?.publicationEnabled === true && !preview.mediaError &&
+      !pending.get(preview.id)?.checking && !pending.get(preview.id)?.sending && $('vehicleVideo').readyState >= 1 && ['ready', 'preparing'].includes(phase);
   }
   function canPrepareAnother() {
-    return authenticated && !busy && preview?.publicationEnabled === true && phase === 'published';
+    return authenticated && !busy && preview && ['published', 'canceled', 'failed', 'authorization_required'].includes(phase);
   }
   function updateControls() {
     $('chooseVehicle').disabled = !authenticated || busy;
@@ -124,7 +183,9 @@
     $('resumeVideo').disabled = !authenticated || busy;
     $('resumeVideo').textContent = preparation?.failed ? 'Tentar criar novamente' : 'Acompanhar vídeo';
     $('publishStory').disabled = !canPublish() && !canPrepareAnother();
-    $('publishStory').textContent = phase === 'published' ? 'Preparar novo Story desta viatura' : phase === 'preparing' ? 'Continuar este envio' : 'Publicar Story agora';
+    const labels = { published: 'Preparar novo Story desta viatura', preparing: 'Continuar este envio',
+      busy: 'A aguardar o resultado', review_required: 'A aguardar o resultado' };
+    $('publishStory').textContent = labels[phase] || (canPrepareAnother() ? 'Rever vídeo desta viatura' : 'Publicar Story agora');
     $('sendStory').disabled = !confirmation || !canPublish();
     for (const button of host.querySelectorAll('.ms-row, #pendingStories button')) button.disabled = busy;
   }
@@ -133,8 +194,14 @@
     for (const attempt of pending.values()) {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'ms-action'; button.disabled = busy;
-      button.textContent = 'Consultar envio · ' + attempt.id;
-      button.addEventListener('click', () => checkAttempt(attempt));
+      const needsReview = attempt.status === 'preparing' && !attempt.autoEligible && (!sameAttempt(preview, attempt) || phase !== 'preparing');
+      button.textContent = (needsReview ? 'Rever vídeo para continuar · ' : 'Consultar envio · ') + attempt.id;
+      button.addEventListener('click', () => {
+        if (busy || attempt.sending || attempt.checking) return;
+        attempt.remaining = maxStatusChecks;
+        if (needsReview) void openStock(attempt.id);
+        else void checkAttempt(attempt);
+      });
       container.appendChild(button);
     }
     notifyPending?.(pending.size);
@@ -173,7 +240,7 @@
   async function request(action, body) {
     const version = sessionVersion;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), action === 'publish' ? 285000 : 35000);
+    const timeout = setTimeout(() => controller.abort(), action === 'publish' ? 20000 : 35000);
     try {
       const response = await fetch('/api/stock?integration=instagram-sync&action=stories-manual-' + action, {
         method: body ? 'POST' : 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
@@ -263,14 +330,18 @@
       const vehicle = data.vehicle?.id === item.id ? data.vehicle : item;
       preview = { ...receiptOf(data), publicationEnabled: data.publicationEnabled, title: title(vehicle), previous: lastPublished(data.previousPublishedAt) };
       const remotePhase = data.publicationStatus || 'ready';
+      preview.initialPhase = remotePhase;
       if (validReceipt(data.pendingPublication) && data.pendingPublication.id === item.id) {
-        pending.set(item.id, receiptOf(data.pendingPublication)); storePending(); renderPending();
-      } else if (['preparing', 'busy', 'review_required'].includes(remotePhase) &&
-          (!pending.has(item.id) || pending.get(item.id).fingerprint === preview.fingerprint)) {
-        pending.set(item.id, receiptOf(preview)); storePending(); renderPending();
+        track(data.pendingPublication);
+      } else if (['preparing', 'busy', 'review_required'].includes(remotePhase)) {
+        track(preview);
       }
       const previous = pending.get(item.id);
       phase = previous ? 'review_required' : remotePhase;
+      if (previous) {
+        previous.remaining = maxStatusChecks;
+        renderPending(); queueStatus(previous, 0);
+      }
       $('vehicleName').textContent = collapsiblePreview ? 'Vídeo preparado · ' + title(vehicle) : title(vehicle);
       $('vehicleDetails').textContent = [price(vehicle), item.id, '30 segundos', '1080 × 1920',
         preview.previous && 'Último Story manual em ' + preview.previous].filter(Boolean).join(' · ');
@@ -279,7 +350,7 @@
       $('vehiclePreview').hidden = false;
       if (collapsiblePreview) $('vehiclePreview').open = true;
       const readyMessage = collapsiblePreview ? '' : 'Carrega em reproduzir para rever o vídeo e confirmar o preço.';
-      message(previous ? 'Há um envio anterior desta viatura. Consulta o resultado antes de publicar.' :
+      message(previous ? 'A verificar o resultado do envio anterior desta viatura…' :
         data.publicationEnabled ? readyMessage : outcomes.disabled);
       $('vehicleVideo').focus();
   }
@@ -353,48 +424,115 @@
     stopPreparationPolling(); preparationMessage();
     await readPreparation();
   }
-  function showOutcome(result, attempt) {
+  function showOutcome(result, attempt, fromStatus = false) {
+    if (pending.get(attempt.id) !== attempt) return;
     const status = result.id === attempt.id && Object.hasOwn(outcomes, result.status) ? result.status : 'review_required';
+    if (fromStatus && status === 'ready') {
+      // A read can reach another instance before the original POST has recorded its claim.
+      attempt.firstMissingAt ??= Date.now();
+      attempt.missingReads = (attempt.missingReads || 0) + 1;
+      if (attempt.missingReads < 3 || Date.now() - attempt.firstMissingAt < 16000) {
+        attempt.status = 'awaiting_receipt'; attempt.autoEligible = false;
+        if (sameAttempt(preview, attempt)) phase = 'review_required';
+        if (preview?.id === attempt.id || !preview && !busy)
+          message(attempt.id + ' · O servidor ainda não registou o pedido. A verificar novamente…');
+        updateControls(); queueStatus(attempt); return;
+      }
+    } else { attempt.firstMissingAt = undefined; attempt.missingReads = 0; }
     const unresolved = ['busy', 'preparing', 'review_required'].includes(status);
-    if (!unresolved) pending.delete(attempt.id);
-    storePending(); renderPending();
-    const differentVideo = preview?.id === attempt.id && preview.fingerprint !== attempt.fingerprint;
-    if (preview?.id === attempt.id) {
-      phase = differentVideo ? 'review_required' : status;
-      if (phase === 'preparing') preview.reviewToken = attempt.reviewToken;
+    attempt.status = status;
+    // The server sets this flag only for an existing, confirmed container that
+    // is still processing and whose original consent permits continuation.
+    attempt.autoEligible = status === 'preparing' && result.canContinueAutomatically === true &&
+      attempt.automaticResumes < maxAutomaticResumes;
+    if (!unresolved) finishAttempt(attempt);
+    const selected = preview?.id === attempt.id;
+    const same = sameAttempt(preview, attempt);
+    if (selected) {
+      // A saved receipt may be for yesterday's already completed generation.
+      // Only its own generation can update the review token or mark this preview published.
+      phase = attempt.autoEligible ? 'busy' : status;
+      if (!same) {
+        phase = unresolved ? 'review_required' : preview.initialPhase;
+        if (!unresolved && phase !== 'ready') phase = 'canceled';
+      }
+      if (same && phase === 'preparing' && validReceipt(result.pendingPublication) && sameAttempt(attempt, result.pendingPublication)) {
+        preview.reviewToken = result.pendingPublication.reviewToken;
+      }
     }
-    const detail = differentVideo ? 'Envio do vídeo anterior. ' + (reasons[result.reason] || outcomes[status]) +
-      ' Seleciona novamente a viatura para rever o vídeo atual.' : reasons[result.reason] || outcomes[status];
-    message(attempt.id + ' · ' + detail, status === 'published' ? 'success' : unresolved || ['failed', 'canceled', 'authorization_required'].includes(status) ? 'error' : '');
+    renderPending(); updateControls();
+    if (selected || (!preview && !busy && !preparation)) {
+      const date = status === 'published' && lastPublished(result.publishedAt);
+      const detail = attempt.autoEligible ? 'O Instagram ainda está a processar o vídeo. A publicação continua automaticamente.' : reasons[result.reason] || outcomes[status];
+      message(attempt.id + ' · ' + (selected && !same ? 'Envio anterior. ' : '') + detail + (date ? ' ' + date : ''),
+        status === 'published' ? 'success' : ['failed', 'canceled', 'authorization_required', 'review_required'].includes(status) ? 'error' : '');
+    }
+    if (attempt.autoEligible) {
+      if (fromStatus && !document.hidden) {
+        attempt.automaticResumes++;
+        void sendPublication(attempt, receiptOf(attempt), true);
+      } else queueStatus(attempt);
+    } else if (status === 'busy' || status === 'review_required') {
+      queueStatus(attempt, status === 'busy' ? 8000 : 15000);
+    }
   }
   async function checkAttempt(attempt) {
-    if (!authenticated || busy) return;
-    const version = sessionVersion; busy = true; updateControls(); message('A consultar o envio de ' + attempt.id + '…');
-    try {
-      const result = await request('status', receiptOf(attempt));
-      if (sessionVersion === version) showOutcome(result, attempt);
-    } catch (error) {
-      if (sessionVersion === version) message(error.message + ' Podes voltar a consultar o envio.', 'error');
-    } finally { if (sessionVersion === version) { busy = false; updateControls(); } }
-  }
-  async function publish(attempt) {
-    if (!canPublish() || attempt !== preview) return;
+    if (!authenticated || attempt.checking || attempt.sending || pending.get(attempt.id) !== attempt) return;
     const version = sessionVersion;
-    busy = true; phase = 'busy'; updateControls();
-    const receipt = receiptOf(attempt);
-    pending.set(receipt.id, receipt); storePending(); renderPending();
-    message('A enviar o Story para @autovalorpt. Aguarda a confirmação…');
+    clearTimeout(attempt.timer); attempt.timer = null; attempt.checking = true; attempt.remaining--; updateControls();
+    let result;
     try {
-      const result = await request('publish', { ...receipt, confirmed: true });
-      if (version === sessionVersion) showOutcome(result, receipt);
+      result = await request('status', receiptOf(attempt));
+    } catch (error) {
+      if (version !== sessionVersion || pending.get(attempt.id) !== attempt) return;
+      if (error.code === 'story_manual_review_invalid') {
+        showOutcome({ id: attempt.id, status: 'failed', reason: error.code }, attempt);
+        return;
+      }
+      if (preview?.id === attempt.id || !preview && !busy) message(error.message + ' Podes voltar a consultar o envio.', 'error');
+    } finally { attempt.checking = false; if (version === sessionVersion) updateControls(); }
+    if (version !== sessionVersion || pending.get(attempt.id) !== attempt) return;
+    if (result) showOutcome(result, attempt, true);
+    else queueStatus(attempt, 15000);
+  }
+  async function publish(reviewed) {
+    if (!canPublish() || reviewed !== preview) return;
+    const receipt = receiptOf(reviewed), attempt = track(receipt);
+    if (!sameAttempt(receipt, attempt)) {
+      phase = 'review_required'; renderPending(); updateControls(); queueStatus(attempt, 0);
+      message('Foi encontrado um envio mais recente. A consultar o resultado…'); return;
+    }
+    busy = true; phase = 'busy';
+    attempt.remaining = maxStatusChecks; attempt.automaticResumes = 0;
+    message('A pedir a publicação do Story em @autovalorpt. Podes voltar a esta página para ver o resultado.');
+    await sendPublication(attempt, receipt, false);
+  }
+  async function sendPublication(attempt, receipt, automatic) {
+    const version = sessionVersion;
+    clearTimeout(attempt.timer); attempt.timer = null; attempt.sending = true;
+    updateControls(); renderPending();
+    let result;
+    try {
+      result = await request('publish', { ...receipt, confirmed: true, background: true, ...(automatic && { automatic: true }) });
     } catch (error) {
       if (version !== sessionVersion) return;
-      if (['story_manual_review_expired', 'story_manual_review_invalid'].includes(error.code)) {
-        pending.delete(receipt.id); storePending(); renderPending(); phase = 'failed'; message(error.message, 'error');
-      } else {
-        phase = 'review_required'; message('O envio ficou sem confirmação. Consulta o envio para saber o resultado.', 'error');
+      if (automatic && error.code === 'story_manual_review_expired') {
+        attempt.automaticResumes = maxAutomaticResumes;
+      } else if (['story_manual_review_expired', 'story_manual_review_invalid'].includes(error.code)) {
+        result = { id: receipt.id, status: 'failed', reason: error.code };
+      } else if (sameAttempt(preview, receipt)) {
+        phase = 'review_required'; message('O pedido ficou sem resposta. A verificar se o Instagram recebeu o envio…');
       }
-    } finally { if (version === sessionVersion) { busy = false; updateControls(); } }
+    } finally {
+      attempt.sending = false;
+      if (version === sessionVersion) {
+        if (!automatic) busy = false;
+        updateControls();
+      }
+    }
+    if (version !== sessionVersion) return;
+    if (result) showOutcome(result, attempt);
+    else queueStatus(attempt, 0);
   }
   $('chooseVehicle').addEventListener('click', () => {
     if ($('vehiclePicker').hidden) void openStock();
@@ -403,6 +541,10 @@
   $('vehicleSearch').addEventListener('input', renderStock);
   $('resumeVideo').addEventListener('click', () => { void resumePreparation(); });
   document.addEventListener('visibilitychange', () => {
+    for (const attempt of pending.values()) {
+      clearTimeout(attempt.timer); attempt.timer = null;
+      if (!document.hidden && (attempt.status !== 'preparing' || attempt.autoEligible)) { attempt.remaining = maxStatusChecks; queueStatus(attempt, 0); }
+    }
     if (document.hidden) { clearTimeout(preparationTimer); preparationTimer = null; }
     else if (authenticated && preparation?.jobId && !preparation.failed && busy && !preparationTimer) {
       queuePreparationPoll(sessionVersion, preparationVersion);
@@ -447,12 +589,12 @@
       authenticated = active; onExpiry = expire; sessionVersion++; busy = false;
       stopPreparationPolling(); preparation = null;
       notifyPending = onPendingChange;
+      for (const attempt of pending.values()) clearTimeout(attempt.timer);
       clearPreview(); setPicker(false); message(''); stock = []; stockAt = 0; pending = new Map();
       $('vehicleResults').replaceChildren(); $('vehicleSearch').value = '';
+      restoreAttempts(active);
       if (active) {
         try {
-          const saved = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
-          if (Array.isArray(saved)) for (const item of saved.filter(validReceipt)) pending.set(item.id, receiptOf(item));
           const video = JSON.parse(localStorage.getItem(preparationKey) || 'null');
           if (video && validId.test(video.id) && typeof video.title === 'string' && video.title.length <= 300 &&
               (!video.jobId || validJob.test(video.jobId)) && Number.isSafeInteger(video.startedAt) &&
@@ -461,7 +603,8 @@
               ...(video.jobId ? { jobId: video.jobId } : {}), ...(video.failed === true ? { failed: true } : {}) };
           } else localStorage.removeItem(preparationKey);
         } catch { /* Ignore unavailable storage. */ }
-      } else { storePending(); savePreparation(); }
+      } else savePreparation();
+      for (const attempt of pending.values()) queueStatus(attempt, 0);
       renderPending(); updateControls();
       if (active && preparation) {
         message('Tens um pedido de vídeo de ' + preparation.title + '. Podes acompanhar o resultado.');
