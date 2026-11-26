@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const count = n => Number.isSafeInteger(n) && n >= 0 && n <= 5000 ? String(n) : '—';
-  let busy = false; let configuration = null; let report = null;
+  let busy = false; let privateAccess = false; let configuration = null; let report = null;
   const labels = {
     catalog_matches: ['Stock, preços e imagens confirmados na Meta', 'Foram conferidas as viaturas, a origem, os preços, as imagens, a disponibilidade e os estados de aprovação e publicação. A apresentação no WhatsApp continua por confirmar.'],
     catalog_matches_legacy: ['Stock e preços confirmados na Meta', 'Os dados do catálogo foram confirmados numa verificação anterior. As imagens precisam de uma nova verificação. A apresentação no WhatsApp continua por confirmar.'],
@@ -20,7 +20,8 @@
     upload_unknown: ['Resultado por confirmar', 'O pedido anterior ficou sem confirmação. A rotina consulta o estado antes de tentar novamente.'],
     mismatch: ['Diferença encontrada', 'O ficheiro e o catálogo ainda não coincidem. A sincronização depende da validação da origem e do acesso ao catálogo.'],
     catalog_mismatch: ['Diferença encontrada', 'O ficheiro e o catálogo ainda não coincidem.'],
-    source_invalid: ['Origem por confirmar', 'A leitura de uma das contas Standvirtual ou do ficheiro não passou na validação. O último catálogo válido foi preservado.'],
+    stock_refresh_required: ['Stock e galerias por atualizar', 'O stock guardado precisa de ser atualizado com as viaturas e fotografias atuais do Standvirtual. Selecione Sincronizar agora para recolher e validar as galerias completas antes de conferir o catálogo.'],
+    source_invalid: ['Origem por confirmar', 'Não foi possível ler e validar todas as viaturas ou fotografias do Standvirtual. O último catálogo válido foi preservado. Confirme que os anúncios estão acessíveis e volte a tentar a sincronização.'],
     source_blocked: ['Origem por confirmar', 'A leitura de uma das contas Standvirtual ou do ficheiro não passou na validação. Nenhuma importação foi iniciada.'],
     source_changed: ['Origem alterada durante a leitura', 'O inventário ou o ficheiro mudou durante a verificação. A próxima execução volta a comparar os dados antes de importar.'],
     products_rejected: ['Artigos rejeitados pela Meta', 'A Meta assinalou artigos rejeitados. Repetir a importação não confirma a sua aprovação.'],
@@ -41,10 +42,29 @@
     review_required: 'A aguardar revisão',
     failed: 'Fotos de origem indisponíveis',
   };
+  function authorizationRequired(r = {}) {
+    const auth = r.authorization;
+    // Before the source audit succeeds, the server serializes the untested
+    // Meta authorization as this neutral value. It is not a denied permission.
+    const notChecked = auth == null || auth.ready === false && auth.source === 'none' &&
+      auth.catalogManagementGranted == null && !auth.reason;
+    return r.permissionRequired === true || /authorization|permission|credential/.test(
+      [r.status, r.reason, r.error].filter(value => typeof value === 'string').join(' ')) ||
+      Boolean(auth && auth.ready !== true && !notChecked);
+  }
+  function canSync() {
+    // The authenticated action refreshes a stale snapshot before the server
+    // evaluates Meta access and every import safeguard. Do not require a
+    // successful prior audit to request that recovery.
+    return privateAccess && configuration?.enabled === true && !authorizationRequired(report || {});
+  }
+  function needsStockRefresh(r) {
+    return r.status === 'source_invalid' && ['stock_source_changed', 'stock_not_synchronized'].includes(r.reason);
+  }
   function setBusy(value) {
     busy = value;
-    $('refreshButton').disabled = value; $('checkButton').disabled = value;
-    $('syncButton').disabled = value || configuration?.enabled !== true || report?.authorization?.ready !== true;
+    $('refreshButton').disabled = value; $('checkButton').disabled = value || !privateAccess;
+    $('syncButton').disabled = value || !canSync();
   }
   async function api(action, method = 'GET') {
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 280000);
@@ -54,9 +74,11 @@
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data) {
+        if (response.status === 401 || response.status === 403) privateAccess = false;
         const error = new Error(response.status === 401 ? 'A consulta privada não está disponível nesta sessão. A rotina agendada continua no servidor.' : 'Não foi possível confirmar o resultado. Atualize o estado antes de repetir uma sincronização.');
         error.status = response.status; throw error;
       }
+      privateAccess = true;
       return data;
     } finally { clearTimeout(timer); }
   }
@@ -85,15 +107,18 @@
     $('sourceCount').textContent = count(r.sourceCount);
     $('feedCount').textContent = count(r.expectedCount);
     $('metaCount').textContent = count(r.actualCount);
-    const known = r.status === 'catalog_matches'
+    const known = needsStockRefresh(r) ? labels.stock_refresh_required : r.status === 'catalog_matches'
       ? r.catalogConfirmed === true ? labels[r.imagesVerified === true ? 'catalog_matches' : 'catalog_matches_legacy']
         : labels[r.imagesVerified === true ? 'review_required' : 'images_not_checked']
       : labels[r.status];
-    const authRequired = r.authorization?.ready === false || /authorization|permission|credential/.test(r.reason || r.error || r.status || '');
+    const authRequired = authorizationRequired(r);
     const selected = known || (authRequired ? labels.authorization_required : ['Por confirmar', 'Aguardamos uma verificação concluída do catálogo.']);
     $('stateBadge').textContent = selected[0];
     $('stateBadge').className = `badge ${r.catalogConfirmed === true ? 'good' : 'pending'}`;
     $('stateText').textContent = selected[1];
+    if (needsStockRefresh(r) && !canSync()) $('stateText').textContent = configuration?.enabled !== true
+      ? 'O stock guardado precisa de ser atualizado com as viaturas e galerias atuais do Standvirtual. A sincronização está desativada na configuração do servidor.'
+      : 'O stock guardado precisa de ser atualizado com as viaturas e galerias atuais do Standvirtual. É necessário restabelecer a autorização do catálogo antes de pedir a sincronização.';
     const checked = r.checkedAt || r.at || data.lastCheckedAt;
     const date = new Date(checked || '');
     $('checkedAt').textContent = Number.isFinite(date.getTime()) ? `Última verificação: ${new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Lisbon' }).format(date)}.` : 'Ainda sem verificação registada.';
@@ -110,7 +135,8 @@
     setBusy(busy);
   }
   async function perform(action) {
-    if (busy) return; setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…'
+    if (busy || action !== 'status' && !privateAccess || action === 'run' && !canSync()) return;
+    setBusy(true); $('actionStatus').textContent = action === 'status' ? 'A consultar o estado…'
       : action === 'run' ? 'A atualizar as duas contas, verificar as fotos originais e sincronizar o catálogo…'
         : 'A comparar as viaturas, os preços e as imagens do catálogo…';
     try {
@@ -127,7 +153,7 @@
     } catch (error) {
       const text = error.name === 'AbortError' ? 'O pedido ficou sem resposta e pode continuar em processamento. Atualize o estado antes de repetir.' : error.message;
       $('actionStatus').textContent = text;
-      if (error.status === 401) { $('dashboard').hidden = true; $('accessView').hidden = false; $('accessStatus').textContent = text; }
+      if (error.status === 401 || error.status === 403) { $('dashboard').hidden = true; $('accessView').hidden = false; $('accessStatus').textContent = text; }
     } finally { setBusy(false); }
   }
   $('refreshButton').addEventListener('click', () => perform('status'));
