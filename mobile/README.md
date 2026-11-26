@@ -15,7 +15,7 @@ Este diretório contém a preparação da aplicação e os ficheiros necessário
 | Exportação dos bundles iOS e Android | Concluída para ambas as plataformas em 26/11/2026. Produz JavaScript/Hermes e recursos, não uma IPA ou um APK. |
 | Geração dos projetos nativos | Expo Prebuild para iOS e Android concluído; não foram instalados Pods nem compilados binários. |
 | Teste da interface em iPhone e iPad | Pendente de evidência em dispositivos ou simuladores nativos. |
-| Conta Expo e projeto EAS | `eas whoami` devolveu `Not logged in`. Associação à conta correta pendente. |
+| Conta Expo e projeto EAS | Projeto `autovalorpt-catalogo` criado na conta `cvasconcelos1969s-team`; ID `99e2814b-559a-42fe-899b-19b167c1c05c`. GitHub ligado ao repositório atual e pasta `/mobile`. A sessão CLI local continua sem login. |
 | Conta Apple, equipa e identificadores | Registo criado em 26/11/2026: Carlos Vasconcelos, equipa `QBU2Z3YJ88`, bundle `pt.autovalor.catalogo`, Apple ID `6839660385`. |
 | IPA assinada e TestFlight | Não confirmados por este documento. Registar a build e a ligação reais quando existirem. |
 | App Store e screenshots | Ficha 1.0.0 criada em português de Portugal, descrição/apoio/notas guardados e lançamento manual selecionado. Faltam screenshots nativas e submissão. |
@@ -73,7 +73,9 @@ O identificador **`pt.autovalor.catalogo`** foi registado em Apple Developer na 
 
 [Ficha da AutoValorPT no App Store Connect](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight).
 
-A associação Expo e o EAS Project ID continuam pendentes de autenticação. Antes de criar um projeto novo na Expo, verificar se já existe um projeto AutoValorPT adequado nessa conta. Não substituir os identificadores Apple já registados por valores de outra app.
+O projeto Expo **`autovalorpt-catalogo`** foi criado na conta **`cvasconcelos1969s-team`**, com EAS Project ID **`99e2814b-559a-42fe-899b-19b167c1c05c`**, ligado a este repositório e à pasta **`/mobile`**. O `app.json` já contém a associação real.
+
+[Projeto Expo AutoValorPT](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo). Não criar um segundo projeto nem substituir os identificadores Apple por valores de outra app. A sessão do navegador foi suficiente para este registo; não foi extraída para autenticar o terminal.
 
 Com a conta Expo selecionada, o EAS CLI instalado pelo projeto pode ser usado para consultar a sessão e associar o projeto:
 

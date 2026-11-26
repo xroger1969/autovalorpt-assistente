@@ -53,6 +53,12 @@
       ],
       "expo-image",
       "expo-font"
-    ]
+    ],
+    "owner": "cvasconcelos1969s-team",
+    "extra": {
+      "eas": {
+        "projectId": "99e2814b-559a-42fe-899b-19b167c1c05c"
+      }
+    }
   }
 }
