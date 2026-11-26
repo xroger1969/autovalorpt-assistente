@@ -141,14 +141,16 @@ test('manual start requires authenticated same-origin POST and cron callbacks re
 });
 
 test('iPhone shortcut has its own installable manifest and no embedded access credential', () => {
-  const html = readFileSync(new URL('../stock-rapido.html', import.meta.url), 'utf8');
-  const script = readFileSync(new URL('../stock-rapido.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../rotina.html', import.meta.url), 'utf8');
+  const script = readFileSync(new URL('../rotina.js', import.meta.url), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('../manifest-stock-rapido.json', import.meta.url), 'utf8'));
   const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   assert.equal(manifest.start_url, '/stock-rapido.html');
   assert.equal(manifest.display, 'standalone');
-  assert.match(html, /Atualizar agora/);
+  assert.match(html, /Atualizar tudo/);
   assert.match(html, /apple-mobile-web-app-capable/);
+  assert.match(html, /rel="manifest" href="\/manifest-stock-rapido\.json"/);
+  assert.match(html, /src="\/rotina\.js\?/);
   assert.match(script, /manual-start/);
   assert.match(script, /method: 'POST'/);
   assert.match(script, /credentials: 'same-origin'/);

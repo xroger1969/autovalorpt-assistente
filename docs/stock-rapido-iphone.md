@@ -4,6 +4,8 @@ URL de acesso: https://autovalorpt-assistente.vercel.app/stock-rapido.html
 
 Este endereço abre o painel completo por reescrita interna para `rotina.html`: a barra de endereço permanece em `stock-rapido.html`. O atalho já instalado continua válido. A política de conteúdo permite as imagens originais de stock e os vídeos da própria aplicação, mantendo o acesso privado.
 
+A rota não tem um ficheiro físico `stock-rapido.html`: a [Vercel dá prioridade aos ficheiros existentes antes de aplicar as reescritas](https://vercel.com/docs/project-configuration/vercel-json#rewrites). O antigo `stock-rapido.js` mantém-se disponível para clientes que ainda tenham o atalho anterior em cache.
+
 No iPhone, abrir no **Safari** (não num navegador interno de outra aplicação), autenticar com o código privado do painel e selecionar **Partilhar → Adicionar ao ecrã principal**. O atalho instalado abre sempre o mesmo endereço, sem tokens no URL. A sessão de administração é HttpOnly, Secure, SameSite=Strict e expira ao fim de 7 dias.
 
 ## Stock sem espera pela folha
