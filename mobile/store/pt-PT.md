@@ -1,17 +1,19 @@
 # AutoValorPT — ficha da loja em português de Portugal
 
-**Estado: rascunho editorial para a primeira versão nativa.** Estes textos só devem ser submetidos depois de confirmar que a build final apresenta as funcionalidades descritas. Este documento não comprova a existência de uma IPA, uma aprovação TestFlight ou uma publicação na App Store.
+**Estado: ficha Apple criada, versão 1.0.0 em preparação para envio.** O Apple ID é `6839660385`; a equipa é `QBU2Z3YJ88` e o SKU é `AUTOVALORPT-IOS-001`. A descrição, palavras-chave, URLs de apoio/marketing, notas de revisão, ausência de login e lançamento manual foram guardados no App Store Connect em 26/11/2026. Os textos abaixo são a base editorial; rever a versão guardada antes da submissão.
+
+[App Store Connect — AutoValorPT](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight). Estes textos só devem ser submetidos depois de confirmar que a build final apresenta as funcionalidades descritas. Este documento não comprova a existência de uma IPA, uma aprovação TestFlight ou uma publicação na App Store.
 
 ## Identificação
 
 | Campo | Valor proposto |
 | --- | --- |
 | Nome | AutoValorPT |
-| Subtítulo | O seu próximo carro |
+| Subtítulo | O teu próximo automóvel — preenchido; confirmação de gravação pendente |
 | Idioma | Português de Portugal (`pt-PT`) |
-| Categoria principal | Compras — a confirmar na ficha da loja |
+| Categoria principal | Compras — selecionada; confirmação de gravação pendente |
 | Dispositivos iOS | iPhone e iPad; a configuração atual tem `supportsTablet: true` |
-| Bundle ID | `pt.autovalor.catalogo` — validar na conta Apple antes do registo/primeiro upload |
+| Bundle ID | `pt.autovalor.catalogo` — registado na equipa Apple `QBU2Z3YJ88` |
 | Número de contacto | +351 965 637 736 |
 | Telefone em formato internacional sem símbolos | `351965637736` |
 | Política de privacidade | https://autovalorpt-assistente.vercel.app/app/privacidade.html |

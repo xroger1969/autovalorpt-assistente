@@ -16,9 +16,9 @@ Este diretório contém a preparação da aplicação e os ficheiros necessário
 | Geração dos projetos nativos | Expo Prebuild para iOS e Android concluído; não foram instalados Pods nem compilados binários. |
 | Teste da interface em iPhone e iPad | Pendente de evidência em dispositivos ou simuladores nativos. |
 | Conta Expo e projeto EAS | `eas whoami` devolveu `Not logged in`. Associação à conta correta pendente. |
-| Conta Apple, equipa e identificadores | Pendentes de confirmação. |
+| Conta Apple, equipa e identificadores | Registo criado em 26/11/2026: Carlos Vasconcelos, equipa `QBU2Z3YJ88`, bundle `pt.autovalor.catalogo`, Apple ID `6839660385`. |
 | IPA assinada e TestFlight | Não confirmados por este documento. Registar a build e a ligação reais quando existirem. |
-| App Store e screenshots | Preparação editorial em `store/pt-PT.md`; submissão e publicação não confirmadas. |
+| App Store e screenshots | Ficha 1.0.0 criada em português de Portugal, descrição/apoio/notas guardados e lançamento manual selecionado. Faltam screenshots nativas e submissão. |
 
 Guardar o resultado e a data das verificações efetuadas no relatório da entrega ou no pull request. Não substituir a validação num dispositivo nativo por capturas de uma versão web.
 
@@ -69,9 +69,11 @@ npm start
 
 ## Associar o projeto às contas corretas
 
-A configuração propõe o identificador **`pt.autovalor.catalogo`** para iOS e Android. É uma proposta: confirmar a disponibilidade e a titularidade na conta correta **antes de o registar ou enviar a primeira build**. A Apple não permite alterar o bundle ID de um registo depois do primeiro upload.
+O identificador **`pt.autovalor.catalogo`** foi registado em Apple Developer na equipa **`QBU2Z3YJ88`** (Carlos Vasconcelos), em 26/11/2026. A ficha App Store Connect tem Apple ID **`6839660385`**, SKU **`AUTOVALORPT-IOS-001`**, idioma `pt-PT` e versão **1.0.0**. `app.json` e `eas.json` usam estes identificadores reais. A configuração Android usa o mesmo identificador de pacote; ainda não existe uma publicação Google Play verificada.
 
-Não há um Apple App ID, Team ID, conta Expo ou EAS Project ID fictício a preencher por aproximação. Usar os identificadores devolvidos pelas contas reais. Antes de criar um projeto novo, verificar se já existe um projeto AutoValorPT adequado nessa conta.
+[Ficha da AutoValorPT no App Store Connect](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight).
+
+A associação Expo e o EAS Project ID continuam pendentes de autenticação. Antes de criar um projeto novo na Expo, verificar se já existe um projeto AutoValorPT adequado nessa conta. Não substituir os identificadores Apple já registados por valores de outra app.
 
 Com a conta Expo selecionada, o EAS CLI instalado pelo projeto pode ser usado para consultar a sessão e associar o projeto:
 

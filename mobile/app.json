@@ -19,7 +19,8 @@
         "CFBundleLocalizations": [
           "pt-PT"
         ]
-      }
+      },
+      "appleTeamId": "QBU2Z3YJ88"
     },
     "android": {
       "package": "pt.autovalor.catalogo",
