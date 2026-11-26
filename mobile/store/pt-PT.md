@@ -1,14 +1,14 @@
 # AutoValorPT — ficha da loja em português de Portugal
 
-**Estado em 26/11/2026: build iOS 1.0.0 (3) assinada, submetida e processada pela Apple, com estado «Pronta para enviar» e associada ao grupo interno TestFlight; ficha pública 1.0.0 em rascunho, ainda não enviada para revisão, com lançamento manual.** O Apple ID é `6839660385`; a equipa é `QBU2Z3YJ88` e o SKU é `AUTOVALORPT-IOS-001`. A descrição completa com ferramentas, as notas de revisão atualizadas e os contactos de revisão foram guardados no App Store Connect. O copyright **2026 Carlos Vasconcelos** foi confirmado como guardado. Palavras-chave, URLs de apoio/marketing, ausência de login, subtítulo **O teu próximo automóvel**, categoria **Compras** e URL de privacidade também estão guardados.
+**Estado em 26/11/2026: build iOS 1.0.0 (3) assinada, processada pela Apple, disponibilizada no TestFlight e selecionada para App Review; ficha pública 1.0.0 ainda não enviada para revisão, com lançamento manual.** O Apple ID é `6839660385`; a equipa é `QBU2Z3YJ88` e o SKU é `AUTOVALORPT-IOS-001`. A descrição completa com ferramentas, as notas de revisão atualizadas e os contactos de revisão foram guardados no App Store Connect. O copyright **2026 Carlos Vasconcelos** foi confirmado como guardado. Palavras-chave, URLs de apoio/marketing, ausência de login, subtítulo **O teu próximo automóvel**, categoria **Compras** e URL de privacidade também estão guardados. A classificação etária **4+**, os direitos de conteúdo e a declaração **App Privacy** foram concluídos e guardados; os detalhes de privacidade foram publicados na Apple.
 
-**As ferramentas e os contactos descritos abaixo estão incluídos na build 3, já compilada e enviada.** A descrição completa deste documento foi guardada na Apple. As notas para App Review constituem uma referência editorial de conteúdo equivalente às notas guardadas, não uma transcrição literal. A validação visual e funcional em dispositivo nativo continua pendente.
+**As ferramentas e os contactos descritos abaixo estão incluídos na build 3. O titular confirmou que testou a app instalada e aprovou esta versão em 26/11/2026, autorizando o envio definitivo à revisão Apple e deixando melhorias para versões posteriores.** Esta confirmação não constitui uma bateria de testes em todos os dispositivos. A descrição completa deste documento foi guardada na Apple. As notas para App Review constituem uma referência editorial de conteúdo equivalente às notas guardadas, não uma transcrição literal.
 
 [App Store Connect — ficha pública AutoValorPT](https://appstoreconnect.apple.com/apps/6839660385/distribution/ios/version/inflight). A [build de produção EAS `c53a3057-d41f-4205-a683-493313ff6481`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/c53a3057-d41f-4205-a683-493313ff6481) terminou com estado **Succeeded**, versão **1.0.0 (3)**, a partir do commit `877654a24a86b4fad319683c20b12bb7881a5566`. A compilação demorou **2 min 10 s**, com **2 min 37 s** de duração total. A [submissão `9f500b1b-9dd0-4879-97f4-17f11d2b0738`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/submissions/9f500b1b-9dd0-4879-97f4-17f11d2b0738) terminou com estado **Succeeded**, enviada às **18:07 de 26/11/2026, hora de Lisboa**. A Apple concluiu o processamento e apresenta a [build 3 no TestFlight](https://appstoreconnect.apple.com/teams/f14e8d50-2439-4216-bbe0-5697b90f3551/apps/6839660385/testflight/ios/4d947a8a-378c-412c-af86-5d77a82ca94a) como **«Pronta para enviar»**, com associação ao grupo interno confirmada.
 
-O grupo interno **Team (Expo)** tem agora **2 compilações, as builds 2 e 3, e 1 tester convidado**. A [build 2](https://appstoreconnect.apple.com/teams/f14e8d50-2439-4216-bbe0-5697b90f3551/apps/6839660385/testflight/ios/f2758a0b-d878-4c20-90fa-c36be985fcf1) mantém-se no grupo como referência anterior. Apenas o titular foi adicionado; ainda não há instalação ou sessões registadas. **Beta Info global e notas foram atualizadas para Mais, simuladores e logótipo; What to Test da build 3 foi preenchido e guardado, com persistência confirmada.** As ligações das builds abrem páginas de gestão, não convites públicos.
+O grupo interno **Team (Expo)** tem **2 compilações, as builds 2 e 3, e 1 tester, o titular**. A [build 2](https://appstoreconnect.apple.com/teams/f14e8d50-2439-4216-bbe0-5697b90f3551/apps/6839660385/testflight/ios/f2758a0b-d878-4c20-90fa-c36be985fcf1) mantém-se no grupo como referência anterior. O convite foi reenviado e recebido às **18:48 de 26/11/2026, hora de Lisboa**; o titular confirmou posteriormente a instalação e o teste. As métricas de sessões da Apple não foram usadas para essa confirmação. **Beta Info global e notas foram atualizadas para Mais, simuladores e logótipo; What to Test da build 3 foi preenchido e guardado, com persistência confirmada.** As ligações das builds abrem páginas de gestão, não convites públicos.
 
-**Continuam pendentes a validação visual nativa, as screenshots de iPhone/iPad e a publicação pública na App Store.** A seleção de uma build para App Review e uma ligação pública de TestFlight ainda não estão confirmadas. A build histórica de simulador 1.0.0 (1) está documentada em `../README.md`.
+**Continuam pendentes as screenshots nativas de iPhone/iPad e o envio à revisão Apple; a app ainda não foi publicada na App Store.** A build 3 já está selecionada para App Review. Não foi criada uma ligação pública de TestFlight. A build histórica de simulador 1.0.0 (1) está documentada em `../README.md`.
 
 ## Identificação
 
@@ -29,7 +29,7 @@ O URL de privacidade foi guardado na Apple e verificado em produção com respos
 
 ## Ferramentas e contactos da build 3
 
-**Incluídas na build 1.0.0 (3), compilada, enviada, processada pela Apple e associada ao grupo interno TestFlight; teste nativo pendente.** A verificação de tipos, os 8 testes nativos e a exportação dos bundles iOS/Android foram aprovados para estas alterações. O preview Vercel do mesmo commit aprovou os 727 testes web/backend, sem falhas. O separador **Contacto** passou a **Mais**, mantendo quatro separadores: Viaturas, Favoritos, Comparar e Mais. Um atalho no catálogo abre os simuladores e a avaliação do usado. O cabeçalho e o cartão de contacto usam o mesmo logótipo PNG através de `BrandMark`.
+**Incluídas na build 1.0.0 (3), compilada, processada pela Apple, instalada e aprovada pelo titular em 26/11/2026.** A verificação de tipos, os 8 testes nativos e a exportação dos bundles iOS/Android foram aprovados para estas alterações. O preview Vercel do mesmo commit aprovou os 727 testes web/backend, sem falhas. O separador **Contacto** passou a **Mais**, mantendo quatro separadores: Viaturas, Favoritos, Comparar e Mais. Um atalho no catálogo abre os simuladores e a avaliação do usado. O cabeçalho e o cartão de contacto usam o mesmo logótipo PNG através de `BrandMark`.
 
 Os seguintes destinos foram confirmados na interface da bio de **@autovalorpt em 26/11/2026**:
 
@@ -56,7 +56,7 @@ Consulte viaturas, guarde favoritos e compare até três carros na AutoValorPT.
 
 ## Descrição completa
 
-**Descrição guardada no App Store Connect em 26/11/2026.** A ficha pública permanece em rascunho, sem envio para App Review; a build 3 está processada no TestFlight e aguarda validação nativa.
+**Descrição guardada no App Store Connect em 26/11/2026.** A ficha pública ainda não foi enviada para App Review; a build 3 foi testada e aprovada pelo titular e está selecionada para revisão, aguardando as screenshots nativas obrigatórias.
 
 Explore o catálogo AutoValorPT e organize as viaturas que quer conhecer melhor.
 
@@ -120,7 +120,7 @@ Os contactos de revisão foram preenchidos e guardados na Apple em 26/11/2026:
 | E-mail de contacto | Endereço do titular guardado no App Store Connect |
 | Telefone | +351 965 637 736 — guardado como contacto de revisão |
 | Credenciais de demonstração | Não aplicáveis à consulta pública; rever se a build final introduzir autenticação |
-| Build selecionada para revisão | Build 1.0.0 (3) processada e associada ao grupo interno TestFlight. A seleção para App Review ainda não está confirmada; a ficha pública ainda não foi enviada para revisão. |
+| Build selecionada para revisão | Build 1.0.0 (3) selecionada para App Review em 26/11/2026; a ficha pública ainda não foi enviada para revisão. |
 
 ## Screenshots pendentes
 
@@ -133,11 +133,11 @@ Capturar a aplicação nativa final num iPhone e num iPad. Não apresentar captu
 | Favoritos | Seleção de viaturas guardadas no dispositivo |
 | Comparação | Duas ou três viaturas com dados disponíveis |
 | Ficha da viatura | Informação e ações de partilha/contacto |
-| Mais | Ferramentas e contactos da build 3, depois de instalada e validada |
+| Mais | Ferramentas e contactos da build 3 |
 
 Preparar os formatos exigidos pela especificação Apple vigente. Na documentação consultada, existe uma categoria iPhone Dynamic Island de ecrã médio, com formatos como **1206 × 2622** e **1179 × 2556**. Como há suporte iPad, é também necessária a categoria de screenshots **iPad de 13 polegadas**. Confirmar os tamanhos aceites no momento do upload. As imagens não podem incluir transparência.
 
-**Estado dos screenshots:** pendentes; a interface ainda não foi executada num dispositivo ou simulador nativo. O catálogo web existente foi verificado em desktop e a 390/320 px, mas essas capturas não são screenshots nativas para a App Store.
+**Estado dos screenshots:** pendentes. O titular já testou a app instalada e aprovou a versão 3; faltam as capturas nativas exigidas para iPhone e iPad. O catálogo web existente foi verificado em desktop e a 390/320 px, mas essas capturas não são screenshots nativas para a App Store.
 
 ## Dados de conta e publicação
 
@@ -152,18 +152,19 @@ Preparar os formatos exigidos pela especificação Apple vigente. Na documentaç
 | Perfil de assinatura App Store | Perfil correto para `QBU2Z3YJ88.pt.autovalor.catalogo`, disponível e válido no Expo; correspondência confirmada com o certificado de distribuição existente. |
 | IPA assinada | Build de produção 1.0.0 (3) concluída pelo EAS, submetida e processada pela Apple, com estado «Pronta para enviar». Inclui as ferramentas e os contactos atualizados. |
 | Publicação Android | Pendente; ainda não foi executada uma build nativa Android |
-| Preço da aplicação e territórios | Pendentes de confirmação |
-| Classificação etária | Pendente das respostas sobre o conteúdo e funcionalidades reais |
+| Preço da aplicação e territórios | Gratuita (0 EUR), com Portugal como país base. Disponibilidade configurada e guardada apenas para Portugal (1 país); inclusão automática de futuros países desativada. |
+| Classificação etária | 4+ — questionário concluído e guardado na Apple em 26/11/2026 |
+| Direitos de conteúdo | Declaração de conteúdo de terceiros e respetivos direitos guardada na Apple em 26/11/2026; catálogo baseado nos inventários autorizados AutoValorPT/Samucar e fotografias originais dos anúncios |
 | Copyright | 2026 Carlos Vasconcelos — confirmado como guardado na Apple |
-| Declaração App Privacy | Pendente de revisão do binário, dependências e serviços efetivamente usados |
-| Exportação de encriptação | Pendente de confirmação para a build final |
-| Estado de comerciante DSA / contactos UE | Pendente de confirmação e verificação na conta Apple |
-| Grupo interno TestFlight | Team (Expo), com 2 compilações, as builds 2 e 3, processadas e associadas; 1 tester, apenas o titular, no estado Convidado em 26/11/2026. Sem instalação ou sessões registadas. |
+| Declaração App Privacy | Publicada na Apple em 26/11/2026: localização aproximada e outros dados de diagnóstico; finalidade funcionalidade da app; associados ao utilizador; não utilizados para tracking |
+| Exportação de encriptação | Build 3 configurada com `ITSAppUsesNonExemptEncryption: false`; o código utiliza HTTPS/TLS do sistema, sem encriptação própria |
+| Estado de comerciante DSA / contactos UE | A interface Apple identifica a app como disponibilizada por um comerciante. O estado de verificação do comerciante ao nível da conta não foi confirmado de forma independente. |
+| Grupo interno TestFlight | Team (Expo), com 2 compilações, as builds 2 e 3, processadas e associadas; 1 tester, apenas o titular, que confirmou a instalação e o teste em 26/11/2026 |
 | Informação beta | Beta Info global e notas atualizadas para Mais, simuladores e logótipo. What to Test da build 3 preenchido e guardado, com persistência confirmada. |
 | Ligação pública TestFlight | Ainda não confirmada; requer grupo e revisão aplicáveis para testadores externos. |
 | Publicação pública na App Store | Pendente; ficha 1.0.0 em rascunho, ainda não enviada para revisão, com lançamento manual. |
 
-Não declarar “dados não recolhidos” apenas com base na existência de favoritos locais. As respostas de privacidade devem também considerar o comportamento dos SDKs, do backend e dos serviços que recebem pedidos da app.
+A declaração App Privacy considera o endereço IP, a cidade/país aproximados derivados desse IP e os dados técnicos tratados pelo alojamento para funcionamento e segurança. A app nativa não pede acesso ao GPS. Pesquisa, favoritos e comparação permanecem locais; não existe SDK de publicidade, analytics ou tracking no cliente. As categorias declaradas não se referem aos formulários que o utilizador pode optar por abrir e preencher no navegador externo.
 
 ## Fontes oficiais
 
@@ -175,5 +176,8 @@ Consultadas em 26 de novembro de 2026; confirmar os requisitos antes da submiss�
 - [Especificações de screenshots](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
 - [Política de privacidade e respostas App Privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy)
 - [Definições de recolha e detalhes de privacidade](https://developer.apple.com/app-store/app-privacy-details/)
+- [Classificação etária Apple](https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/)
+- [Privacidade da Vercel, incluindo visitantes das APIs de clientes](https://vercel.com/legal/privacy-notice)
+- [Dados técnicos e retenção de logs Vercel](https://vercel.com/docs/logs/runtime)
 - [Requisitos de comerciante na União Europeia](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements)
 - [Distribuição TestFlight com Expo](https://docs.expo.dev/submit/testflight/)
