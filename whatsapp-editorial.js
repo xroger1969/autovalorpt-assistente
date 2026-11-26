@@ -26,6 +26,7 @@
           (source.searchParams.get('extra') === '1') !== (row.extra === true) ||
           !['v1','v2','v3','v4'].includes(source.searchParams.get('v'))) return false;
       const expected = new URL(imageUrl({ date: row.date, extra: row.extra, version: source.searchParams.get('v') }, index), location.origin);
+      if (!source.searchParams.has('theme')) expected.searchParams.delete('theme');
       if (source.searchParams.get('variant') === 'wa1') expected.searchParams.set('variant', 'wa1');
       source.searchParams.sort(); expected.searchParams.sort();
       return source.href === expected.href;

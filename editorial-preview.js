@@ -27,6 +27,7 @@
         }
       } catch { /* Use the date, slide and version from the preview. */ }
     }
+    if (['v3','v4'].includes(version) && post.date >= (extra ? '2026-11-27' : '2026-11-26')) query.set('theme', 'navy1');
     if (['v1', 'v2', 'v3', 'v4'].includes(version)) query.set('v', version);
     else if (extra) query.set('v', 'v1');
     if (extra) query.set('extra', '1');
