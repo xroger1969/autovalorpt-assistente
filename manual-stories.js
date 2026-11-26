@@ -23,6 +23,7 @@
       </div>
     </${previewTag}>
     <p id="vehicleStatus" class="ms-message" role="status" aria-live="polite"></p>
+    <button id="resumeVideo" class="ms-action" type="button" hidden>Acompanhar vídeo</button>
     <div id="pendingStories" class="ms-actions"></div>
     <dialog id="confirmStory" class="ms-dialog" aria-labelledby="confirmStoryTitle" aria-describedby="confirmStoryText">
       <h2 id="confirmStoryTitle">Publicar o Story no Instagram?</h2><p id="confirmStoryText"></p>
@@ -33,6 +34,8 @@
   const validId = /^ID[A-Za-z0-9]{5,30}$/;
   const validHash = /^[a-f0-9]{64}$/;
   const storageKey = 'autovalorpt.manual-stories.pending.v1';
+  const preparationKey = 'autovalorpt.manual-video.preparation.v1';
+  const validJob = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
   const prices = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const sourceError = 'Não foi possível confirmar os dois inventários no Standvirtual. Volta a consultar o stock.';
   const reasons = {
@@ -44,6 +47,15 @@
     story_manual_quota_reserved: 'O limite disponível no Instagram está reservado às publicações programadas. Tenta mais tarde.',
     story_preview_required: 'Seleciona novamente a viatura para preparar a pré-visualização.',
     video_render_failed: 'A criação do MP4 falhou. Seleciona a viatura para tentar de novo.',
+    video_render_timeout: 'A criação do vídeo demorou demasiado. Podes tentar novamente.',
+    video_budget_exhausted: 'A criação do vídeo demorou demasiado. Podes tentar novamente.',
+    manual_video_job_interrupted: 'A criação do vídeo foi interrompida. Podes tentar novamente.',
+    manual_video_job_expired: 'A ligação a este vídeo expirou. Prepara-o novamente para obter a versão atual.',
+    manual_video_job_not_found: 'Este pedido de vídeo já não está disponível. Podes tentar novamente.',
+    manual_video_job_invalid: 'Não foi possível recuperar este pedido. Prepara o vídeo novamente.',
+    manual_video_job_failed: 'Não foi possível concluir o vídeo. Podes tentar novamente.',
+    manual_video_job_unavailable: 'Não foi possível consultar o vídeo neste momento.',
+    private_access_required: 'A sessão terminou. Entra novamente com o teu código privado.',
     production_required: 'Abre o painel de produção para preparar ou publicar um vídeo.',
     story_manual_review_expired: 'A confirmação expirou. Seleciona novamente a viatura para rever o vídeo atual.',
     story_manual_review_invalid: 'A confirmação não corresponde a este vídeo. Seleciona novamente a viatura.',
@@ -70,6 +82,7 @@
   let authenticated = false, onExpiry, notifyPending, sessionVersion = 0, busy = false;
   let stock = [], stockAt = 0, preview = null, phase = '', confirmation = null;
   let pending = new Map();
+  let preparation = null, preparationTimer = null, preparationRequest = null, preparationVersion = 0;
 
   function message(text = '', tone = '') {
     $('vehicleStatus').textContent = text;
@@ -106,6 +119,10 @@
   }
   function updateControls() {
     $('chooseVehicle').disabled = !authenticated || busy;
+    $('chooseVehicle').textContent = preparation && busy ? 'A criar o vídeo…' : 'Criar vídeo de outra viatura';
+    $('resumeVideo').hidden = !authenticated || !preparation || busy;
+    $('resumeVideo').disabled = !authenticated || busy;
+    $('resumeVideo').textContent = preparation?.failed ? 'Tentar criar novamente' : 'Acompanhar vídeo';
     $('publishStory').disabled = !canPublish() && !canPrepareAnother();
     $('publishStory').textContent = phase === 'published' ? 'Preparar novo Story desta viatura' : phase === 'preparing' ? 'Continuar este envio' : 'Publicar Story agora';
     $('sendStory').disabled = !confirmation || !canPublish();
@@ -156,7 +173,7 @@
   async function request(action, body) {
     const version = sessionVersion;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), action === 'preview' ? 305000 : action === 'publish' ? 285000 : 90000);
+    const timeout = setTimeout(() => controller.abort(), action === 'publish' ? 285000 : 35000);
     try {
       const response = await fetch('/api/stock?integration=instagram-sync&action=stories-manual-' + action, {
         method: body ? 'POST' : 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store',
@@ -168,7 +185,10 @@
       if (!data || !response.ok) throw Object.assign(new Error(reasons[data?.error] || reasons[data?.reason] || 'O servidor não conseguiu concluir o pedido.'), { code: data?.error });
       return data;
     } catch (error) {
-      if (error.name === 'AbortError') throw new Error('O pedido ficou sem resposta e pode continuar em processamento.');
+      if (error.name === 'AbortError') throw Object.assign(new Error('O servidor demorou a responder.'), { code: 'connection_interrupted' });
+      if (error.name === 'TypeError' || /^(Load failed|Failed to fetch|NetworkError.*)$/i.test(error.message || '')) {
+        throw Object.assign(new Error('A ligação ao servidor foi interrompida.'), { code: 'connection_interrupted' });
+      }
       throw error;
     } finally { clearTimeout(timeout); }
   }
@@ -223,14 +243,19 @@
     } finally { if (version === sessionVersion) { busy = false; updateControls(); } }
     if (selected) await prepare(selected);
   }
-  async function prepare(item) {
-    if (!authenticated || busy) return;
-    const version = sessionVersion;
-    clearPreview(); setPicker(false); busy = true; updateControls();
-    message('A preparar o vídeo de ' + title(item) + '… Pode demorar alguns minutos.');
+  function savePreparation() {
     try {
-      const data = await request('preview', { id: item.id });
-      if (version !== sessionVersion) return;
+      if (preparation) localStorage.setItem(preparationKey, JSON.stringify(preparation));
+      else localStorage.removeItem(preparationKey);
+    } catch { /* Keep the current request available when browser storage is disabled. */ }
+  }
+  function stopPreparationPolling() {
+    clearTimeout(preparationTimer); preparationTimer = null; preparationRequest = null; preparationVersion++;
+  }
+  function preparationMessage() {
+    message('A criar o vídeo de ' + preparation.title + '… Podes sair desta página e voltar para acompanhar o resultado.');
+  }
+  function applyPreview(item, data) {
       const media = videoPath(data.videoUrl, item.id, data.fingerprint);
       const download = videoPath(data.downloadUrl, item.id, data.fingerprint);
       if (data.ok !== true || data.status !== 'preview_ready' || data.id !== item.id || !validReceipt(data) || !media || !download)
@@ -257,9 +282,76 @@
       message(previous ? 'Há um envio anterior desta viatura. Consulta o resultado antes de publicar.' :
         data.publicationEnabled ? readyMessage : outcomes.disabled);
       $('vehicleVideo').focus();
+  }
+  function preparationError(error) {
+    clearTimeout(preparationTimer); preparationTimer = null;
+    busy = false;
+    if (preparation && ['manual_video_job_invalid', 'manual_video_job_not_found', 'manual_video_job_expired'].includes(error.code)) {
+      preparation.failed = true; savePreparation();
+    }
+    message(error.message + (preparation && !preparation.failed ? ' Usa «Acompanhar vídeo» para consultar o mesmo pedido.' : ''), 'error');
+    updateControls();
+  }
+  function queuePreparationPoll(version, run) {
+    clearTimeout(preparationTimer); preparationTimer = null;
+    // Poll only while a requested video is active and the page is visible.
+    if (!document.hidden && authenticated && preparation && !preparationRequest && version === sessionVersion && run === preparationVersion) {
+      preparationTimer = setTimeout(() => { preparationTimer = null; void readPreparation(version, run); }, 8000);
+    }
+  }
+  async function readPreparation(version = sessionVersion, run = preparationVersion) {
+    if (!authenticated || !preparation?.jobId || preparationRequest || version !== sessionVersion || run !== preparationVersion) return;
+    const job = preparation;
+    const reading = {}; preparationRequest = reading; let pollAgain = false;
+    busy = true; updateControls();
+    try {
+      const data = await request('progress', { id: job.id, jobId: job.jobId });
+      if (version !== sessionVersion || run !== preparationVersion || preparation !== job) return;
+      if (data.id !== job.id || data.jobId !== job.jobId) throw new Error('Não foi possível confirmar o resultado deste vídeo.');
+      if (data.ok === true && data.status === 'preparing') {
+        preparationMessage(); pollAgain = true; return;
+      }
+      if (data.status === 'failed') {
+        job.failed = true; savePreparation();
+        throw new Error(reasons[data.reason] || reasons.manual_video_job_failed);
+      }
+      applyPreview(job, data);
+      clearTimeout(preparationTimer); preparationTimer = null;
+      preparation = null; savePreparation(); busy = false; updateControls();
     } catch (error) {
-      if (version === sessionVersion) { stockAt = 0; message(error.message, 'error'); }
-    } finally { if (version === sessionVersion) { busy = false; updateControls(); } }
+      if (version === sessionVersion && run === preparationVersion && preparation === job) preparationError(error);
+    } finally {
+      if (preparationRequest === reading) preparationRequest = null;
+      if (pollAgain) queuePreparationPoll(version, run);
+    }
+  }
+  async function startPreparation(item) {
+    const version = sessionVersion;
+    stopPreparationPolling(); const run = preparationVersion;
+    clearPreview(); setPicker(false);
+    preparation = { id: item.id, title: title(item), startedAt: Date.now() };
+    savePreparation(); busy = true; updateControls(); preparationMessage();
+    try {
+      const data = await request('create', { id: item.id });
+      if (version !== sessionVersion || run !== preparationVersion) return;
+      if (data.ok !== true || data.status !== 'preparing' || data.id !== item.id || !validJob.test(data.jobId)) {
+        throw new Error(reasons[data.reason] || 'Não foi possível confirmar o pedido de criação do vídeo.');
+      }
+      preparation.jobId = data.jobId; savePreparation();
+      await readPreparation(version, run);
+    } catch (error) {
+      if (version === sessionVersion && run === preparationVersion) preparationError(error);
+    }
+  }
+  async function prepare(item) {
+    if (!authenticated || busy) return;
+    await startPreparation(item);
+  }
+  async function resumePreparation() {
+    if (!authenticated || busy || !preparation) return;
+    if (preparation.failed || !preparation.jobId) return startPreparation(preparation);
+    stopPreparationPolling(); preparationMessage();
+    await readPreparation();
   }
   function showOutcome(result, attempt) {
     const status = result.id === attempt.id && Object.hasOwn(outcomes, result.status) ? result.status : 'review_required';
@@ -309,6 +401,13 @@
     else { setPicker(false); message(''); }
   });
   $('vehicleSearch').addEventListener('input', renderStock);
+  $('resumeVideo').addEventListener('click', () => { void resumePreparation(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { clearTimeout(preparationTimer); preparationTimer = null; }
+    else if (authenticated && preparation?.jobId && !preparation.failed && busy && !preparationTimer) {
+      queuePreparationPoll(sessionVersion, preparationVersion);
+    }
+  });
   if (collapsiblePreview) $('vehiclePreview').addEventListener('toggle', () => {
     const player = $('vehicleVideo');
     if (!$('vehiclePreview').open && !player.paused) player.pause();
@@ -346,6 +445,7 @@
     },
     setSession(active, expire, onPendingChange = notifyPending) {
       authenticated = active; onExpiry = expire; sessionVersion++; busy = false;
+      stopPreparationPolling(); preparation = null;
       notifyPending = onPendingChange;
       clearPreview(); setPicker(false); message(''); stock = []; stockAt = 0; pending = new Map();
       $('vehicleResults').replaceChildren(); $('vehicleSearch').value = '';
@@ -353,9 +453,20 @@
         try {
           const saved = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
           if (Array.isArray(saved)) for (const item of saved.filter(validReceipt)) pending.set(item.id, receiptOf(item));
+          const video = JSON.parse(localStorage.getItem(preparationKey) || 'null');
+          if (video && validId.test(video.id) && typeof video.title === 'string' && video.title.length <= 300 &&
+              (!video.jobId || validJob.test(video.jobId)) && Number.isSafeInteger(video.startedAt) &&
+              video.startedAt <= Date.now() + 60000 && Date.now() - video.startedAt < 24 * 3600000) {
+            preparation = { id: video.id, title: video.title, startedAt: video.startedAt,
+              ...(video.jobId ? { jobId: video.jobId } : {}), ...(video.failed === true ? { failed: true } : {}) };
+          } else localStorage.removeItem(preparationKey);
         } catch { /* Ignore unavailable storage. */ }
-      } else storePending();
+      } else { storePending(); savePreparation(); }
       renderPending(); updateControls();
+      if (active && preparation) {
+        message('Tens um pedido de vídeo de ' + preparation.title + '. Podes acompanhar o resultado.');
+        if (preparation.jobId && !preparation.failed) void resumePreparation();
+      }
       if (!active) notifyPending = undefined;
     }
   };
