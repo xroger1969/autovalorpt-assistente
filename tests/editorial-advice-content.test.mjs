@@ -83,7 +83,7 @@ test('the revised cost comparison identifies the dated fuel reference and the ex
   assert.match(revised.body, /DGEG em Portugal continental, 26\/11\/2026/);
   assert.ok(revised.body.length <= 175 && revised.takeaway.length <= 105);
   for (const [index, label, cost] of [
-    [0, 'Casa a 0,22 €/kWh', 13 * 0.22],
+    [0, 'Casa a 0,14 €/kWh', 13 * 0.14],
     [1, 'Gasolina 95 a 1,851 €/L', 6 * 1.851],
     [2, 'Gasóleo a 2,035 €/L', 6 * 2.035],
   ]) {
