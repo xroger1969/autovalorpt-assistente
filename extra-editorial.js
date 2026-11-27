@@ -7,15 +7,17 @@
   const correctionImage = '/assets/editorial/custo-100km-20261126-r2.jpg';
   const modes = new Set(['publish', 'resume', 'verify']);
   let authenticated = false, onExpiry, refresh, status = null;
-  let revision = 0, controller = null, review = null, phase = 'closed';
+  let revision = 0, controller = null, review = null, phase = 'closed', selectedEdition = null;
 
   function message(value) { $('extraStatus').textContent = value; }
-  function available() {
+  function available(edition) {
     const c = status?.configuration, auth = status?.authorization;
-    return authenticated && status?.extra?.available === true && c?.production !== false && c?.tokenConfigured === true &&
+    const allowed = edition === correctionId ? status?.extra?.correctionId === correctionId : status?.extra?.available === true;
+    return authenticated && allowed && c?.production !== false && c?.tokenConfigured === true &&
       c.accountConfigured === true && c.validApi === true && c.imagesConfigured === true && !auth?.expired && !auth?.lastError;
   }
-  function mode() {
+  function mode(edition) {
+    if (edition === correctionId) return status?.extra?.correctionMode || 'publish';
     return status?.extra?.verifyOnly ? 'verify' : status?.extra?.resumable ? 'resume' : 'publish';
   }
   function controls() {
@@ -26,16 +28,16 @@
     const correctionButton = $('publishCostRevision');
     if (correctionButton) {
       correctionButton.hidden = status?.extra?.correctionId !== correctionId;
-      correctionButton.disabled = !available() || open;
+      correctionButton.disabled = !available(correctionId) || open;
     }
     $('extraReview').hidden = !open; $('extraTitle').hidden = open;
     $('extraBack').disabled = phase === 'sending';
-    $('extraConfirm').disabled = !available() || phase !== 'review' || !review?.loaded;
+    $('extraConfirm').disabled = !available(selectedEdition) || phase !== 'review' || !review?.loaded;
     $('extraConfirm').textContent = review?.mode === 'verify' ? 'Verificar envio anterior' : review?.mode === 'resume' ? 'Continuar publicação no Instagram' : 'Publicar no Instagram';
   }
   function clear() {
     revision++;
-    controller?.abort(); controller = null; phase = 'closed'; review = null;
+    controller?.abort(); controller = null; phase = 'closed'; review = null; selectedEdition = null;
     renderCopyCredit($('extraCopyOrigin'), null); renderSimulatorLinks(null, 'extra');
     $('extraArtwork').replaceChildren(); $('extraReviewTitle').textContent = ''; $('extraReviewCaption').textContent = '';
     controls();
@@ -48,10 +50,10 @@
     return available() ? 'Revê a imagem e a legenda antes de confirmar.' : 'A publicação extra está indisponível.';
   }
   function setStatus(data) {
-    const oldMode = mode(), oldId = status?.extra?.nextPost?.id;
+    const oldMode = mode(selectedEdition), oldId = status?.extra?.nextPost?.id;
     status = data;
     if (phase !== 'sending' && phase !== 'closed' &&
-        (!available() || oldMode !== mode() || oldId && oldId !== status?.extra?.nextPost?.id)) {
+        (!available(selectedEdition) || oldMode !== mode(selectedEdition) || !selectedEdition && oldId && oldId !== status?.extra?.nextPost?.id)) {
       clear();
       message('O estado da publicação mudou. Volta a consultar o conteúdo extra.');
     } else if (phase === 'closed') message(defaultMessage());
@@ -121,7 +123,8 @@
     $('extraReviewTitle').focus?.();
   }
   async function open(edition) {
-    if (!available() || phase !== 'closed') return;
+    if (!available(edition) || phase !== 'closed') return;
+    selectedEdition = edition || null;
     const token = ++revision; phase = 'loading'; controls(); message('A preparar a imagem e a legenda…');
     try {
       const data = await request(edition ? 'extra-preview&edition=' + encodeURIComponent(edition) : 'extra-preview');
@@ -147,7 +150,7 @@
     }
   }
   async function confirm() {
-    if (phase !== 'review' || !available() || !review?.loaded) return;
+    if (phase !== 'review' || !available(selectedEdition) || !review?.loaded) return;
     const token = revision, { id, fingerprint } = review;
     phase = 'sending'; controls(); message(review.mode === 'verify' ? 'A verificar o envio anterior…' : 'A aguardar a confirmação do Instagram…');
     let outcome;

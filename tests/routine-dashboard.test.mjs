@@ -442,7 +442,7 @@ test('the panel opens the exact corrected edition and accepts only its approved 
   const post = { id, date: '2026-11-27', version: 'custo-100km-r2', extra: true, fingerprint: '2'.repeat(64),
     format: 'IMAGE', slideCount: 1, title: 'Quanto custa percorrer 100 km?', caption: '13 kWh × 0,14 € = 1,82 €.', images: [asset] };
   const state = { configuration: { production: true, tokenConfigured: true, accountConfigured: true, validApi: true, imagesConfigured: true },
-    extra: { available: true, correctionId: id } };
+    extra: { available: false, usedToday: true, correctionId: id, correctionMode: 'publish' } };
   const app = await dashboard({ editorial: state, fetch: (endpoint, init) => {
     if (!endpoint.includes('action=extra-preview')) return null;
     assert.equal(new URL(endpoint, 'https://example.invalid').searchParams.get('edition'), id);
@@ -451,6 +451,8 @@ test('the panel opens the exact corrected edition and accepts only its approved 
   } });
   const button = app.get('publishCostRevision');
   assert.equal(button.hidden, false);
+  assert.equal(button.disabled, false);
+  assert.equal(app.get('extraButton').disabled, true);
   await button.handlers.click();
   assert.equal(app.get('extraArtwork').children[0].src, asset);
   assert.equal(app.get('extraConfirm').disabled, true);

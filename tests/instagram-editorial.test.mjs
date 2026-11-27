@@ -380,17 +380,26 @@ test('the corrected cost card is explicitly selected, reviewed and sent once wit
   await assert.rejects(f.publisher.run({ extra: true, session, confirmation: { id: post.id, fingerprint: regular.fingerprint } }),
     { code: 'editorial_review_stale' });
   assert.equal(f.calls.length, 0);
-  const confirmed = { extra: true, session, confirmation: { id: post.id, fingerprint: post.fingerprint } };
+  const regularConfirmation = { extra: true, session, confirmation: { id: regular.id, fingerprint: regular.fingerprint } };
+  assert.equal((await f.publisher.run(regularConfirmation)).status, 'published');
+  const afterRegular = (await f.publisher.status()).extra;
+  assert.equal(afterRegular.available, false);
+  assert.equal(afterRegular.usedToday, true);
+  assert.equal(afterRegular.correctionId, correctionId);
+  const selected = (await f.publisher.extraPreview(session, correctionId)).post;
+  const confirmed = { extra: true, session, confirmation: { id: selected.id, fingerprint: selected.fingerprint } };
   assert.equal((await f.publisher.run(confirmed)).status, 'published');
-  const create = f.calls.find(call => call.method === 'POST' && call.url.endsWith('/media'));
+  const create = f.calls.filter(call => call.method === 'POST' && call.url.endsWith('/media')).at(-1);
   const form = new URLSearchParams(create.body);
   assert.equal(form.get('image_url'), post.images[0]);
   assert.equal(form.get('caption'), post.caption);
-  assert.equal((await f.publisher.status()).history[0].id, post.id);
+  const done = await f.publisher.status();
+  assert.deepEqual(new Set(done.history.map(item => item.id)), new Set([regular.id, post.id]));
+  assert.equal(done.extra.correctionId, undefined);
   await assert.rejects(f.publisher.run(confirmed), { code: 'editorial_review_stale' });
   f.setTime('2026-11-28T10:00:00Z');
   await assert.rejects(f.publisher.extraPreview(session, correctionId), { code: 'editorial_review_stale' });
-  assert.equal(f.posts().length, 1);
+  assert.equal(f.posts().length, 2);
 });
 
 async function reviewExtra(publisher) {
