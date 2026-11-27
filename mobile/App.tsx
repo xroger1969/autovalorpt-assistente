@@ -22,6 +22,10 @@ import { VehicleGallery } from './src/VehicleGallery';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const ORIGIN = 'https://autovalorpt-assistente.vercel.app';
+const APP_BUILD = Platform.OS === 'ios'
+  ? Constants.platform?.ios?.buildNumber
+  : Constants.platform?.android?.versionCode;
+const APP_VERSION = `${Constants.expoConfig?.version ?? '1.0.0'}${APP_BUILD != null ? ` (${APP_BUILD})` : ''}`;
 type Tab = 'stock' | 'favorites' | 'compare' | 'contact';
 const TABS: { id: Tab; label: string; icon: IconName; selectedIcon: IconName }[] = [
   { id: 'stock', label: 'Viaturas', icon: 'car-outline', selectedIcon: 'car' },
@@ -238,7 +242,7 @@ function CatalogueApp() {
           <Text style={s.infoTitle}>Stock atualizado</Text><Text style={s.infoCopy}>A app consulta o stock ao abrir e enquanto a utilizas. Última atualização do stock: {dateLabel(catalogue.snapshot?.updatedAt)}.</Text></View></View>
         <Button title="Privacidade" icon="lock-closed-outline" variant="secondary" onPress={() => void openExternal(`${ORIGIN}/app/privacidade.html`)} />
         <Button title="Ajuda e suporte" icon="help-circle-outline" variant="secondary" onPress={() => void openExternal(`${ORIGIN}/app/apoio.html`)} />
-        <Text style={s.listFooter}>AutoValorPT · Versão {Constants.expoConfig?.version ?? '1.0.0'}{`\n`}Preços e disponibilidade sujeitos a confirmação.</Text>
+        <Text style={s.listFooter}>AutoValorPT · Versão {APP_VERSION}{`\n`}Preços e disponibilidade sujeitos a confirmação.</Text>
       </ScrollView>}
     </SafeAreaView>
     {toast && <View pointerEvents="none" accessibilityLiveRegion="polite" style={[s.toast, { bottom: Math.max(insets.bottom, 12) + 70 }]}><Text style={s.toastText}>{toast}</Text></View>}

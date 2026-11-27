@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { CATALOGUE_ENDPOINT, isSnapshotStale, normalizeInventory, type Snapshot } from './catalogue';
+import { CATALOGUE_ENDPOINT, isSnapshotStale, normalizeInventory, reconcileCatalogueSnapshot, type Snapshot } from './catalogue';
 import { readCachedCatalogue, saveCachedCatalogue } from './storage';
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -67,7 +67,7 @@ export function useCatalogue(): CatalogueState {
         if (!mounted.current || requestSequence !== sequence.current) return;
         const checkedAt = new Date().toISOString();
         const previous = snapshotRef.current;
-        const stable = previous?.revision === next.revision && previous.updatedAt === next.updatedAt ? previous : next;
+        const stable = reconcileCatalogueSnapshot(previous, next);
         snapshotRef.current = stable;
         if (stable !== previous) setSnapshot(stable);
         setLastChecked(checkedAt);
