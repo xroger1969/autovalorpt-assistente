@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cleanVehicleIds, filterVehicles, formatMileage, formatPrice, fuelCategory,
-  isSnapshotStale, MAX_COMPARISON_VEHICLES, MAX_VEHICLE_IMAGES, normalizeInventory, STOCK_STALE_AFTER_MS,
+  isSnapshotStale, MAX_COMPARISON_VEHICLES, MAX_VEHICLE_IMAGES, normalizeInventory, reconcileCatalogueSnapshot, STOCK_STALE_AFTER_MS,
   toggleComparisonIds, vehicleShareMessage, vehicleShareUrl, whatsappUrl,
   type Vehicle,
 } from '../src/catalogue.ts';
@@ -72,6 +72,48 @@ test('legacy saved catalogues without a gallery remain usable with the original 
   const snapshot = normalizeInventory({ ...base, items: [legacy] });
   assert.deepEqual(snapshot.items[0].images, [vehicle.image]);
   assert.equal(snapshot.items[0].image, vehicle.image);
+});
+
+test('the first refresh restores a legacy cached gallery even when its server revision and date are current', () => {
+  const { images: _gallery, ...legacy } = vehicle;
+  const cached = normalizeInventory({ ...payload(), items: [legacy] });
+  const images = [vehicle.image, 'https://ireland.apollo.olxcdn.com/v1/files/interior/image'];
+  const received = normalizeInventory(payload([{ ...vehicle, images }]));
+  assert.equal(cached.revision, received.revision);
+  assert.equal(cached.updatedAt, received.updatedAt);
+  const displayed = reconcileCatalogueSnapshot(cached, received);
+  assert.equal(displayed, received);
+  assert.deepEqual(displayed.items[0].images, images);
+  assert.deepEqual(cached.items[0].images, [vehicle.image], 'refresh does not mutate the old cached copy');
+});
+
+test('an unchanged validated catalogue keeps its instance while new metadata is adopted', () => {
+  const images = [vehicle.image, 'https://ireland.apollo.olxcdn.com/v1/files/interior/image'];
+  const input = payload([{ ...vehicle, images }]);
+  const previous = normalizeInventory(input);
+  const received = normalizeInventory(input);
+  assert.notEqual(previous.items[0].images, received.items[0].images);
+  assert.equal(reconcileCatalogueSnapshot(previous, received), previous);
+  assert.equal(reconcileCatalogueSnapshot(null, received), received);
+  for (const next of [
+    normalizeInventory({ ...input, revision: 'b'.repeat(64) }),
+    normalizeInventory({ ...input, updatedAt: '2026-11-27T08:00:00.000Z' }),
+  ]) assert.equal(reconcileCatalogueSnapshot(previous, next), next);
+});
+
+test('photo replacement, reordering and removal are reflected even with unchanged server metadata', () => {
+  const side = 'https://ireland.apollo.olxcdn.com/v1/files/side/image';
+  const interior = 'https://ireland.apollo.olxcdn.com/v1/files/interior/image';
+  const replacement = 'https://ireland.apollo.olxcdn.com/v1/files/new-interior/image';
+  const previous = normalizeInventory(payload([{ ...vehicle, images: [vehicle.image, side, interior] }]));
+  for (const images of [
+    [vehicle.image, side, replacement], [vehicle.image, interior, side], [vehicle.image, side],
+  ]) {
+    const received = normalizeInventory(payload([{ ...vehicle, images }]));
+    const displayed = reconcileCatalogueSnapshot(previous, received);
+    assert.equal(displayed, received);
+    assert.deepEqual(displayed.items[0].images, images);
+  }
 });
 
 test('rejects unsafe or inconsistent galleries without hiding invalid entries', () => {

@@ -6,6 +6,14 @@ O projeto usa Expo e TypeScript. As versões concretas das dependências estão 
 
 ## Estado da entrega
 
+### Correção da galeria em 27/11/2026
+
+O endpoint público foi verificado com **10 viaturas e 221 fotografias originais** (snapshot `2026-11-27T08:00:39.973Z`). A build 3 abaixo continua anterior à galeria. A próxima build inclui também a correção da migração da cópia local: mesmo que a revisão e a data do servidor coincidam com as guardadas pela app antiga, a primeira resposta válida repõe a galeria completa. O rodapé passa a identificar também o número nativo da compilação, para distinguir builds da mesma versão 1.0.0.
+
+Compilação e distribuição desta correção: **pendentes**; os registos de builds abaixo referem-se à entrega anterior.
+
+### Entrega anterior — build 3
+
 Em **26/11/2026**, a build iOS de produção **1.0.0 (3)** foi compilada, submetida e processada com sucesso pela Apple. A build 3 está **«Pronta para enviar»** no TestFlight e associada ao grupo interno **Team (Expo)**. O grupo tem **2 compilações, as builds 2 e 3, e 1 tester convidado**; apenas o titular foi adicionado. Ainda não há instalação ou sessões registadas, validação visual nativa ou publicação pública na App Store.
 
 A build 3 inclui as ferramentas da bio, a secção Mais, o atalho no catálogo e o logótipo comum descritos em **«Ferramentas e contactos da build 3»**. A descrição e as notas da ficha pública foram atualizadas e guardadas na Apple com estas funcionalidades.

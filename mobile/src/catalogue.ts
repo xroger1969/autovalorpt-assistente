@@ -139,6 +139,23 @@ export function normalizeInventory(payload: unknown): Snapshot {
   return { updatedAt, revision: payload.revision, items };
 }
 
+/** Reuse an unchanged validated snapshot without keeping an older client's partial cache. */
+export function reconcileCatalogueSnapshot(previous: Snapshot | null, next: Snapshot): Snapshot {
+  if (!previous || previous.revision !== next.revision || previous.updatedAt !== next.updatedAt ||
+      previous.items.length !== next.items.length) return next;
+  // A pre-gallery app can have saved the current server revision while dropping
+  // images. Compare the represented content as well as the server metadata so
+  // the first successful refresh after an app upgrade restores every photograph.
+  const unchanged = previous.items.every((item, index) => {
+    const current = next.items[index];
+    return item.id === current.id && item.title === current.title && item.brand === current.brand &&
+      item.year === current.year && item.mileage === current.mileage && item.price === current.price &&
+      item.fuel === current.fuel && item.image === current.image && item.url === current.url &&
+      item.images.length === current.images.length && item.images.every((image, photoIndex) => image === current.images[photoIndex]);
+  });
+  return unchanged ? previous : next;
+}
+
 export function fuelCategory(fuel: unknown): FuelCategory {
   const label = fold(fuel);
   const hasElectric = /\b(?:eletric[oa]s?|electric(?:[oa]s?)?|bev)\b/.test(label);
