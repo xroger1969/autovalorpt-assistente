@@ -268,3 +268,73 @@ test('rejections, mismatches and review failures retain their own status even wi
     assert.equal(text.element('stateBadge').className, 'badge pending');
   }
 });
+
+const verifiedDataReport = { ...publishedGalleryReport, catalogDataConfirmed: true };
+
+test('confirmed data has a green badge while WhatsApp approval and Meta publication remain separate', async () => {
+  const text = await dashboard({ ...verifiedDataReport, status: 'products_rejected',
+    pendingReviewIds: ['ID8Q19HN', 'ID8Q1lYB'], rejectedIds: ['ID8Q1n7N'],
+    notPublishedIds: ['ID8Q1n7N', 'ID8Q1lYB', 'ID8Q1hSv'] });
+  assert.equal(text('stateBadge'), 'Dados conferidos na Meta');
+  assert.equal(text.element('stateBadge').className, 'badge good');
+  assert.match(text('stateText'), /fotografias e as galerias coincidem/);
+  assert.equal(text.element('publicationStatus').hidden, false);
+  assert.match(text('publicationStatus'), /Aprovação para WhatsApp por confirmar em 2 artigos/);
+  assert.match(text('publicationStatus'), /Aprovação para WhatsApp rejeitada em 1 artigo\./);
+  assert.match(text('publicationStatus'), /Publicação no catálogo Meta por confirmar em 3 artigos/);
+  assert.match(text('publicationStatus'), /apresentação dos artigos no WhatsApp continua por verificar/);
+  assert.equal(text('photoStatus'), 'Fotografias principais e galerias das viaturas verificadas na Meta.');
+  assert.equal(text.element('photoCounts').children.length, 0);
+});
+
+test('full confirmation by Meta keeps customer visibility on WhatsApp distinct', async () => {
+  const text = await dashboard({ ...verifiedDataReport, status: 'catalog_matches', catalogConfirmed: true,
+    pendingReviewIds: [] });
+  assert.equal(text('stateBadge'), 'Dados conferidos na Meta');
+  assert.match(text('publicationStatus'), /aprovação para WhatsApp e a publicação no catálogo foram confirmadas pela Meta/);
+  assert.match(text('publicationStatus'), /apresentação dos artigos no WhatsApp continua por verificar/);
+});
+
+test('an active import stops a previous green badge and hides historical approval information', async () => {
+  let active = null;
+  const report = { ...verifiedDataReport, status: 'catalog_matches', catalogConfirmed: true, pendingReviewIds: [] };
+  const text = await dashboard(null, { respond: () => ({ lastResult: report, active }) });
+  assert.equal(text.element('stateBadge').className, 'badge good');
+  assert.equal(text.element('publicationStatus').hidden, false);
+  active = { phase: 'submitted' };
+  await text.click('refreshButton');
+  assert.equal(text('stateBadge'), 'Importação em curso');
+  assert.equal(text.element('stateBadge').className, 'badge pending');
+  assert.match(text('stateText'), /contagens são do último diagnóstico/);
+  assert.equal(text.element('publicationStatus').hidden, true);
+  assert.equal(text('publicationStatus'), '');
+  active = { phase: 'unknown' };
+  await text.click('refreshButton');
+  assert.equal(text('stateBadge'), 'Resultado por confirmar');
+  assert.equal(text.element('stateBadge').className, 'badge pending');
+});
+
+test('equal counts preserve image and authorization warnings and do not provide data confirmation', async () => {
+  for (const [variant, expected] of [
+    [{ status: 'images_pending', imagesVerified: false }, 'Imagens por confirmar na Meta'],
+    [{ status: 'catalog_mismatch' }, 'Diferença encontrada'],
+    [{ status: 'authorization_required', authorization: { ready: false } }, 'Autorização do catálogo pendente'],
+    [{ status: 'catalog_matches', authorization: { ready: false }, catalogConfirmed: true }, 'Autorização do catálogo pendente'],
+    [{ status: 'products_pending', catalogDataConfirmed: 'true' }, 'Fotografias sincronizadas · WhatsApp por confirmar'],
+  ]) {
+    const text = await dashboard({ ...verifiedDataReport, sourceCount: 10, expectedCount: 10, actualCount: 10, ...variant });
+    assert.equal(text('stateBadge'), expected);
+    assert.equal(text.element('stateBadge').className, 'badge pending');
+    assert.equal(text.element('publicationStatus').hidden, true);
+    for (const id of ['sourceCount', 'feedCount', 'metaCount']) assert.equal(text(id), '10');
+  }
+});
+
+test('new authorization failure remains explicit while an import is unresolved', async () => {
+  const text = await dashboard(null, { respond: () => ({ active: { phase: 'unknown' },
+    lastResult: { status: 'authorization_required', authorization: { ready: false } } }) });
+  assert.equal(text('stateBadge'), 'Autorização do catálogo pendente');
+  assert.equal(text.element('stateBadge').className, 'badge pending');
+  assert.match(text('stateText'), /importação por confirmar/);
+  assert.equal(text.element('publicationStatus').hidden, true);
+});

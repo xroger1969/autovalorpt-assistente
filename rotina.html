@@ -86,6 +86,7 @@
     details[open] > summary::after { transform: rotate(225deg); }
     summary strong { font-size: 17px; }
     summary .badge { justify-self: start; grid-column: 1; }
+    .catalog-badges { display: flex; flex-wrap: wrap; gap: 5px; grid-column: 1; }
     .details-body { margin: 0 16px; border-top: 1px solid var(--line); padding: 13px 0 16px; }
     .details-body p + p { margin-top: 7px; }
     .details-body p { font-size: 14px; }
@@ -126,7 +127,7 @@
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261126-1" defer></script>
   <script src="/whatsapp-editorial.js?v=20261126-4" defer></script>
-  <script src="/rotina.js?v=20261126-premium1" defer></script>
+  <script src="/rotina.js?v=20261127-catalogo" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -186,7 +187,7 @@
       <div class="section-head"><h2>Resultados</h2><button id="refreshButton" class="secondary" type="button" hidden>Consultar estado</button></div>
       <p id="readAt" class="time"></p><p id="dashboardStatus" class="status notice" role="status"></p>
       <div class="rows">
-        <details><summary><strong>Catálogo WhatsApp</strong><span id="catalogBadge" class="badge">Por consultar</span></summary>
+        <details><summary><strong>Catálogo WhatsApp</strong><span class="catalog-badges"><span id="catalogBadge" class="badge">Por consultar</span><span id="catalogApprovalBadge" class="badge" hidden></span></span></summary>
           <div class="details-body">
             <div class="stats"><div class="stat"><span>Standvirtual</span><strong id="sourceCount">—</strong></div><div class="stat"><span>Para a Meta</span><strong id="feedCount">—</strong></div><div class="stat"><span>Na Meta</span><strong id="metaCount">—</strong></div></div>
             <p id="catalogSummary" class="status"></p><p id="catalogTime" class="time"></p><p id="catalogAccess" class="status"></p>

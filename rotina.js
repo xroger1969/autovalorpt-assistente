@@ -5,9 +5,10 @@
   const STEPS = [['source', 'Stock Samucar + AutoValorPT'], ['catalog', 'Catálogo Meta / WhatsApp'], ['retirements', 'Histórico Instagram'], ['photo', 'Fotografia Instagram'], ['story', 'Vídeo e Story Instagram'], ['verify', 'Verificação final']];
   const LABELS = { source_matches: 'Stock conferido', source_waiting: 'A aguardar o ficheiro', catalog_matches: 'Catálogo conferido', matched: 'Catálogo conferido', synced: 'Catálogo conferido', published: 'Publicação confirmada', mapped: 'Publicação confirmada', no_new_stock: 'Sem novas viaturas', retired: 'Retirada confirmada', canceled: 'Cancelado', checked: 'Verificação terminada', disabled: 'Desativado', authorization_required: 'Autorização pendente', sync_disabled: 'Correção desativada', import_requested: 'Importação pedida', import_pending: 'Importação em curso', upload_requested: 'Importação pedida', upload_pending: 'Importação em curso', preparing: 'Em processamento', busy: 'Em curso', mapping_pending: 'Confirmação em curso', baseline_initialized: 'Registo inicial criado', review_required: 'Precisa de atenção', source_invalid: 'Origem por confirmar', source_blocked: 'Origem por confirmar', mismatch: 'Diferença encontrada', catalog_mismatch: 'Diferença encontrada', check_failed: 'Verificação por concluir', check_deferred: 'Verificação adiada', deferred: 'Adiado', unknown: 'Resultado por confirmar', publish_unknown: 'Publicação por confirmar', import_unknown: 'Importação por confirmar', ready: 'Vídeo pronto', preview_ready: 'Vídeo pronto', expired: 'Story expirado', products_pending: 'Aprovação pendente', products_rejected: 'Artigos rejeitados', unverified: 'Por confirmar' };
   Object.assign(LABELS, { preserved: 'Publicações preservadas', daily_limit_reached: 'Limite diário atingido', other_cycle_in_progress: 'Outra atualização em curso', no_retirements: 'Sem retiradas pendentes', partial: 'Concluído parcialmente', failed: 'Operação não concluída', upload_unknown: 'Importação por confirmar' });
+  Object.assign(LABELS, { images_pending: 'Fotografias por confirmar na Meta', source_changed: 'Origem alterada durante a verificação', import_rejected: 'Importação rejeitada pela Meta' });
   const GOOD = new Set(['source_matches', 'catalog_matches', 'matched', 'synced', 'published', 'mapped', 'no_new_stock', 'retired', 'canceled', 'expired']);
   const ISSUES = new Set(['review_required', 'source_invalid', 'source_blocked', 'mismatch', 'catalog_mismatch', 'check_failed', 'unknown', 'publish_unknown', 'import_unknown', 'products_rejected']);
-  GOOD.add('no_retirements'); GOOD.add('preserved'); for (const code of ['partial', 'failed', 'upload_unknown', 'unverified']) ISSUES.add(code);
+  GOOD.add('no_retirements'); GOOD.add('preserved'); for (const code of ['partial', 'failed', 'upload_unknown', 'unverified', 'import_rejected']) ISSUES.add(code);
   const ERRORS = { story_state_invalid: 'O histórico das Stories precisa de verificação. Não foi possível consultar o resultado.', story_provider_binding_changed: 'A ligação das Stories precisa de verificação.', morning_flow_unavailable: 'Não foi possível consultar esta execução.', catalog_permission_required: 'Falta acesso de servidor ao catálogo.' };
   let authenticated = false; let busy = false; let closing = false; let generation = 0; let followingToday = true;
   let manualRead = 0; let manualAction = ''; let submitting = false; let acceptedDay = '';
@@ -33,6 +34,15 @@
   function node(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if (className) el.className = className; return el; }
   function label(result) { return LABELS[result?.status] || 'Resultado por confirmar'; }
   function kind(result) { return ISSUES.has(result?.status) ? 'error' : result?.remaining > 0 ? 'pending' : (GOOD.has(result?.status) || result?.status === 'checked' && result?.catalogConfirmed === true) && result?.ok !== false ? 'good' : 'pending'; }
+  function catalogApprovalLabel(result) {
+    if (result.status === 'products_rejected') return 'Artigos rejeitados pela Meta';
+    const review = result.pendingReviewIds?.length > 0;
+    const visibility = result.notPublishedIds?.length > 0;
+    if (review && visibility) return 'Aprovação e visibilidade por confirmar';
+    if (review) return 'Aprovação WhatsApp por confirmar';
+    if (visibility) return 'Visibilidade na Meta por confirmar';
+    return 'Publicação no catálogo por confirmar';
+  }
   function finalIssues(data) {
     if (!data?.verification) return data?.status === 'finished' ? ['verificação final sem registo'] : [];
     return [['catalog', 'catálogo'], ['retirements', 'retiradas'], ['photo', 'fotografias'], ['story', 'Stories']].filter(([key]) => {
@@ -78,6 +88,7 @@
       for (const id of ['readAt', 'dashboardStatus', 'cycleSummary', 'cycleTime', 'latestCycle', 'catalogSummary', 'catalogTime', 'catalogAccess', 'photoSummary', 'storySummary', 'whatsappSummary', 'whatsappAccess', 'whatsappLast', 'whatsappTime', 'whatsappWithdrawal']) text(id, '');
       for (const id of ['sourceCount', 'feedCount', 'metaCount']) text(id, '—');
       badge('cycleBadge', 'Por consultar'); badge('catalogBadge', 'Por consultar'); badge('whatsappBadge', 'Por consultar'); $('stepsList').replaceChildren();
+      $('catalogApprovalBadge').hidden = true; text('catalogApprovalBadge', '');
     }
   }
   function setBusy(value) { busy = value; for (const id of ['refreshButton', 'todayButton', 'cycleDay']) $(id).disabled = value; }
@@ -204,6 +215,9 @@
       Number.isSafeInteger(diagnostic.sourceCount) && diagnostic.sourceCount >= 0 ? diagnostic.sourceCount : null;
     alerts.push(publicationAttention('Story', stories), publicationAttention('Fotografia', photos));
     if (!catalog || catalog.ok === false) alerts.push('Catálogo WhatsApp por consultar');
+    else if (!catalog.active && diagnostic?.status === 'images_pending') alerts.push('Catálogo WhatsApp · fotografias por confirmar');
+    else if (!catalog.active && diagnostic?.catalogDataConfirmed === true && diagnostic.catalogConfirmed !== true)
+      alerts.push('Catálogo WhatsApp · ' + catalogApprovalLabel(diagnostic).toLowerCase());
     else if (catalog.active || diagnostic?.catalogConfirmed !== true || diagnostic?.ok === false) alerts.push('Catálogo WhatsApp por confirmar');
     const wa = whatsapp?.active;
     if (!whatsapp || whatsapp.ok === false) alerts.push('Estado WhatsApp por consultar');
@@ -315,10 +329,33 @@
   function showCatalog(data, error) {
     const r = data?.lastResult || {};
     const active = !error && data?.active;
+    const confirmed = !error && !active && r.ok !== false && r.catalogConfirmed === true;
+    const dataConfirmed = !error && !active && r.ok !== false && r.catalogDataConfirmed === true;
     for (const [id, key] of [['sourceCount', 'sourceCount'], ['feedCount', 'expectedCount'], ['metaCount', 'actualCount']]) text(id, error ? '—' : count(r[key]));
-    const unconfirmedMatch = ['catalog_matches', 'matched', 'synced'].includes(r.status) && r.catalogConfirmed !== true;
-    badge('catalogBadge', error ? 'Leitura indisponível' : active ? 'Operação por confirmar' : r.catalogConfirmed === true ? 'Dados conferidos na Meta' : unconfirmedMatch ? 'Catálogo por confirmar' : label(r), error ? 'error' : active ? 'pending' : r.catalogConfirmed === true ? 'good' : ISSUES.has(r.status) ? 'error' : 'pending');
-    text('catalogSummary', error ? errorText(error) : active ? `Existe uma operação iniciada em ${date(active.startedAt)} ainda sem conclusão confirmada. As contagens apresentadas pertencem ao último diagnóstico, não ao resultado desta operação.` : r.catalogConfirmed === true ? 'Identificadores, preços e disponibilidade conferidos na Meta. A apresentação no WhatsApp é uma verificação separada.' : r.authorization?.ready === false ? 'A verificação e correção pelo servidor aguardam acesso ao catálogo. A importação horária configurada na Meta pode continuar a funcionar.' : 'O diagnóstico ainda não confirma a correspondência do catálogo com o ficheiro.');
+    const approvalPending = dataConfirmed && !confirmed;
+    $('catalogApprovalBadge').hidden = !approvalPending;
+    badge('catalogApprovalBadge', approvalPending ? catalogApprovalLabel(r) : '', r.status === 'products_rejected' ? 'error' : 'pending');
+
+    let title = ['catalog_matches', 'matched', 'synced'].includes(r.status) ? 'Catálogo por confirmar' : label(r);
+    let tone = ISSUES.has(r.status) ? 'error' : 'pending';
+    let summary = 'O diagnóstico ainda não confirma a correspondência do catálogo com o ficheiro.';
+    if (error) {
+      title = 'Leitura indisponível'; tone = 'error'; summary = errorText(error);
+    } else if (active) {
+      title = 'Operação por confirmar'; tone = 'pending';
+      summary = `Existe uma operação iniciada em ${date(active.startedAt)} ainda sem conclusão confirmada. As contagens apresentadas pertencem ao último diagnóstico, não ao resultado desta operação.`;
+    } else if (confirmed || dataConfirmed) {
+      title = 'Dados conferidos na Meta'; tone = 'good';
+      summary = dataConfirmed ? 'Viaturas, preços, disponibilidade e fotografias conferidos na Meta.' : 'Identificadores, preços e disponibilidade conferidos na Meta.';
+      if (confirmed) summary += ' A apresentação no WhatsApp é uma verificação separada.';
+    } else if (r.authorization?.ready === false) {
+      summary = 'A verificação e correção pelo servidor aguardam acesso ao catálogo. A importação horária configurada na Meta pode continuar a funcionar.';
+    } else if (r.status === 'images_pending') {
+      summary = 'A Meta ainda não confirmou o carregamento de todas as fotografias.';
+      if (r.imagePendingIds?.length > 0) summary += ` Viaturas com fotografias por confirmar: ${r.imagePendingIds.length}.`;
+    }
+    badge('catalogBadge', title, tone);
+    text('catalogSummary', summary);
     text('catalogTime', r.checkedAt || r.at ? `Diagnóstico: ${date(r.checkedAt || r.at)}.` : 'Ainda sem diagnóstico datado.');
     text('catalogAccess', error ? 'Acesso e configuração por confirmar.' : `Correção automática: ${data?.configuration?.enabled === true ? 'ativa' : 'desativada ou ainda não configurada'}. Acesso de servidor: ${r.authorization?.ready === true ? 'validado no diagnóstico' : 'por confirmar'}.`);
   }
