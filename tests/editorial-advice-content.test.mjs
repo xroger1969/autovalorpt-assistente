@@ -74,3 +74,25 @@ test('advice lookup validates dates and ordinals and isolates mutable caller out
   const copy = adviceFor(ADVICE_START_DATE); copy.visual.items[0].value = 'stale'; copy.facts.pop();
   assert.deepEqual(adviceFor(ADVICE_START_DATE), daily[0]);
 });
+
+test('the revised cost comparison identifies the dated fuel reference and the example home tariff', () => {
+  const revised = adviceFor('2026-11-27', false, 0);
+  assert.equal(revised.id, daily[0].id);
+  assert.match(revised.body, /13 kWh na tomada e 6 L/);
+  assert.match(revised.body, /tarifa de casa é ilustrativa/);
+  assert.match(revised.body, /DGEG em Portugal continental, 26\/11\/2026/);
+  assert.ok(revised.body.length <= 175 && revised.takeaway.length <= 105);
+  for (const [index, label, cost] of [
+    [0, 'Casa a 0,22 €/kWh', 13 * 0.22],
+    [1, 'Gasolina 95 a 1,851 €/L', 6 * 1.851],
+    [2, 'Gasóleo a 2,035 €/L', 6 * 2.035],
+  ]) {
+    const row = revised.visual.items[index];
+    assert.equal(row.label, label);
+    assert.equal(row.amount, Number(cost.toFixed(2)));
+    assert.equal(row.value, cost.toFixed(2).replace('.', ',') + ' €');
+  }
+  for (const price of [1.851, 2.035]) {
+    assert.ok(revised.takeaway.includes((6 * price / 13).toFixed(2).replace('.', ',') + ' €/kWh'));
+  }
+});
