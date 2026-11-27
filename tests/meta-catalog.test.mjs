@@ -493,6 +493,87 @@ test('other channels neither confer nor veto an explicit WhatsApp approval', asy
   assert.equal((await f.service.check()).catalogConfirmed, true);
 });
 
+test('data confirmation is independent of WhatsApp approval and publication with complete galleries', async () => {
+  const audit = galleryAudit();
+  for (const [patch, status] of [
+    [{}, 'catalog_matches'],
+    [{ capability_to_review_status: [{ key: 'WHATSAPP', value: 'PENDING' }] }, 'products_pending'],
+    [{ visibility: undefined }, 'products_pending'],
+    [{ capability_to_review_status: [{ key: 'WHATSAPP', value: 'REJECTED' }] }, 'products_rejected'],
+  ]) {
+    const products = galleryProducts(audit);
+    Object.assign(products[0], patch);
+    const f = fixture({ remote: { products }, auditSource: async () => audit });
+    const result = await f.service.run();
+    assert.equal(result.status, status);
+    assert.equal(result.catalogDataConfirmed, true);
+    assert.equal(result.catalogConfirmed, status === 'catalog_matches');
+    assert.equal(result.whatsappVisibilityVerified, false);
+    assert.equal((await f.service.status()).lastResult.catalogDataConfirmed, true);
+    assert.equal(f.posts().length, 0);
+  }
+});
+
+test('matching totals cannot confirm data with a real mismatch, uncertain Meta fields or unfinished import', async () => {
+  const audit = galleryAudit();
+  for (const [patch, status] of [
+    [{ retailer_id: 'ID8WrongOne' }, 'catalog_mismatch'],
+    [{ product_feed: { id: '999999' } }, 'review_required'],
+    [{ price: '29999 EUR' }, 'catalog_mismatch'],
+    [{ price: '2699000' }, 'review_required'],
+    [{ availability: 'out of stock' }, 'catalog_mismatch'],
+    [{ image_url: originalImages[1] }, 'catalog_mismatch'],
+    [{ additional_image_urls: [] }, 'catalog_mismatch'],
+    [{ additional_image_urls: ['https://example.invalid/unknown.jpg'] }, 'review_required'],
+    [{ image_fetch_status: 'PARTIAL_FETCH' }, 'images_pending'],
+    [{ image_fetch_status: 'PARTIAL_FETCH', capability_to_review_status: [{ key: 'WHATSAPP', value: 'REJECTED' }] }, 'products_rejected'],
+  ]) {
+    const products = galleryProducts(audit);
+    Object.assign(products[0], patch);
+    const f = fixture({ remote: { products }, auditSource: async () => audit });
+    const result = await f.service.check();
+    assert.equal(result.status, status, JSON.stringify(patch));
+    assert.equal(result.expectedCount, result.actualCount);
+    assert.equal(result.catalogDataConfirmed, false);
+    assert.equal((await f.service.status()).lastResult.catalogDataConfirmed, false);
+  }
+  for (const [startedAt, expected] of [[TIME, 'import_pending'], [TIME - 31 * 60_000, 'review_required']]) {
+    const f = fixture({ remote: { products: galleryProducts(audit),
+      uploads: [{ id: '999999', start_time: new Date(startedAt).toISOString() }] }, auditSource: async () => audit });
+    const result = await f.service.check();
+    assert.equal(result.status, expected);
+    assert.equal(result.imagesVerified, true);
+    assert.equal(result.catalogDataConfirmed, false);
+  }
+});
+
+test('stored data confirmation is rebuilt from complete evidence and never inherited from a stored flag', async () => {
+  const audit = galleryAudit();
+  const products = galleryProducts(audit);
+  products[0].capability_to_review_status = [];
+  const f = fixture({ remote: { products }, auditSource: async () => audit });
+  assert.equal((await f.service.check()).catalogDataConfirmed, true);
+  const record = f.blob.records.get(STATE);
+  const state = JSON.parse(record.text);
+  const report = state.lastResult;
+  delete report.catalogDataConfirmed;
+  record.text = JSON.stringify(state);
+  assert.equal((await f.service.status()).lastResult.catalogDataConfirmed, true);
+
+  for (const patch of [
+    { imageRevision: undefined }, { additionalImageRevision: undefined }, { imagesVerified: false },
+    { sourceValid: false }, { catalogValidated: false }, { authorization: { ready: false } }, { ok: false },
+    { checkedAt: undefined }, { feedProductCount: 1 }, { feedProductCount: undefined }, { expectedCount: 0, feedProductCount: 0 },
+    { priceMismatchIds: undefined }, { foreignFeedIds: [null] },
+    { import: undefined }, { import: { pending: false } }, { import: { pending: true, unverified: false } },
+    { import: { pending: false, unverified: true } }, { status: 'check_deferred' },
+  ]) {
+    state.lastResult = { ...report, ...patch, catalogDataConfirmed: true };
+    record.text = JSON.stringify(state);
+    assert.equal((await f.service.status()).lastResult.catalogDataConfirmed, false, JSON.stringify(patch));
+  }
+});
+
 test('check reports missing entries without importing; pending uploads block run', async () => {
   const f = fixture({ remote: { products: [asProduct(items[0])] } });
   const first = await f.service.check();

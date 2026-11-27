@@ -108,12 +108,59 @@ function finishedCycle() {
 
 test('active catalog import overrides a successful old diagnostic without inventing new counts', async () => {
   const app = await dashboard({ catalog: { active: { phase: 'unknown', startedAt }, configuration: { enabled: true }, lastResult: {
-    status: 'catalog_matches', catalogConfirmed: true, actualCount: 8, sourceCount: 8, expectedCount: 8, checkedAt: '2026-11-13T08:00:00Z'
+    status: 'catalog_matches', catalogDataConfirmed: true, catalogConfirmed: true, actualCount: 8, sourceCount: 8, expectedCount: 8, checkedAt: '2026-11-13T08:00:00Z'
   } } });
   assert.equal(app.get('catalogBadge').textContent, 'Operação por confirmar');
   assert.equal(app.get('catalogBadge').className, 'badge pending');
+  assert.equal(app.get('catalogApprovalBadge').hidden, true);
   assert.equal(app.get('metaCount').textContent, '8');
   assert.match(app.get('catalogSummary').textContent, /último diagnóstico/);
+});
+
+test('equal catalog counts with pending images explain the remaining check', async () => {
+  const app = await dashboard({ catalog: { lastResult: {
+    ok: true, status: 'images_pending', sourceCount: 10, expectedCount: 10, actualCount: 10,
+    imagePendingIds: ['ID12345'], checkedAt: startedAt, sourceValid: true, authorization: { ready: true },
+  } } });
+  assert.equal(app.get('catalogBadge').textContent, 'Fotografias por confirmar na Meta');
+  assert.equal(app.get('catalogBadge').className, 'badge pending');
+  assert.equal(app.get('catalogApprovalBadge').hidden, true);
+  assert.match(app.get('catalogSummary').textContent, /carregamento.*fotografias.*: 1/);
+  assert.match(app.get('checkStatus').textContent, /Catálogo WhatsApp · fotografias por confirmar/);
+});
+
+test('catalog data verification stays distinct from WhatsApp approval and Meta visibility', async () => {
+  const lastResult = {
+    ok: true, status: 'products_pending', sourceCount: 10, expectedCount: 10, actualCount: 10,
+    checkedAt: startedAt, sourceValid: true, catalogDataConfirmed: true, catalogConfirmed: false,
+    pendingReviewIds: ['ID12345'], notPublishedIds: [],
+  };
+  const app = await dashboard({ catalog: { lastResult } });
+  assert.equal(app.get('catalogBadge').textContent, 'Dados conferidos na Meta');
+  assert.equal(app.get('catalogBadge').className, 'badge good');
+  assert.equal(app.get('catalogApprovalBadge').hidden, false);
+  assert.equal(app.get('catalogApprovalBadge').textContent, 'Aprovação WhatsApp por confirmar');
+  assert.equal(app.get('catalogApprovalBadge').className, 'badge pending');
+  assert.match(app.get('catalogSummary').textContent, /preços, disponibilidade e fotografias conferidos/);
+  assert.match(app.get('checkStatus').textContent, /Catálogo WhatsApp · aprovação whatsapp por confirmar/i);
+
+  lastResult.pendingReviewIds = [];
+  lastResult.notPublishedIds = ['ID12345'];
+  await app.get('refreshButton').handlers.click();
+  assert.equal(app.get('catalogApprovalBadge').textContent, 'Visibilidade na Meta por confirmar');
+
+  lastResult.status = 'products_rejected';
+  await app.get('refreshButton').handlers.click();
+  assert.equal(app.get('catalogBadge').className, 'badge good');
+  assert.equal(app.get('catalogApprovalBadge').textContent, 'Artigos rejeitados pela Meta');
+  assert.equal(app.get('catalogApprovalBadge').className, 'badge error');
+
+  lastResult.status = 'catalog_mismatch';
+  lastResult.catalogDataConfirmed = false;
+  await app.get('refreshButton').handlers.click();
+  assert.equal(app.get('metaCount').textContent, '10');
+  assert.equal(app.get('catalogBadge').className, 'badge error');
+  assert.equal(app.get('catalogApprovalBadge').hidden, true);
 });
 
 test('failed final Story verification is visible even after all operations finished', async () => {
@@ -531,7 +578,7 @@ test('compact stock overview uses current counts, distinguishes zero from a miss
   const app = await dashboard({ cycle: finishedCycle(), catalog, whatsapp: { device: { valid: true } },
     fetch: path => path.includes(manualStockAction) ? response({ ok: true, items: [] }) : null });
   assert.doesNotMatch(app.get('checkStatus').textContent, /9 viaturas|0 viaturas|concluída/);
-  catalog.lastResult.checkedAt = startedAt;
+  catalog.lastResult.checkedAt = new Date().toISOString();
   await app.get('runNow').handlers.click();
   assert.match(app.get('checkStatus').textContent, /0 viaturas · Contagem do catálogo WhatsApp por atualizar/);
 });

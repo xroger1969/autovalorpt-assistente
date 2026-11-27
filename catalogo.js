@@ -4,6 +4,7 @@
   const count = n => Number.isSafeInteger(n) && n >= 0 && n <= 5000 ? String(n) : '—';
   let busy = false; let privateAccess = false; let configuration = null; let report = null;
   const labels = {
+    catalog_data_matches: ['Dados conferidos na Meta', 'As viaturas, os preços, a disponibilidade, as fotografias e as galerias coincidem com o ficheiro validado.'],
     catalog_matches: ['Stock, preços e imagens confirmados na Meta', 'Foram conferidas as viaturas, a origem, os preços, as imagens, a disponibilidade e os estados de aprovação e publicação. A apresentação no WhatsApp continua por confirmar.'],
     catalog_matches_legacy: ['Stock e preços confirmados na Meta', 'Os dados do catálogo foram confirmados numa verificação anterior. As imagens precisam de uma nova verificação. A apresentação no WhatsApp continua por confirmar.'],
     images_pending: ['Imagens por confirmar na Meta', 'Falta confirmar que a Meta recebeu as fotografias corretas. A rotina acompanha o resultado sem repetir a importação.'],
@@ -62,11 +63,31 @@
   function needsStockRefresh(r) {
     return r.status === 'source_invalid' && ['stock_source_changed', 'stock_not_synchronized'].includes(r.reason);
   }
+  function vehicleCount(ids) {
+    return Array.isArray(ids) && ids.every(id => typeof id === 'string' && /^ID[A-Za-z0-9]{5,30}$/.test(id))
+      ? new Set(ids).size : null;
+  }
   function publishedWithUnconfirmedWhatsApp(r) {
     return r.status === 'products_pending' && r.imagesVerified === true &&
-      Array.isArray(r.notPublishedIds) && r.notPublishedIds.length === 0 &&
-      Array.isArray(r.pendingReviewIds) && r.pendingReviewIds.length > 0 &&
-      r.pendingReviewIds.every(id => typeof id === 'string' && /^ID[A-Za-z0-9]{5,30}$/.test(id));
+      vehicleCount(r.notPublishedIds) === 0 && vehicleCount(r.pendingReviewIds) > 0;
+  }
+  function showPublication(r, dataConfirmed) {
+    const status = $('publicationStatus');
+    status.hidden = !dataConfirmed;
+    status.textContent = '';
+    if (!dataConfirmed) return;
+    const signals = [
+      [vehicleCount(r.pendingReviewIds), 'Aprovação para WhatsApp por confirmar em'],
+      [vehicleCount(r.rejectedIds), 'Aprovação para WhatsApp rejeitada em'],
+      [vehicleCount(r.notPublishedIds), 'Publicação no catálogo Meta por confirmar em'],
+    ];
+    const messages = signals.filter(([total]) => total > 0).map(([total, label]) =>
+      `${label} ${total} ${total === 1 ? 'artigo' : 'artigos'}.`);
+    if (!messages.length) messages.push(r.catalogConfirmed === true
+      ? 'A aprovação para WhatsApp e a publicação no catálogo foram confirmadas pela Meta.'
+      : 'A aprovação para WhatsApp ou a publicação no catálogo continua por confirmar.');
+    messages.push('A apresentação dos artigos no WhatsApp continua por verificar.');
+    status.textContent = messages.join(' ');
   }
   function setBusy(value) {
     busy = value;
@@ -89,8 +110,8 @@
       return data;
     } finally { clearTimeout(timer); }
   }
-  function showPhotos(r) {
-    if (publishedWithUnconfirmedWhatsApp(r)) {
+  function showPhotos(r, galleriesVerified) {
+    if (galleriesVerified) {
       // These diagnostics cover vehicles from one source, not photo totals.
       // The remote gallery verification is the relevant result in this state.
       $('photoCounts').replaceChildren();
@@ -122,17 +143,33 @@
     $('sourceCount').textContent = count(r.sourceCount);
     $('feedCount').textContent = count(r.expectedCount);
     $('metaCount').textContent = count(r.actualCount);
-    const known = needsStockRefresh(r) ? labels.stock_refresh_required : publishedWithUnconfirmedWhatsApp(r)
-      ? labels.whatsapp_unconfirmed : r.status === 'catalog_matches'
-      ? r.catalogConfirmed === true ? labels[r.imagesVerified === true ? 'catalog_matches' : 'catalog_matches_legacy']
-        : labels[r.imagesVerified === true ? 'review_required' : 'images_not_checked']
-      : labels[r.status];
     const authRequired = authorizationRequired(r);
-    const selected = known || (authRequired ? labels.authorization_required : ['Por confirmar', 'Aguardamos uma verificação concluída do catálogo.']);
+    const authorizationBlocked = ['authorization_required', 'catalog_authorization_required'].includes(r.status);
+    const active = data.active;
+    const pendingImport = active || r.import?.pending === true;
+    const canConfirm = !authRequired && !pendingImport && r.import?.unverified !== true;
+    const strictMatch = canConfirm && r.status === 'catalog_matches' && r.catalogConfirmed === true;
+    const dataConfirmed = canConfirm && r.catalogDataConfirmed === true && r.imagesVerified === true &&
+      ['catalog_matches', 'products_pending', 'products_rejected'].includes(r.status);
+    const legacyGallery = canConfirm && publishedWithUnconfirmedWhatsApp(r);
+    const refreshRequired = needsStockRefresh(r);
+    let selected = labels[r.status] || (authRequired ? labels.authorization_required : ['Por confirmar', 'Aguardamos uma verificação concluída do catálogo.']);
+    if (pendingImport && !authorizationBlocked) {
+      selected = active?.phase === 'unknown' ? labels.import_unknown
+        : ['import_requested', 'upload_requested'].includes(r.status) ? labels[r.status] : labels.import_pending;
+    } else if (dataConfirmed) selected = labels.catalog_data_matches;
+    else if (refreshRequired) selected = labels.stock_refresh_required;
+    else if (legacyGallery) selected = labels.whatsapp_unconfirmed;
+    else if (r.status === 'catalog_matches') {
+      if (authRequired) selected = labels.authorization_required;
+      else if (strictMatch) selected = labels[r.imagesVerified === true ? 'catalog_matches' : 'catalog_matches_legacy'];
+      else selected = labels[r.imagesVerified === true ? 'review_required' : 'images_not_checked'];
+    }
     $('stateBadge').textContent = selected[0];
-    $('stateBadge').className = `badge ${r.catalogConfirmed === true ? 'good' : 'pending'}`;
-    $('stateText').textContent = selected[1];
-    if (needsStockRefresh(r) && !canSync()) $('stateText').textContent = configuration?.enabled !== true
+    $('stateBadge').className = `badge ${dataConfirmed || strictMatch ? 'good' : 'pending'}`;
+    $('stateText').textContent = selected[1] + (active && authorizationBlocked
+      ? ' Existe uma operação de importação por confirmar.' : active ? ' As contagens são do último diagnóstico.' : '');
+    if (!pendingImport && refreshRequired && !canSync()) $('stateText').textContent = configuration?.enabled !== true
       ? 'O stock guardado precisa de ser atualizado com as viaturas e galerias atuais do Standvirtual. A sincronização está desativada na configuração do servidor.'
       : 'O stock guardado precisa de ser atualizado com as viaturas e galerias atuais do Standvirtual. É necessário restabelecer a autorização do catálogo antes de pedir a sincronização.';
     const checked = r.checkedAt || r.at || data.lastCheckedAt;
@@ -146,7 +183,8 @@
       if (values.length) { const li = document.createElement('li'); li.textContent = `${text}: ${values.length}.`; list.appendChild(li); }
     }
     $('differencePanel').hidden = !list.children.length;
-    showPhotos(r);
+    showPublication(r, dataConfirmed);
+    showPhotos(r, dataConfirmed || legacyGallery);
     $('accessView').hidden = true; $('dashboard').hidden = false;
     setBusy(busy);
   }
