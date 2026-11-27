@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const script = (await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
+const script = (await Promise.all(['editorial-preview.js', 'extra-editorial.js', 'stock-selection-panel.js', 'rotina.js'].map(file => readFile(new URL('../' + file, import.meta.url), 'utf8')))).join('\n');
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const startedAt = `${today()}T08:00:00Z`;
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
@@ -19,6 +19,7 @@ async function dashboard(options = {}) {
     if (endpoint === '/api/admin-session') return response({ authenticated: options.authenticated !== false, configured: true });
     const u = new URL(endpoint, 'https://example.invalid'); const integration = u.searchParams.get('integration');
     if (integration === 'morning-flow') return response(options.cycle || { ok: true, status: 'not_started', day: u.searchParams.get('day') });
+    if (integration === 'stock-selection') return response({ ok: true, review: { revision: 'empty', pending: [], defaultIds: [] } });
     if (integration === 'meta-catalog') return response(options.catalog || { configuration: { enabled: false }, lastResult: { status: 'authorization_required', sourceCount: 9, expectedCount: 9, actualCount: null, checkedAt: startedAt, authorization: { ready: false } } });
     if (integration === 'editorial') return response(options.editorial || {ok:true,enabled:true,configuration:{production:true,tokenConfigured:true,accountConfigured:true,validApi:true,imagesConfigured:true},schedule:{nextRunAt:today()+'T19:00:00Z'},history:[]});
     if (integration === 'whatsapp-status') return response(options.whatsapp || { ok: true, role: 'admin', automation: 'pending_end_to_end_test', device: null, active: null, blocked: false, lastResult: null });
@@ -496,8 +497,8 @@ test('full check shows progress, deduplicates clicks and waits for the live inve
     assert.equal(button.disabled, true);
     assert.match(app.get('checkStatus').textContent, /verific|consult/i);
     const calls = app.calls.slice(start);
-    assert.equal(calls.length, 8);
-    assert.equal(new Set(calls.map(c => c.endpoint)).size, 8);
+    assert.equal(calls.length, 9);
+    assert.equal(new Set(calls.map(c => c.endpoint)).size, 9);
     assert.ok(readOnly(calls));
   } finally { stock.resolve(response(dualInventory)); }
   await Promise.all([check, second]);
@@ -619,4 +620,85 @@ test('a failed Story in today’s final check stays visible by the button withou
   assert.match(app.get('checkStatus').textContent, /Story por confirmar/);
   assert.ok(!app.get('stockActionDetails').open);
   assert.doesNotMatch(app.get('checkStatus').textContent, /concluída/);
+});
+
+function selectionDashboard(review, submit, options = {}) {
+  const posts = [];
+  const make = dashboard({ ...options, fetch: async (endpoint, init) => {
+    if (endpoint.includes('integration=stock-selection')) {
+      if (init.method === 'POST') {
+        const body = JSON.parse(init.body);
+        posts.push(body);
+        assert.equal(init.credentials, 'same-origin');
+        return submit ? submit(body) : response({ ok: true, whatsapp: { status: 'import_requested' } });
+      }
+      return response({ ok: true, review });
+    }
+    return options.fetch?.(endpoint, init);
+  } });
+  return make.then(app => ({ ...app, posts }));
+}
+function candidate(id, source, fields = {}) {
+  return { id, title: 'Renault ZOE', sources: [source], price: '12990.00 EUR', year: 2021, mileage: 48200,
+    link: 'https://www.standvirtual.com/carros/anuncio/' + id, duplicateIds: [], possibleDuplicateIds: [], ...fields };
+}
+test('stock decision shows both accounts, prevents choosing confirmed duplicates twice and posts only on confirmation', async () => {
+  const review = { revision: 'revision-a', defaultIds: ['A'], pending: [
+    candidate('A','samucar',{duplicateIds:['B']}), candidate('B','autovalorpt',{duplicateIds:['A']})] };
+  const app = await selectionDashboard(review);
+  assert.match(app.get('stockPickStatus').textContent,/2 anúncios.*inclui 1 viatura/);
+  assert.equal(app.get('stockPickActions').hidden,false);
+  app.get('stockPickChoose').handlers.click();
+  const [first, second] = app.get('stockPickRows').children;
+  assert.equal(first.children[0].textContent,'Samucar');
+  assert.equal(second.children[0].textContent,'AutoValorPT');
+  const a = first.children[1].children[0].children[0], b = second.children[1].children[0].children[0];
+  assert.equal(a.checked,false); assert.equal(b.checked,false);
+  a.checked=true; a.handlers.change();
+  b.checked=true; b.handlers.change();
+  assert.equal(a.checked,false); assert.equal(b.checked,true);
+  assert.equal(app.posts.length,0);
+  await Promise.all([app.get('stockPickSave').handlers.click(),app.get('stockPickSave').handlers.click()]);
+  assert.deepEqual(app.posts,[{revision:'revision-a',mode:'choose',selectedIds:['B']}]);
+  assert.match(app.get('stockPickResult').textContent,/Meta está a processar/);
+});
+
+test('sync all requires seeing a possible cross-account match, and matches an already-approved listing by name', async () => {
+  const review = { revision: 'suggestion', defaultIds: ['A'], pending: [candidate('A','samucar',{possibleDuplicateIds:['B']})],
+    related:[candidate('B','autovalorpt',{title:'Renault ZOE Intens'})] };
+  const app = await selectionDashboard(review);
+  await app.get('stockPickAll').handlers.click();
+  assert.equal(app.posts.length,0);
+  assert.match(app.get('stockPickHelp').textContent,/possíveis duplicados serão incluídos/);
+  const note = app.get('stockPickRows').children[0].children[1].children.at(-1);
+  assert.match(note.textContent,/Possível duplicado/);
+  assert.match(note.children[0].textContent,/AutoValorPT.*ZOE Intens/);
+  assert.match(note.children[0].href,/\/B$/);
+  await app.get('stockPickSave').handlers.click();
+  assert.deepEqual(app.posts,[{revision:'suggestion',mode:'all'}]);
+});
+
+test('an explicit empty decision is supported and a stale list reloads before another submission',async () => {
+  const review = { revision:'batch-1', defaultIds:['A'], pending:[candidate('A','samucar')] };
+  const app = await selectionDashboard(review, () => {
+    review.revision='batch-2'; review.pending=[]; review.defaultIds=[];
+    return response({error:'stock_selection_changed'},409);
+  });
+  app.get('stockPickChoose').handlers.click();
+  assert.equal(app.get('stockPickSave').textContent,'Ignorar estes anúncios');
+  await app.get('stockPickSave').handlers.click();
+  assert.deepEqual(app.posts,[{revision:'batch-1',mode:'choose',selectedIds:[]}]);
+  assert.match(app.get('stockPickResult').textContent,/lista mudou/);
+  assert.equal(app.get('stockPickActions').hidden,true);
+  assert.equal(app.get('stockPickRows').children.length,0);
+});
+
+test('manual stock diagnosis compares WhatsApp with approved cars when other source ads are pending or ignored',async () => {
+  const review = {revision:'counts',pending:[],defaultIds:[],sourceCount:3,approvedCount:1};
+  const app = await selectionDashboard(review,null,{cycle:finishedCycle(),whatsapp:{device:{valid:true}},
+    catalog:{lastResult:{checkedAt:new Date().toISOString(),catalogConfirmed:true,sourceCount:1}},
+    fetch:path=>path.includes(manualStockAction)?response(dualInventory):null});
+  await app.get('runNow').handlers.click();
+  assert.match(app.get('checkStatus').textContent,/3 viaturas/);
+  assert.doesNotMatch(app.get('checkStatus').textContent,/Contagem do catálogo WhatsApp por atualizar/);
 });

@@ -23,7 +23,8 @@ const advert = item => ({ title: 'Tesla Model 3', url: item.link,
   photos: (item.photos || [item.image_link]).slice(0, 5), attributes: [
     { key: 'make', value: 'tesla', valueLabel: 'Tesla' }, { key: 'new_used', value: 'used' },
     { key: 'first_registration_year', value: '2022' }, { key: 'mileage', value: '138000' },
-    { key: 'fuel_type', value: 'electric', valueLabel: 'Elétrico' }
+    { key: 'fuel_type', value: 'electric', valueLabel: 'Elétrico' },
+    ...(item.plate ? [{ key: 'registration_plate', value: item.plate }] : [])
   ] });
 const html = (items, count = items.length) => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: {
   numberOfActiveAdverts: count, urqlState: { list: { data: JSON.stringify({ publishedAds: { total: count, ads: items.map(advert) } }) } }
@@ -68,6 +69,11 @@ function legacyState(blob, items) {
   return state;
 }
 
+async function acceptReviewed(source) {
+  const review = await source.review();
+  return source.decide({ revision: review.revision, mode: 'all' });
+}
+
 test('migrates Samucar v1 state to both inventories while retaining IDs, sold history and immutable snapshots', async () => {
   const auto = [car('ID8auto01'), car('ID8auto02')];
   const f = fixture({ autovalorptItems: auto });
@@ -77,7 +83,7 @@ test('migrates Samucar v1 state to both inventories while retaining IDs, sold hi
   assert.equal((await f.source.audit()).reason, 'stock_source_changed');
   assert.equal(f.blob.records.get(STATE).text, before);
   assert.equal(f.blob.calls.some(call => call.method === 'put'), false);
-  const result = await f.source.sync();
+  const result = await acceptReviewed(f.source);
   assert.equal(result.valid, true); assert.equal(result.sourceCount, 4);
   assert.deepEqual(result.sources.map(source => [source.id, source.count]), [['samucar', 2], ['autovalorpt', 2]]);
   assert.deepEqual(new Set(result.items.map(item => item.id)), new Set(['ID8stock1', 'ID8stock2', 'ID8auto01', 'ID8auto02']));
@@ -124,7 +130,7 @@ test('per-source drop protection also catches a lost AutoValorPT majority despit
 test('retiring a listing in either source preserves the other source and all historical rows', async () => {
   const auto = [car('ID8auto01'), car('ID8auto02')];
   const f = fixture({ autovalorptItems: auto });
-  assert.equal((await f.source.sync()).valid, true);
+  assert.equal((await acceptReviewed(f.source)).valid, true);
   f.data.items = [car('ID8stock2')];
   const samucarSale = await f.source.sync();
   assert.equal(samucarSale.valid, true);
@@ -146,7 +152,7 @@ test('the same ID in both sources is one item and remains available until absent
   const shared = car('ID8share1');
   const f = fixture({ items: [shared, car('ID8stock1')], seed: [shared, car('ID8stock1')],
     autovalorptItems: [shared, car('ID8auto01')] });
-  const first = await f.source.sync();
+  const first = await acceptReviewed(f.source);
   assert.equal(first.valid, true); assert.equal(first.sourceCount, 3);
   assert.deepEqual(first.sources.map(source => source.count), [2, 2]);
   const originalHash = first.feedHash;
@@ -202,7 +208,7 @@ test('an empty, partial, malformed or timed-out AutoValorPT origin never removes
 
 test('invalid provenance, source identities and source counts fail closed before any inventory request', async () => {
   const f = fixture({ autovalorptItems: [car('ID8auto01')] });
-  assert.equal((await f.source.sync()).valid, true);
+  assert.equal((await acceptReviewed(f.source)).valid, true);
   const original = f.blob.records.get(STATE); const requests = f.calls.length;
   for (const mutate of [
     state => { state.sources[1].url = 'https://attacker.invalid/inventory'; },
@@ -455,7 +461,7 @@ test('complete advert gallery crosses both origins, snapshot, Meta XML and publi
     `https://ireland.apollo.olxcdn.com/v1/files/${id}${i ? '-photo-' + i : ''}/image`) });
   const first = galleryCar('ID8stock1', 27); const own = galleryCar('ID8auto01', 12);
   const f = fixture({ items: [first], autovalorptItems: [own], seed: [car('ID8stock1')] });
-  const result = await f.source.sync(); assert.equal(result.valid, true);
+  const result = await acceptReviewed(f.source); assert.equal(result.valid, true);
   const snapshot = await f.source.feed('latest');
   assert.deepEqual(snapshot.galleries[first.id], first.photos);
   assert.deepEqual(snapshot.galleries[own.id], own.photos);
@@ -503,7 +509,7 @@ test('a missing, redirected, foreign or inconsistent advert gallery preserves th
 test('version two snapshots migrate galleries without losing sold history or changing legacy snapshot bytes', async () => {
   const f = fixture(); assert.equal((await f.source.sync()).valid, true);
   const original = f.blob.records.get(STATE); const state = JSON.parse(original.text);
-  state.version = 2; delete state.galleries; delete state.galleryRevision;
+  state.version = 2; delete state.selection; delete state.galleries; delete state.galleryRevision;
   state.items.forEach(item => { delete item.additional_image_link; });
   const csv = stockFeedCsv(state.items.filter(item => item.availability === 'in stock'));
   state.feedHash = createHash('sha256').update(csv).digest('hex');
@@ -534,7 +540,7 @@ test('oversized complete galleries cannot write a snapshot or replace the last r
   const csv = stockFeedCsv(f.data.items.map(item => ({ ...item, additional_image_link: item.photos.slice(1, 21).join(',') })));
   assert.ok(Buffer.byteLength(csv) < 2 * 1024 * 1024, 'the Meta CSV fits while the complete gallery exceeds the state limit');
 
-  const result = await f.source.sync();
+  const result = await acceptReviewed(f.source);
   assert.equal(result.valid, false);
   assert.equal(result.reason, 'stock_state_too_large');
   assert.equal(f.blob.calls.slice(callsBefore).some(call => call.method === 'put'), false, 'neither snapshot nor state is written');
@@ -565,4 +571,57 @@ test('photo identities accept exactly the original CDN path supported by the web
   assert.equal((await f.source.sync()).valid, false);
   assert.equal(f.blob.records.get(STATE).text, previousState);
   assert.equal(f.blob.calls.slice(callsBefore).some(call => call.method === 'put'), false);
+});
+
+test('automatic sync holds arrivals on both destinations, applies one decision, and keeps both social inventories', async () => {
+  const f = fixture(); await f.source.sync();
+  const first = car('ID8choose1', { plate: 'AA-11-AA' }); const second = car('ID8choose2', { plate: 'AA11AA' });
+  f.data.items.push(first);
+  f.data.autovalorptItems = [car('ID8stock1'), car('ID8stock2'), second];
+  f.data.items[0].price = '30000.00 EUR'; f.data.autovalorptItems[0].price = '30000.00 EUR';
+  const safe = await f.source.sync(); assert.equal(safe.valid, true);
+  const preview = await f.source.review();
+  assert.equal(preview.approvedCount, 2); assert.equal(preview.sourceCount, 4);
+  assert.deepEqual(preview.pending.map(x => x.id), [first.id, second.id]);
+  assert.deepEqual(preview.pending[0].duplicateIds, [second.id]);
+  assert.equal(safe.items.length, 2); assert.equal(safe.items[0].price, '30000.00 EUR');
+  assert.doesNotMatch(stockFeedXml((await f.source.feed('latest')).csv), /ID8choose/);
+  assert.equal((await publicCatalogue(f.source)).total, 2);
+  const selected = await f.source.decide({ revision: preview.revision, mode: 'choose', selectedIds: [second.id] });
+  assert.equal(selected.valid, true);
+  const app = await publicCatalogue(f.source);
+  assert.deepEqual(app.items.map(row => row.id), [second.id, 'ID8stock1', 'ID8stock2']);
+  assert.equal(app.items[0].image, second.image_link);
+  const xml = stockFeedXml((await f.source.feed('latest')).csv);
+  assert.ok(xml.includes(second.image_link)); assert.ok(!xml.includes(first.id));
+  assert.equal((await f.source.decide({ revision: preview.revision, mode: 'all' })).reason, 'stock_selection_stale');
+  assert.equal((await f.source.audit()).valid, true);
+  assert.equal((await f.source.review()).pending.length, 0);
+  assert.equal((await f.source.sync()).expectedCount, 3);
+  assert.ok((await f.source.loadFeed()).some(item => item.id === first.id && item.availability === 'in stock'));
+  f.data.items = f.data.items.filter(item => item.id !== first.id);
+  assert.equal((await f.source.sync()).valid, true);
+  assert.ok((await f.source.loadFeed()).some(item => item.id === first.id && item.availability === 'out of stock'));
+});
+
+test('an explicit empty selection survives refresh and both destinations serve only the approved set', async () => {
+  const f = fixture({ items: [car('ID8choose1')], seed: [car('ID8sold01', { availability: 'out of stock' })] });
+  const before = await f.source.review();
+  const decision = await f.source.decide({ revision: before.revision, mode: 'choose', selectedIds: [] });
+  assert.equal(decision.valid, true); assert.equal(decision.selectionEmpty, true);
+  assert.equal((await publicCatalogue(f.source)).total, 0);
+  assert.doesNotMatch(stockFeedXml((await f.source.feed('latest')).csv), /<item>/);
+  assert.equal((await f.source.sync()).expectedCount, 0);
+  assert.equal((await f.source.review()).pending.length, 0);
+  assert.equal((await f.source.audit()).selectionEmpty, true);
+});
+
+test('a changed batch invalidates approval without advancing either public catalogue', async () => {
+  const f = fixture(); await f.source.sync();
+  const original = await f.source.feed('latest');
+  f.data.autovalorptItems = [car('ID8fresh1')];
+  const before = await f.source.review();
+  f.data.autovalorptItems.push(car('ID8fresh2'));
+  assert.equal((await f.source.decide({ revision: before.revision, mode: 'all' })).reason, 'stock_selection_stale');
+  assert.deepEqual(await f.source.feed('latest'), original);
 });

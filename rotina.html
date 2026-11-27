@@ -47,6 +47,21 @@
     .action { padding: clamp(17px, 3vw, 25px); margin-top: 20px; }
     .action > p:first-of-type { margin-top: 7px; color: var(--muted); }
     .action .primary { margin-top: 0; }
+    .stock-pick { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .stock-pick h2 { font-size: 17px; }
+    .stock-pick .links button { flex: 1 1 145px; }
+    .stock-pick .stock-pick-go { color: white; background: var(--navy-light); }
+    .stock-pick button:disabled { opacity: .6; }
+    .stock-pick-group { min-width: 0; padding: 0; border: 0; margin: 16px 0 0; }
+    .stock-pick-group legend { font-size: 16px; font-weight: 750; }
+    .stock-pick-row { border-top: 1px solid var(--line); padding: 8px 0; overflow-wrap: anywhere; }
+    .stock-pick-row label { min-height: 44px; display: flex; align-items: center; gap: 9px; cursor: pointer; }
+    .stock-pick-row input { min-height: 0; width: 21px; height: 21px; flex: none; accent-color: var(--navy-light); }
+    .stock-pick-row img { border-radius: 6px; object-fit: cover; }
+    .stock-pick-row small { display: block; font-weight: normal; color: var(--muted); }
+    .stock-pick-row a { color: #244f70; text-underline-offset: 2px; }
+    .stock-pick-row > a { display: inline-block; padding: 8px 0; }
+    .stock-pick-match { margin: 4px 0; padding: 6px 9px; font-size: 14px; background: #fff3df; border-radius: 6px; }
     .editorial-next { margin: 12px 0; padding-top: 12px; border-top: 1px solid var(--line); }
     .editorial-next h3 { margin: 5px 0; font-size: 18px; }
     .editorial-image { display: block; width: 100%; max-width: 340px; height: auto; border-radius: 12px; margin: 10px auto; }
@@ -127,7 +142,8 @@
   <script src="/routine-calendar.js?v=20261125-6" defer></script>
   <script src="/extra-editorial.js?v=20261127-correcao2" defer></script>
   <script src="/whatsapp-editorial.js?v=20261126-4" defer></script>
-  <script src="/rotina.js?v=20261127-catalogo" defer></script>
+  <script src="/stock-selection-panel.js?v=1" defer></script>
+  <script src="/rotina.js?v=20261127-selecao" defer></script>
 </head>
 <body>
   <header><div class="top"><div class="brand">AutoValor<span>PT</span></div>
@@ -148,6 +164,23 @@
         <button id="runNow" class="primary" type="button" aria-describedby="manualStatus checkStatus" disabled>Atualizar tudo</button>
         <p id="manualStatus" class="hint" role="status">A verificar a disponibilidade…</p>
         <p id="checkStatus" class="status" role="status" aria-atomic="true"></p>
+        <section id="stockSelection" class="stock-pick" aria-labelledby="stockPickTitle">
+          <h2 id="stockPickTitle">Novas viaturas do Standvirtual</h2>
+          <p id="stockPickStatus" class="hint" role="status">A consultar as duas contas…</p>
+          <div id="stockPickActions" class="links" hidden>
+            <button id="stockPickAll" type="button" class="stock-pick-go">Sincronizar tudo</button>
+            <button id="stockPickChoose" type="button" class="secondary" aria-controls="stockPickBody" aria-expanded="false">Escolher viaturas</button>
+          </div>
+          <div id="stockPickBody" hidden>
+            <p id="stockPickHelp" class="hint"></p>
+            <div id="stockPickRows"></div>
+            <div class="links">
+              <button id="stockPickBack" class="secondary" type="button">Voltar</button>
+              <button id="stockPickSave" class="stock-pick-go" type="button">Sincronizar seleção</button>
+            </div>
+          </div>
+          <p id="stockPickResult" role="status" class="hint"></p>
+        </section>
         <details id="stockActionDetails" class="action-details">
           <summary>Detalhes da atualização</summary>
           <div class="details-body">
@@ -189,7 +222,7 @@
       <div class="rows">
         <details><summary><strong>Catálogo WhatsApp</strong><span class="catalog-badges"><span id="catalogBadge" class="badge">Por consultar</span><span id="catalogApprovalBadge" class="badge" hidden></span></span></summary>
           <div class="details-body">
-            <div class="stats"><div class="stat"><span>Standvirtual</span><strong id="sourceCount">—</strong></div><div class="stat"><span>Para a Meta</span><strong id="feedCount">—</strong></div><div class="stat"><span>Na Meta</span><strong id="metaCount">—</strong></div></div>
+            <div class="stats"><div class="stat"><span>Selecionadas no Standvirtual</span><strong id="sourceCount">—</strong></div><div class="stat"><span>Para a Meta</span><strong id="feedCount">—</strong></div><div class="stat"><span>Na Meta</span><strong id="metaCount">—</strong></div></div>
             <p id="catalogSummary" class="status"></p><p id="catalogTime" class="time"></p><p id="catalogAccess" class="status"></p>
             <div class="links"><a class="link" href="/catalogo.html">Gerir só o catálogo</a></div>
           </div>

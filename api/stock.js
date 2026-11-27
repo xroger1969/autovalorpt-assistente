@@ -328,6 +328,9 @@ async function loadStock() {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.integration === 'stock-selection') {
+    return (await import('../lib/stock-selection-handler.js')).default(req, res);
+  }
   if (req.query?.integration === 'catalogue-app') {
     return (await import('../lib/catalogue-app-feed.js')).default(req, res);
   }

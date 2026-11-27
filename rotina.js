@@ -66,6 +66,7 @@
   function sessionView(value, message = '') {
     authenticated = value; generation++;
     const expire = () => sessionView(false, 'A sessão terminou. Volta a entrar.');
+    globalThis.AutoValorStockSelection.setSession(value, api, expire, refresh);
     globalThis.AutoValorRoutineCalendar?.setSession(value, expire);
     globalThis.AutoValorWhatsappEditorial?.setSession(value, expire);
     globalThis.AutoValorExtraEditorial.setSession(value, expire, refreshAll);
@@ -184,9 +185,11 @@
     if (current?.manualMissing) alerts.push('Atualização manual por consultar');
     if (pendingManualStories > 0) alerts.unshift(pendingManualStories === 1 ? 'Story manual por confirmar' : 'Stories manuais por confirmar');
     const newerDiagnostic = channelCheck.total != null && channelCheck.stamp > (current?.stockAt || 0);
-    const total = current?.unavailable ? null : newerDiagnostic ? channelCheck.total : current?.total ?? channelCheck.total;
+    const selection = globalThis.AutoValorStockSelection.counts();
+    const total = current?.unavailable ? null : selection?.sourceCount ?? (newerDiagnostic ? channelCheck.total : current?.total ?? channelCheck.total);
+    const expected = selection?.approvedCount ?? current?.total;
     if (!current?.unavailable && !newerDiagnostic && current?.total != null && channelCheck.total != null &&
-        current.total !== channelCheck.total && !alerts.some(item => item.startsWith('Catálogo WhatsApp')))
+        expected !== channelCheck.total && !alerts.some(item => item.startsWith('Catálogo WhatsApp')))
       alerts.push('Contagem do catálogo WhatsApp por atualizar');
     if (total == null && !current?.unavailable && !alerts.length) alerts.push('Stock por verificar');
     const line = total == null ? [] : [total + (total === 1 ? ' viatura' : ' viaturas')];
@@ -253,7 +256,7 @@
     text('checkStatus', checkStock ? 'A consultar os dois inventários e os registos dos canais…' : 'A consultar o progresso da atualização…');
     try {
       const stock = checkStock ? api(url('instagram-sync', 'stories-manual-stock')).then(stockSummary) : null;
-      const [manual, channels, inventory] = await Promise.allSettled([readManualStatus(), refresh(), stock]);
+      const [manual, channels, inventory] = await Promise.allSettled([readManualStatus(), refresh(), stock, globalThis.AutoValorStockSelection.refresh()]);
       if (version !== generation) return;
       if (inventory.status === 'rejected' && inventory.reason?.status === 401) {
         sessionView(false, 'A sessão terminou. Volta a entrar.'); return;
@@ -561,7 +564,7 @@
     const sections = ['rotina das 08h00', 'catálogo WhatsApp', 'fotografias do Instagram', 'Stories do Instagram', 'Estado WhatsApp', 'publicações criativas'];
     return sections.filter((_, index) => error(index));
   }
-  function refreshAll() { return Promise.all([refreshManual(), refresh()]); }
+  function refreshAll() { return Promise.all([refreshManual(), refresh(), globalThis.AutoValorStockSelection.refresh()]); }
   $('runNow').addEventListener('click', submitManual);
   $('editorialPanel').addEventListener('toggle', loadEditorialPreview);
   $('historyPanel').addEventListener('toggle', () => {
