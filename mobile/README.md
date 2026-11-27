@@ -8,9 +8,13 @@ O projeto usa Expo e TypeScript. As versões concretas das dependências estão 
 
 ### Correção da galeria em 27/11/2026
 
-O endpoint público foi verificado com **10 viaturas e 221 fotografias originais** (snapshot `2026-11-27T08:00:39.973Z`). A build 3 abaixo continua anterior à galeria. A próxima build inclui também a correção da migração da cópia local: mesmo que a revisão e a data do servidor coincidam com as guardadas pela app antiga, a primeira resposta válida repõe a galeria completa. O rodapé passa a identificar também o número nativo da compilação, para distinguir builds da mesma versão 1.0.0.
+O endpoint público foi verificado com **10 viaturas e 221 fotografias originais** (snapshot `2026-11-27T08:00:39.973Z`). A build 3 abaixo continua anterior à galeria. A build 4 inclui também a correção da migração da cópia local: mesmo que a revisão e a data do servidor coincidam com as guardadas pela app antiga, a primeira resposta válida repõe a galeria completa. O rodapé passa a identificar também o número nativo da compilação, para distinguir builds da mesma versão 1.0.0.
 
-Compilação e distribuição desta correção: **pendentes**; os registos de builds abaixo referem-se à entrega anterior.
+**Entrega confirmada em 27/11/2026: build iOS 1.0.0 (4), compilada e enviada para o TestFlight.** A [build EAS `103d1ad8-68cd-4fba-bc72-7d1a10dd0b95`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/builds/103d1ad8-68cd-4fba-bc72-7d1a10dd0b95) terminou com estado **Succeeded** a partir do commit `e924ceb14c04944db45755e7feedd9bc7f18239e`: 2 min 29 s de compilação e 3 min de duração total. A [submissão EAS `ec801775-07d7-4212-bddd-61b5266e3008`](https://expo.dev/accounts/cvasconcelos1969s-team/projects/autovalorpt-catalogo/submissions/ec801775-07d7-4212-bddd-61b5266e3008) terminou com estado **Succeeded**, com envio às **12:09, hora de Lisboa**. O Expo identifica o trabalho como «Submit app to TestFlight» e confirma a versão **1.0.0 (4)**.
+
+Validação desta entrega: TypeScript e **15 testes nativos aprovados**; exportação dos bundles iOS/Android concluída; migração verificada com as 10 viaturas e 221 fotografias reais, preservando a revisão e a data do cache antigo. O preview Vercel do mesmo commit está READY e executou **796 testes, sem falhas**. Os jobs GitHub Actions não arrancaram devido ao bloqueio de faturação da conta; não foram desativadas proteções. A alteração foi integrada em `main` no [PR #80](https://github.com/xroger1969/autovalorpt-assistente/pull/80).
+
+O sucesso da submissão confirma a entrega do binário ao App Store Connect. **O processamento final da Apple, a associação da build 4 ao grupo de testadores e a instalação ainda não foram confirmados nesta sessão.** A sessão web da Apple exige nova autenticação. A validação visual nativa do deslize, zoom e rotação, assim como qualquer substituição da build em App Review, continuam por confirmar. Não confundir esta submissão ao TestFlight com aprovação ou publicação na App Store. Os registos seguintes documentam a entrega anterior.
 
 ### Entrega anterior — build 3
 
