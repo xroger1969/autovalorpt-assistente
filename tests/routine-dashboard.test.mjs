@@ -436,6 +436,33 @@ test('extra publication previews artwork and full caption, cancel is safe, doubl
   assert.match(app.get('extraStatus').textContent, /confirmada pelo Instagram/);
 });
 
+test('the panel opens the exact corrected edition and accepts only its approved static image', async () => {
+  const id = 'extra-2026-11-27-custo-100km-r2';
+  const asset = '/assets/editorial/custo-100km-20261126-r2.jpg';
+  const post = { id, date: '2026-11-27', version: 'custo-100km-r2', extra: true, fingerprint: '2'.repeat(64),
+    format: 'IMAGE', slideCount: 1, title: 'Quanto custa percorrer 100 km?', caption: '13 kWh × 0,14 € = 1,82 €.', images: [asset] };
+  const state = { configuration: { production: true, tokenConfigured: true, accountConfigured: true, validApi: true, imagesConfigured: true },
+    extra: { available: true, correctionId: id } };
+  const app = await dashboard({ editorial: state, fetch: (endpoint, init) => {
+    if (!endpoint.includes('action=extra-preview')) return null;
+    assert.equal(new URL(endpoint, 'https://example.invalid').searchParams.get('edition'), id);
+    assert.equal(init.method, 'GET');
+    return response({ ok: true, mode: 'publish', post });
+  } });
+  const button = app.get('publishCostRevision');
+  assert.equal(button.hidden, false);
+  await button.handlers.click();
+  assert.equal(app.get('extraArtwork').children[0].src, asset);
+  assert.equal(app.get('extraConfirm').disabled, true);
+  app.get('extraArtwork').children[0].handlers.load();
+  assert.equal(app.get('extraConfirm').disabled, false);
+  app.get('extraBack').handlers.click();
+  post.images = ['https://outside.example' + asset];
+  await button.handlers.click();
+  assert.equal(app.get('extraReview').hidden, true);
+  assert.equal(app.get('extraConfirm').disabled, true);
+});
+
 test('intentional preservation of Instagram posts is not an outstanding retirement',async()=>{
   const cycle=finishedCycle();
   cycle.results.retirements={status:'preserved',ok:true,retired:0,at:startedAt};

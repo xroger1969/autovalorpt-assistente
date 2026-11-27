@@ -368,6 +368,31 @@ test('public post lookup returns only a confirmed safe stored URL without Meta o
 });
 
 const session = hashAdminToken('test-browser-session');
+test('the corrected cost card is explicitly selected, reviewed and sent once with the same JPEG and caption', async () => {
+  const f = fixture({ time: '2026-11-27T10:00:00Z' });
+  const { correctionId } = (await f.publisher.status()).extra;
+  assert.equal(correctionId, 'extra-2026-11-27-custo-100km-r2');
+  const regular = (await f.publisher.extraPreview(session)).post;
+  const { post } = await f.publisher.extraPreview(session, correctionId);
+  assert.notEqual(regular.id, post.id);
+  assert.deepEqual(post.images, [f.env.INSTAGRAM_PUBLIC_BASE_URL + '/assets/editorial/custo-100km-20261126-r2.jpg']);
+  for (const value of ['13 kWh', '0,14 €/kWh', '1,82 €', '11,11 €', '12,21 €']) assert.ok(post.caption.includes(value));
+  await assert.rejects(f.publisher.run({ extra: true, session, confirmation: { id: post.id, fingerprint: regular.fingerprint } }),
+    { code: 'editorial_review_stale' });
+  assert.equal(f.calls.length, 0);
+  const confirmed = { extra: true, session, confirmation: { id: post.id, fingerprint: post.fingerprint } };
+  assert.equal((await f.publisher.run(confirmed)).status, 'published');
+  const create = f.calls.find(call => call.method === 'POST' && call.url.endsWith('/media'));
+  const form = new URLSearchParams(create.body);
+  assert.equal(form.get('image_url'), post.images[0]);
+  assert.equal(form.get('caption'), post.caption);
+  assert.equal((await f.publisher.status()).history[0].id, post.id);
+  await assert.rejects(f.publisher.run(confirmed), { code: 'editorial_review_stale' });
+  f.setTime('2026-11-28T10:00:00Z');
+  await assert.rejects(f.publisher.extraPreview(session, correctionId), { code: 'editorial_review_stale' });
+  assert.equal(f.posts().length, 1);
+});
+
 async function reviewExtra(publisher) {
   const { post } = await publisher.extraPreview(session);
   return { extra: true, session, confirmation: { id: post.id, fingerprint: post.fingerprint } };

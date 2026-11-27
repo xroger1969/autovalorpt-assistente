@@ -3,6 +3,8 @@
   const $ = id => document.getElementById(id);
   const { validDay, imageUrl, renderCopyCredit, renderSimulatorLinks } = globalThis.AutoValorEditorialPreview;
   const api = '/api/stock?integration=editorial&action=';
+  const correctionId = 'extra-2026-11-27-custo-100km-r2';
+  const correctionImage = '/assets/editorial/custo-100km-20261126-r2.jpg';
   const modes = new Set(['publish', 'resume', 'verify']);
   let authenticated = false, onExpiry, refresh, status = null;
   let revision = 0, controller = null, review = null, phase = 'closed';
@@ -21,6 +23,11 @@
     $('extraButton').disabled = !available() || open;
     $('extraButton').textContent = mode() === 'verify' ? 'Verificar publicação extra' : mode() === 'resume' ? 'Continuar publicação extra' : 'Publicar conteúdo extra agora';
     $('extraButton').setAttribute?.('aria-expanded', String(open));
+    const correctionButton = $('publishCostRevision');
+    if (correctionButton) {
+      correctionButton.hidden = status?.extra?.correctionId !== correctionId;
+      correctionButton.disabled = !available() || open;
+    }
     $('extraReview').hidden = !open; $('extraTitle').hidden = open;
     $('extraBack').disabled = phase === 'sending';
     $('extraConfirm').disabled = !available() || phase !== 'review' || !review?.loaded;
@@ -77,6 +84,9 @@
     const origin = globalThis.location?.origin || 'https://autovalorpt-assistente.vercel.app';
     try {
       const url = new URL(post.images[0], origin);
+      if (post.id === correctionId && post.version === 'custo-100km-r2' && post.date === '2026-11-27' &&
+          [origin, 'https://autovalorpt-assistente.vercel.app'].some(base => url.href === new URL(correctionImage, base).href))
+        return correctionImage;
       const version = url.searchParams.get('v') || url.searchParams.get('version');
       if (![origin, 'https://autovalorpt-assistente.vercel.app'].includes(url.origin) || url.pathname !== '/api/stock' ||
           url.username || url.password || url.hash || url.searchParams.get('integration') !== 'editorial-image' ||
@@ -110,11 +120,12 @@
     $('extraArtwork').appendChild(image); message('A carregar a imagem para revisão…'); controls(); image.src = src;
     $('extraReviewTitle').focus?.();
   }
-  async function open() {
+  async function open(edition) {
     if (!available() || phase !== 'closed') return;
     const token = ++revision; phase = 'loading'; controls(); message('A preparar a imagem e a legenda…');
     try {
-      const data = await request('extra-preview');
+      const data = await request(edition ? 'extra-preview&edition=' + encodeURIComponent(edition) : 'extra-preview');
+      if (edition && data.post?.id !== edition) throw new Error('wrong_edition');
       if (token === revision && authenticated) display(data);
     } catch (error) {
       if (token !== revision) return;
@@ -152,7 +163,8 @@
     if (token !== revision || !authenticated) return;
     clear(); message(outcome); $('extraButton').focus?.();
   }
-  $('extraButton').addEventListener('click', open);
+  $('extraButton').addEventListener('click', () => open());
+  $('publishCostRevision')?.addEventListener('click', () => open(correctionId));
   $('extraConfirm').addEventListener('click', confirm);
   $('extraBack').addEventListener('click', () => {
     if (phase === 'sending' || phase === 'closed') return;
