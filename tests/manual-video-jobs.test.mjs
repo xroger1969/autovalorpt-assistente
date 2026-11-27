@@ -94,6 +94,23 @@ test('interrupted work expires; only an explicit create claims a retry, and a la
   assert.deepEqual(await f.jobs.progress(f.receipt(first)), { ok: false, status: 'failed', id, jobId: first.jobId, reason: 'manual_video_job_not_found' });
 });
 
+test('a new request replaces a previous-style render in progress without publishing or accepting the older result', async () => {
+  const gate = deferred();
+  const f = fixture({ preview: async result => { await gate.promise; return result(); } });
+  const old = await f.jobs.create(id);
+  const record = f.memory.records.get(jobPath);
+  const legacy = JSON.parse(record.text);
+  delete legacy.style;
+  f.memory.records.set(jobPath, { ...record, text: JSON.stringify(legacy) });
+  const fresh = await f.jobs.create(id);
+  assert.notEqual(fresh.jobId, old.jobId);
+  gate.resolve();
+  await f.drain();
+  assert.equal((await f.jobs.progress(f.receipt(old))).reason, 'manual_video_job_not_found');
+  assert.equal((await f.jobs.progress(f.receipt(fresh))).status, 'preview_ready');
+  assert.deepEqual(f.calls, ['preview', 'preview']);
+});
+
 test('terminal jobs permit a fresh explicit review and reuse the producer cache instead of replaying an expired receipt', async () => {
   let prepared = 0;
   const f = fixture({ preview: async result => ({ ...result(), reused: prepared++ > 0 }) });

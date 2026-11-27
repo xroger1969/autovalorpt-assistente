@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import ffmpeg from 'ffmpeg-static';
 import sharp from 'sharp';
-import { instagramVideoDetails, instagramVideoCard, originalInstagramAudio, renderInstagramVideo } from '../lib/instagram-video.js';
+import { instagramVideoDetails, instagramVideoCard, instagramVideoTimeline, originalInstagramAudio, renderInstagramVideo } from '../lib/instagram-video.js';
 
 const vehicle = { id: 'ID8Q1luY', title: 'Mercedes-Benz GLC 300 de 4Matic', price: '56990 EUR',
   description: '2023 · 90 000 km · Híbrido Plug-in', image_link: 'https://ireland.apollo.olxcdn.com/v1/files/test-safe/image;s=1024x768' };
@@ -59,6 +61,29 @@ test('portrait cards render bundled-font Portuguese text and keep the photograph
 test('short real model names render without an empty variant overlay', async () => {
   const card = await instagramVideoCard({ ...vehicle, title: 'Mercedes-Benz GLC 300 | 2022 | 60 000 km' }, await photo());
   assert.equal((await sharp(card).metadata()).height, 1920);
+});
+
+test('all eight stock scenes hold every pixel and cut directly at the beat', () => {
+  const args = ['-hide_banner', '-loglevel', 'error', '-filter_complex_threads', '1'];
+  for (let scene = 0; scene < 8; scene++) {
+    // A different, sharp-edged shape identifies each photograph and reveals sub-frame shake.
+    const pattern = `color=s=96x160:r=25:d=0.04,drawbox=x=${scene * 6 + 1}:y=17:w=18:h=112:color=white:t=fill`;
+    args.push('-f', 'lavfi', '-i', pattern);
+  }
+  const output = execFileSync(ffmpeg, [...args, '-filter_complex', instagramVideoTimeline(),
+    '-map', '[v]', '-r', '25', '-threads', '1', '-f', 'framemd5', '-'], { encoding: 'utf8', timeout: 15000 });
+  const frames = output.split('\n').filter(line => /^0,/.test(line)).map(line => line.split(',').at(-1).trim());
+  assert.equal(frames.length, 750);
+  const scenes = new Set();
+  for (let scene = 0; scene < 8; scene++) {
+    const start = Math.round(scene * 3.75 * 25);
+    // The final fade to black begins at 29.65 seconds.
+    const end = Math.min(Math.round((scene + 1) * 3.75 * 25), Math.floor(29.65 * 25));
+    assert.equal(new Set(frames.slice(start, end)).size, 1);
+    scenes.add(frames[start]);
+  }
+  assert.equal(scenes.size, 8);
+  assert.notEqual(frames.at(-1), frames[740]);
 });
 
 test('an exhausted render budget never fetches a photograph or starts an encoder', async () => {
