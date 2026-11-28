@@ -3,18 +3,18 @@ import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Text, View } fr
 import type { Vehicle } from './catalogue';
 import { colors, Icon } from './ui';
 import {
-  eligibleTerm, estimatedPayment, fullSimulatorUrl, QUICK_TERMS, referenceAmount,
+  eligibleTerm, fullSimulatorUrl, QUICK_TERMS, referenceAmount,
   type CreditLimits,
 } from './quick-finance';
 
 const CREDIT_API = 'https://credicarros.vercel.app/api';
 const euro = new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const compactEuro = new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 });
 const percent = new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 type Result = {
   status: 'loading' | 'ready' | 'unavailable' | 'unsupported';
   payment?: number;
-  approximate?: boolean;
+  differentAmount?: boolean;
+  retrievedAt?: number;
   reference?: number;
   tan?: number;
   taeg?: number;
@@ -83,12 +83,9 @@ async function quoteFor(price: number, months: number, signal: AbortSignal): Pro
   const quote = data.quote;
   if (!validQuote(quote, reference.amount, months)) return { status: 'unavailable' };
   const q = quote;
-  const payment = reference.approximate
-    ? estimatedPayment(price, reference, q.payment)
-    : q.payment;
-  if (payment === null || payment === undefined) return { status: 'unavailable' };
+  const payment = q.payment;
   return {
-    status: 'ready', payment, approximate: reference.approximate,
+    status: 'ready', payment, differentAmount: reference.differentAmount, retrievedAt: Date.parse(q.retrievedAt),
     reference: reference.amount, tan: q.tan, taeg: q.taeg, mtic: q.mtic,
   };
 }
@@ -97,11 +94,14 @@ export function QuickFinance({ vehicle, onOpenFull }: {
   vehicle: Vehicle; onOpenFull: (url: string) => void;
 }) {
   const [index, setIndex] = useState(2);
-  const [result, setResult] = useState<Result>({ status: 'loading' });
+  const [response, setResponse] = useState<{ key: string; result: Result } | null>(null);
+  const [retry, setRetry] = useState(0);
   const trackWidth = useRef(1);
   const gestureStart = useRef(2);
   const indexRef = useRef(2);
   const months = QUICK_TERMS[index];
+  const key = `${vehicle.price}:${months}`;
+  const result: Result = response?.key === key ? response.result : { status: 'loading' };
   const chooseIndex = (value: number) => {
     const next = Math.max(0, Math.min(QUICK_TERMS.length - 1, value));
     indexRef.current = next;
@@ -123,47 +123,64 @@ export function QuickFinance({ vehicle, onOpenFull }: {
   })).current;
 
   useEffect(() => {
-    const key = `${vehicle.price}:${months}`;
     const cached = quoteCache.get(key);
     if (cached && Date.now() < cached.until) {
-      setResult(cached.result);
+      setResponse({ key, result: cached.result });
       return;
     }
     let live = true;
     const controller = new AbortController();
-    setResult({ status: 'loading' });
+    setResponse({ key, result: { status: 'loading' } });
     // Avoid starting a request for every intermediate touch position.
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     const timer = setTimeout(() => {
       void quoteFor(vehicle.price, months, controller.signal).then(next => {
         if (!live) return;
-        setResult(next);
+        setResponse({ key, result: next });
         if (next.status === 'ready') {
           if (quoteCache.size >= 32) quoteCache.delete(quoteCache.keys().next().value as string);
-          quoteCache.set(key, { result: next, until: Date.now() + 3 * 60_000 });
+          quoteCache.set(key, { result: next, until: Math.min(Date.now() + 60_000, (next.retrievedAt ?? 0) + 5 * 60_000) });
         }
-      }).catch(() => { if (live) setResult({ status: 'unavailable' }); });
+      }).catch(() => { if (live) setResponse({ key, result: { status: 'unavailable' } }); }).finally(() => clearTimeout(timeout));
     }, 350);
-    return () => { live = false; clearTimeout(timer); controller.abort(); };
-  }, [vehicle.price, months]);
+    return () => { live = false; clearTimeout(timer); clearTimeout(timeout); controller.abort(); };
+  }, [vehicle.price, months, key, retry]);
+
+  // Do not continue to show an expired financial result while a detail sheet remains open.
+  useEffect(() => {
+    if (result.status !== 'ready' || result.retrievedAt === undefined) return;
+    const expires = result.retrievedAt + 5 * 60_000;
+    const timer = setTimeout(() => {
+      quoteCache.delete(key);
+      setResponse({ key, result: { status: 'unavailable' } });
+    }, Math.max(0, expires - Date.now()));
+    return () => clearTimeout(timer);
+  }, [result.status, result.retrievedAt, key]);
 
   const selectedPosition = (index / (QUICK_TERMS.length - 1)) * 100;
   const paymentText = result.status === 'ready' && result.payment !== undefined
-    ? `${result.approximate ? '≈ ' : ''}${euro.format(result.payment)} €`
+    ? `${euro.format(result.payment)} €`
     : result.status === 'loading' ? 'A consultar…' : '—';
   return <View style={s.card}>
     <View style={s.heading}>
       <View style={s.headingIcon}><Icon name="calculator-outline" size={19} color={colors.green} /></View>
       <View style={s.headingCopy}><Text style={s.title}>Quanto ficaria por mês?</Text>
-        <Text style={s.subtitle}>Simulação rápida · entrada 0 €</Text></View>
+        <Text style={s.subtitle}>Simulação rápida · sem entrada</Text></View>
     </View>
     <View style={s.amountRow}>
-      <Text style={s.amountLabel}>Prestação estimada</Text>
+      <Text style={s.amountLabel}>{result.differentAmount ? 'Prestação de referência (outro montante)' : 'Prestação indicativa'}</Text>
       <View style={s.amountValue}>
         {result.status === 'loading' && <ActivityIndicator size="small" color={colors.green} />}
         <Text accessibilityLiveRegion="polite" style={s.payment}>{paymentText}</Text>
         {result.status === 'ready' && <Text style={s.perMonth}>/mês</Text>}
       </View>
     </View>
+    {result.status === 'ready' && <View style={s.quoteDetails}>
+      <Text style={s.quoteDetail}>Financiamento: {euro.format(result.reference ?? vehicle.price)} € · {months} meses</Text>
+      <Text style={s.quoteDetail}>TAEG {percent.format(result.taeg ?? 0)}%</Text>
+      {result.differentAmount && <Text style={s.disclaimer}>Referência para um montante diferente do preço de {euro.format(vehicle.price)} €. Não é uma simulação exata desta viatura sem entrada.</Text>}
+      <Text style={s.disclaimer}>TAN {percent.format(result.tan ?? 0)}% · MTIC {euro.format(result.mtic ?? 0)} € · Fonte: Banco Credibom (CREDICARROS).</Text>
+    </View>}
     <Text style={s.termLabel}>Escolhe o prazo: <Text style={s.termSelected}>{months} meses</Text></Text>
     <View style={s.slider}
       onLayout={event => { trackWidth.current = event.nativeEvent.layout.width; }}
@@ -186,20 +203,15 @@ export function QuickFinance({ vehicle, onOpenFull }: {
         style={s.termTouch}><Text style={[s.termValue, index === position && s.termActive]}>{value}</Text></Pressable>)}
     </View>
     {result.status === 'ready' && <Text style={s.disclaimer}>
-      {result.approximate
-        ? `Valor aproximado, calculado a partir da cotação para ${compactEuro.format(result.reference ?? 0)} €. `
-        : 'Cotação indicativa do montante anunciado. '}
-      {result.tan !== undefined && result.taeg !== undefined && result.mtic !== undefined
-        ? `TAN ${percent.format(result.tan)}% · TAEG ${percent.format(result.taeg)}% · MTIC ${euro.format(result.mtic)} € (cotação de referência). `
-        : ''}
-      Sujeito a aprovação e condições finais.
+      Simulação indicativa, sujeita a análise, aprovação e condições finais.
     </Text>}
     {result.status === 'unsupported' && <Text style={s.disclaimer}>
       O prazo ou o montante sem entrada não são aceites nesta consulta. Confirma outras condições no simulador completo.
     </Text>}
-    {result.status === 'unavailable' && <Text style={s.disclaimer}>
-      Não foi possível consultar a prestação neste momento. O simulador completo continua disponível.
-    </Text>}
+    {result.status === 'unavailable' && <View>
+      <Text style={s.disclaimer}>Não foi possível confirmar uma prestação atual. Tenta novamente ou abre o simulador completo.</Text>
+      <Pressable onPress={() => setRetry(value => value + 1)} accessibilityRole="button" style={s.retry}><Text style={s.openText}>Atualizar simulação</Text></Pressable>
+    </View>}
     <Pressable style={({ pressed }) => [s.openLink, pressed && { opacity: 0.6 }]}
       accessibilityRole="link" accessibilityLabel="Abrir simulador completo CREDICARROS"
       onPress={() => onOpenFull(fullSimulatorUrl(vehicle.price, months, vehicle.year))}>
@@ -225,7 +237,7 @@ const s = StyleSheet.create({
   perMonth: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   termLabel: { fontSize: 12, color: colors.muted, marginTop: 2 },
   termSelected: { fontSize: 13, fontWeight: '800', color: colors.navy },
-  slider: { height: 34, justifyContent: 'center', marginHorizontal: 10 },
+  slider: { height: 44, justifyContent: 'center', marginHorizontal: 10 },
   sliderBackground: { height: 6, backgroundColor: colors.line, borderRadius: 6 },
   sliderFilled: { position: 'absolute', height: 6, backgroundColor: colors.green, borderRadius: 6 },
   sliderThumb: { position: 'absolute', width: 25, height: 25, borderRadius: 13,
@@ -233,11 +245,14 @@ const s = StyleSheet.create({
     transform: [{ translateX: -12.5 }], shadowColor: colors.navy, shadowOpacity: 0.15,
     shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
   terms: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -7 },
-  termTouch: { minWidth: 48, minHeight: 34, justifyContent: 'center', alignItems: 'center' },
+  termTouch: { minWidth: 48, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   termValue: { fontSize: 12, color: colors.muted, fontWeight: '600' },
   termActive: { color: colors.green, fontWeight: '800' },
-  disclaimer: { fontSize: 10, lineHeight: 15, color: colors.muted },
+  disclaimer: { fontSize: 12, lineHeight: 17, color: colors.muted },
   openLink: { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 9,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 36 }
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
+  quoteDetails: { gap: 4 },
+  quoteDetail: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  retry: { minHeight: 44, justifyContent: 'center' },
   openText: { color: colors.green, fontSize: 13, fontWeight: '700', flexShrink: 1 },
 });
