@@ -15,13 +15,13 @@ export interface CreditLimits {
 }
 export interface ReferenceAmount {
   amount: number;
-  approximate: boolean;
+  differentAmount: boolean;
 }
 
 export function eligibleTerm(months: number, limits: CreditLimits): boolean {
   return Number.isInteger(months) && Number.isInteger(limits.monthStep) &&
     limits.monthStep > 0 && months >= limits.minMonths && months <= limits.maxMonths &&
-    (months - limits.minMonths) % limits.monthStep === 0;
+    months % limits.monthStep === 0;
 }
 
 /** Never silently replace the advertised PVP by a different financed amount. */
@@ -35,17 +35,9 @@ export function referenceAmount(price: number, limits: CreditLimits): ReferenceA
   if (first > last) return null;
   const amount = Math.max(first, Math.min(last, Math.round(price / limits.amountStep) * limits.amountStep));
   const difference = Math.abs(price - amount);
-  // Only derive an approximation from a genuinely nearby permitted amount.
+  // Only use a genuinely nearby permitted amount as an explicitly separate reference.
   if (difference > Math.min(500, price * 0.05)) return null;
-  return { amount, approximate: difference > 0.005 };
-}
-
-export function estimatedPayment(price: number, reference: ReferenceAmount, payment: number): number | null {
-  if (!Number.isFinite(payment) || payment <= 0 || !Number.isFinite(price) || price <= 0 ||
-      !Number.isFinite(reference.amount) || reference.amount <= 0) return null;
-  // Only an approximation: taxes and fixed credit charges do not scale linearly.
-  const result = Math.round(payment * (price / reference.amount) * 100) / 100;
-  return result > 0 && Number.isFinite(result) ? result : null;
+  return { amount, differentAmount: difference > 0.005 };
 }
 
 export function fullSimulatorUrl(price: number, term: QuickTerm, year: number | null): string {
