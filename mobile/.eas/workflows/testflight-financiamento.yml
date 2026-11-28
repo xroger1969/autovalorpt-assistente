@@ -1,0 +1,25 @@
+name: AutoValorPT iOS - TestFlight financiamento
+
+on:
+  push:
+    branches:
+      - release/testflight-financiamento-20261128
+    paths:
+      - mobile/.eas/workflows/testflight-financiamento.yml
+
+jobs:
+  build_ios:
+    name: Compilar AutoValorPT iOS
+    type: build
+    params:
+      platform: ios
+      profile: production
+  submit_testflight:
+    name: Enviar AutoValorPT para TestFlight
+    needs: [build_ios]
+    type: testflight
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+      profile: production
+      changelog: "Novo mini-simulador de financiamento na ficha de cada viatura: entrada de 0 EUR, prazos de 60, 72, 84 e 120 meses, cotacoes CREDICARROS e acesso ao simulador completo. Verificar tambem galeria e navegacao."
+      submit_beta_review: false
