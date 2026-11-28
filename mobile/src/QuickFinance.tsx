@@ -47,8 +47,9 @@ async function creditLimits(): Promise<CreditLimits> {
         const response = await fetch(`${CREDIT_API}/credit-config`, { signal: controller.signal, headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error('Configuração indisponível');
         const body = await response.json() as { products?: { used?: CreditLimits } };
-        if (!validLimits(body.products?.used)) throw new Error('Configuração inválida');
-        const used = body.products.used;
+        const candidate = body.products?.used;
+        if (!validLimits(candidate)) throw new Error('Configuração inválida');
+        const used = candidate;
         configurationCache = { used, until: Date.now() + 10 * 60_000 };
         return used;
       } finally { clearTimeout(timer); }
@@ -79,8 +80,9 @@ async function quoteFor(price: number, months: number, signal: AbortSignal): Pro
   });
   if (!response.ok) return { status: response.status === 422 ? 'unsupported' : 'unavailable' };
   const data = await response.json() as { quote?: Quote };
-  if (!validQuote(data.quote, reference.amount, months)) return { status: 'unavailable' };
-  const q = data.quote;
+  const quote = data.quote;
+  if (!validQuote(quote, reference.amount, months)) return { status: 'unavailable' };
+  const q = quote;
   const payment = reference.approximate
     ? estimatedPayment(price, reference, q.payment)
     : q.payment;
