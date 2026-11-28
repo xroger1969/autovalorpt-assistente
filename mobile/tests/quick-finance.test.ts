@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  eligibleTerm, estimatedPayment, fullSimulatorUrl, QUICK_TERMS, referenceAmount,
+  eligibleTerm, fullSimulatorUrl, QUICK_TERMS, referenceAmount,
   type CreditLimits,
 } from '../src/quick-finance.ts';
 
@@ -16,17 +16,16 @@ test('compact slider only uses requested terms', () => {
   assert.equal(eligibleTerm(72, { ...limits, maxMonths: 60 }), false);
   assert.equal(eligibleTerm(84, { ...limits, monthStep: 12 }), true);
   assert.equal(eligibleTerm(72, { ...limits, monthStep: 7 }), false);
+  assert.equal(eligibleTerm(72, { ...limits, minMonths: 25 }), true);
 });
 
 test('financing never silently changes advertised vehicle price', () => {
-  assert.deepEqual(referenceAmount(13000, limits), { amount: 13000, approximate: false });
-  assert.deepEqual(referenceAmount(12990, limits), { amount: 13000, approximate: true });
-  assert.equal(estimatedPayment(12990, { amount: 13000, approximate: true }, 150), 149.88);
+  assert.deepEqual(referenceAmount(13000, limits), { amount: 13000, differentAmount: false });
+  assert.deepEqual(referenceAmount(12990, limits), { amount: 13000, differentAmount: true });
   assert.equal(referenceAmount(2000, limits), null);
   assert.equal(referenceAmount(Number.NaN, limits), null);
   assert.equal(referenceAmount(75001, limits), null);
   assert.equal(referenceAmount(12990, { ...limits, amountStep: 10000 }), null);
-  assert.equal(estimatedPayment(12990, { amount: 13000, approximate: true }, -1), null);
 });
 
 test('open full credit simulator with selected PVP, zero entry, term and car year', () => {
