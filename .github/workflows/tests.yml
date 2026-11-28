@@ -26,3 +26,25 @@ jobs:
 
       - name: Run regression tests
         run: npm test
+
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install native app dependencies
+        run: npm ci
+      - name: Typecheck native app
+        run: npm run typecheck
+      - name: Test native logic
+        run: npm test
