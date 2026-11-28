@@ -19,6 +19,7 @@ import {
 } from './src/catalogue';
 import { BrandMark, Button, Chip, colors, EmptyState, Icon, IconButton, Notice, VehicleImage, type IconName } from './src/ui';
 import { VehicleGallery } from './src/VehicleGallery';
+import { QuickFinance } from './src/QuickFinance';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const ORIGIN = 'https://autovalorpt-assistente.vercel.app';
@@ -296,6 +297,7 @@ function CatalogueApp() {
                 <Spec icon="flash-outline" label="Combustível" value={selected.fuel || 'Por confirmar'} />
                 <Spec icon="car-sport-outline" label="Marca" value={selected.brand} />
               </View>
+              <QuickFinance key={selected.id} vehicle={selected} onOpenFull={url => void openExternal(url)} />
               <View style={s.wrap}><Button title="Partilhar" icon="share-outline" variant="secondary" onPress={() => void shareVehicle(selected)} style={s.flex} />
                 <Button title={preferences.comparisonIds.includes(selected.id) ? 'Na comparação' : 'Comparar'} icon="swap-horizontal-outline" variant="secondary"
                   disabled={!preferences.isReady} onPress={() => compareVehicle(selected)} style={s.flex} /></View>
