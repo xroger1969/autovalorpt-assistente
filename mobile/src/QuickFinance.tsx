@@ -173,9 +173,9 @@ export function QuickFinance({ vehicle, onOpenFull }: {
         if (event.nativeEvent.actionName === 'decrement') chooseIndex(indexRef.current - 1);
       }}
       {...responder.panHandlers}>
-      <View style={s.sliderBackground} />
-      <View style={[s.sliderFilled, { width: `${selectedPosition}%` }]} />
-      <View style={[s.sliderThumb, { left: `${selectedPosition}%` }]} />
+      <View pointerEvents="none" style={s.sliderBackground} />
+      <View pointerEvents="none" style={[s.sliderFilled, { width: `${selectedPosition}%` }]} />
+      <View pointerEvents="none" style={[s.sliderThumb, { left: `${selectedPosition}%` }]} />
     </View>
     <View style={s.terms}>
       {QUICK_TERMS.map((value, position) => <Pressable key={value} onPress={() => chooseIndex(position)}
