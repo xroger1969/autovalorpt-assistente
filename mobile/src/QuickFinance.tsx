@@ -189,8 +189,8 @@ export function QuickFinance({ vehicle, onOpenFull }: {
       {result.approximate
         ? `Valor aproximado, calculado a partir da cotação para ${compactEuro.format(result.reference ?? 0)} €. `
         : 'Cotação indicativa do montante anunciado. '}
-      {result.tan !== undefined && result.taeg !== undefined
-        ? `TAN ${percent.format(result.tan)}% · TAEG ${percent.format(result.taeg)}% (referência). `
+      {result.tan !== undefined && result.taeg !== undefined && result.mtic !== undefined
+        ? `TAN ${percent.format(result.tan)}% · TAEG ${percent.format(result.taeg)}% · MTIC ${euro.format(result.mtic)} € (cotação de referência). `
         : ''}
       Sujeito a aprovação e condições finais.
     </Text>}
